@@ -1,0 +1,3 @@
+export type TravelDocument = { id: string; trip_id: string; name: string; file_url: string | null; file_type: string; file_path: string; uploaded_by: string; created_at: string };
+export function isSupportedDocumentType(type: string) { return type === 'application/pdf' || type.startsWith('image/'); }
+export function buildDocumentPath(tripId: string, userId: string, fileName: string, uniqueId: string = crypto.randomUUID()) { const safeName = fileName.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'document'; return `${tripId}/${userId}/${uniqueId}-${safeName}`; }
