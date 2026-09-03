@@ -16,6 +16,7 @@
     "@react-navigation/elements": "^2.9.10",
     "@react-navigation/native": "^7.1.33",
     "@supabase/supabase-js": "^2.114.0",
+    "@expo/metro-runtime": "~55.0.12",
     "expo": "~55.0.31",
     "expo-constants": "~55.0.17",
     "expo-device": "~55.0.21",
