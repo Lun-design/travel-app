@@ -1,0 +1,3 @@
+import React from 'react'; import MapView, { Marker } from 'react-native-maps'; import { StyleSheet } from 'react-native';
+export function ManualLocationMap({ latitude, longitude, onChange }: { latitude: number | null; longitude: number | null; onChange: (latitude: number, longitude: number) => void }) { const coordinate = { latitude: latitude ?? 25.033, longitude: longitude ?? 121.565 }; return <MapView style={styles.map} initialRegion={{ ...coordinate, latitudeDelta: 0.08, longitudeDelta: 0.08 }}><Marker draggable coordinate={coordinate} onDragEnd={(e) => onChange(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)} /></MapView>; }
+const styles = StyleSheet.create({ map: { height: 180 } });
