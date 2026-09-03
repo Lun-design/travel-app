@@ -2,7 +2,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { getTrip, listTripMembers, type Trip, type TripMember } from '@/lib/trips';
+import { getTrip, listTripMembers, type Trip, type TripMemberWithProfile } from '@/lib/trips';
+import { InviteTripModal } from '@/components/InviteTripModal';
 import { filterAndSortItems, type ItineraryItem } from '@/lib/itinerary';
 import { deleteItineraryItem, listItineraryItems, saveItineraryItem } from '@/lib/itinerary-api';
 import { DayTabs } from '@/components/DayTabs';
@@ -15,7 +16,7 @@ export default function TripDetailScreen() {
   const router = useRouter();
   const tripId = Array.isArray(id) ? id[0] : id;
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [members, setMembers] = useState<TripMember[]>([]);
+  const [members, setMembers] = useState<TripMemberWithProfile[]>([]);
   const [items, setItems] = useState<ItineraryItem[]>([]);
   const [userId, setUserId] = useState('');
   const [day, setDay] = useState(1);
@@ -23,6 +24,7 @@ export default function TripDetailScreen() {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<ItineraryItem | null>(null);
+  const [inviteVisible, setInviteVisible] = useState(false);
 
   const days = useMemo(() => {
     const found = Array.from(new Set(items.map((item) => item.day_number))).sort((a, b) => a - b);
@@ -55,8 +57,8 @@ export default function TripDetailScreen() {
       <Text style={styles.title}>{trip.title}</Text>
       <Text style={styles.destination}>{trip.destination}</Text>
       <Text style={styles.date}>{trip.start_date} ～ {trip.end_date}</Text>
-      <Text style={styles.sectionTitle}>旅伴（{members.length}）</Text>
-      <View style={styles.members}>{members.map((member) => <View key={member.user_id} style={styles.member}><Text>{member.user_id.slice(0, 8)}…</Text><Text style={styles.role}>{member.role}</Text></View>)}</View>
+      <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>旅伴（{members.length}）</Text><Pressable onPress={() => setInviteVisible(true)}><Text style={styles.link}>邀請成員</Text></Pressable></View>
+      <View style={styles.members}>{members.map((member) => <View key={member.user_id} style={styles.member}><Text>{member.profile?.display_name || member.user_id.slice(0, 8) + '…'}</Text><Text style={styles.role}>{member.role}</Text></View>)}</View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <DayTabs days={days} selected={day} onChange={setDay} />
       <View style={styles.map}><TripMap items={items} day={day} /></View>
@@ -64,7 +66,8 @@ export default function TripDetailScreen() {
     </ScrollView>
     <Pressable style={styles.fab} onPress={() => { setEditing(null); setModal(true); }}><Text style={styles.fabText}>＋ 新增景點／活動</Text></Pressable>
     <ItineraryItemModal visible={modal} item={editing} day={day} tripId={tripId} userId={userId} onClose={() => setModal(false)} onSave={async (data) => { try { await saveItineraryItem(data); setModal(false); await load(); } catch (e: any) { setError(e?.message ?? '儲存失敗。'); } }} onDelete={editing ? async () => { await deleteItineraryItem(editing.id); await load(); } : undefined} />
+    <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
   </View>;
 }
 
-const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: '#f8fafc' }, content: { padding: 20, paddingTop: 50, paddingBottom: 100, gap: 10 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }, back: { color: '#2563eb', fontWeight: '600', marginBottom: 8 }, title: { fontSize: 30, fontWeight: '700' }, destination: { fontSize: 19, color: '#334155' }, date: { color: '#64748b' }, sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 12 }, members: { gap: 6 }, member: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'white', borderRadius: 10, padding: 10 }, role: { color: '#2563eb', textTransform: 'capitalize' }, map: { height: 280, borderRadius: 16, overflow: 'hidden', marginTop: 8 }, timeline: { backgroundColor: 'white', borderRadius: 16, padding: 12 }, fab: { position: 'absolute', right: 20, bottom: 24, borderRadius: 24, paddingHorizontal: 18, paddingVertical: 14, backgroundColor: '#2563eb' }, fabText: { color: 'white', fontWeight: '700' }, error: { color: '#b91c1c', paddingVertical: 8 } });
+const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: '#f8fafc' }, content: { padding: 20, paddingTop: 50, paddingBottom: 100, gap: 10 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }, back: { color: '#2563eb', fontWeight: '600', marginBottom: 8 }, title: { fontSize: 30, fontWeight: '700' }, destination: { fontSize: 19, color: '#334155' }, date: { color: '#64748b' }, sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }, sectionTitle: { fontSize: 18, fontWeight: '700' }, link: { color: '#2563eb', fontWeight: '600' }, members: { gap: 6 }, member: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'white', borderRadius: 10, padding: 10 }, role: { color: '#2563eb', textTransform: 'capitalize' }, map: { height: 280, borderRadius: 16, overflow: 'hidden', marginTop: 8 }, timeline: { backgroundColor: 'white', borderRadius: 16, padding: 12 }, fab: { position: 'absolute', right: 20, bottom: 24, borderRadius: 24, paddingHorizontal: 18, paddingVertical: 14, backgroundColor: '#2563eb' }, fabText: { color: 'white', fontWeight: '700' }, error: { color: '#b91c1c', paddingVertical: 8 } });

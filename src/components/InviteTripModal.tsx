@@ -1,0 +1,12 @@
+import React, { useState } from 'react';
+import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { joinTripByInvite } from '@/lib/trips';
+
+export function InviteTripModal({ visible, inviteCode, onClose, onJoined }: { visible: boolean; inviteCode?: string; onClose: () => void; onJoined?: (tripId: string) => void }) {
+  const [code, setCode] = useState(inviteCode ?? '');
+  const [saving, setSaving] = useState(false);
+  async function join() { if (!code.trim()) return; setSaving(true); try { const id = await joinTripByInvite(code); onClose(); onJoined?.(id); } catch (e: any) { Alert.alert('加入失敗', e?.message ?? '邀請碼無效。'); } finally { setSaving(false); } }
+  async function copy() { if (!inviteCode) return; const clipboard = (globalThis as any).navigator?.clipboard; if (clipboard) { await clipboard.writeText(inviteCode); Alert.alert('已複製', '邀請碼已複製。'); } else Alert.alert('邀請碼', inviteCode); }
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><View style={styles.backdrop}><View style={styles.card}><Text style={styles.title}>{inviteCode ? '邀請成員' : '加入行程'}</Text>{inviteCode ? <><Text>分享以下邀請碼給旅伴：</Text><Text style={styles.code}>{inviteCode}</Text><Pressable style={styles.secondary} onPress={copy}><Text>複製邀請碼</Text></Pressable></> : <TextInput style={styles.input} placeholder="輸入邀請碼" autoCapitalize="none" value={code} onChangeText={setCode} />}<View style={styles.actions}><Pressable onPress={onClose}><Text>取消</Text></Pressable>{!inviteCode ? <Pressable style={styles.primary} onPress={join} disabled={saving}><Text style={styles.white}>{saving ? '加入中…' : '加入行程'}</Text></Pressable> : null}</View></View></View></Modal>;
+}
+const styles = StyleSheet.create({ backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15,23,42,.45)' }, card: { backgroundColor: 'white', borderRadius: 18, padding: 22, gap: 14 }, title: { fontSize: 22, fontWeight: '700' }, code: { fontSize: 24, fontWeight: '700', letterSpacing: 2, color: '#2563eb' }, input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 12 }, secondary: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 12, alignItems: 'center' }, actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 18 }, primary: { backgroundColor: '#2563eb', borderRadius: 10, padding: 12 }, white: { color: 'white', fontWeight: '700' } });

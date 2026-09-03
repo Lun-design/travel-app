@@ -3,15 +3,21 @@ import { listItineraryItems, saveItineraryItem, deleteItineraryItem } from './it
 import { buildTripPayload } from './trip-validation';
 export type Trip = { id: string; title: string; destination: string; start_date: string; end_date: string; invite_code: string };
 export type TripMember = { trip_id: string; user_id: string; role: 'owner' | 'editor' | 'viewer'; joined_at: string };
+export type TripMemberWithProfile = TripMember & { profile?: { display_name: string | null; avatar_url: string | null } | null };
 export async function getTrip(id: string): Promise<Trip> {
   const { data, error } = await supabase.from('trips').select('*').eq('id', id).single();
   if (error) throw error;
   return data as Trip;
 }
-export async function listTripMembers(tripId: string): Promise<TripMember[]> {
-  const { data, error } = await supabase.from('trip_members').select('*').eq('trip_id', tripId).order('joined_at');
+export async function listTripMembers(tripId: string): Promise<TripMemberWithProfile[]> {
+  const { data, error } = await supabase.from('trip_members').select('*, profile:profiles(display_name, avatar_url)').eq('trip_id', tripId).order('joined_at');
   if (error) throw error;
-  return (data ?? []) as TripMember[];
+  return (data ?? []) as TripMemberWithProfile[];
+}
+export async function joinTripByInvite(inviteCode: string): Promise<string> {
+  const { data, error } = await supabase.rpc('join_trip_by_invite', { p_invite_code: inviteCode });
+  if (error) throw error;
+  return data as string;
 }
 export async function listTrips() { const { data, error } = await supabase.from('trips').select('*').order('start_date', { ascending: true }); if (error) throw error; return data as Trip[]; }
 export async function createTrip(input: Pick<Trip, 'title' | 'destination' | 'start_date' | 'end_date'> & { created_by: string }): Promise<void> {
