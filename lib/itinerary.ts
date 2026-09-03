@@ -3,6 +3,7 @@ export type ItineraryItem = {
   location_name: string; address: string | null; latitude: number | null; longitude: number | null;
   notes: string | null; category: string; created_by: string; duration_minutes?: number | null; difficulty?: string | null;
 };
+
 export function filterAndSortItems(items: ItineraryItem[], day: number) {
   return items.filter((x) => x.day_number === day).sort((a, b) => (a.time ? (b.time ? a.time.localeCompare(b.time) : -1) : 1));
 }
