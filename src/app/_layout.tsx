@@ -2,15 +2,6 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import React from 'react';
 import { useColorScheme } from 'react-native';
+import { AuthGate } from '@/components/AuthGate';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <Stack screenOptions={{ headerShown: false }} />
-    </ThemeProvider>
-  );
-}
+export default function RootLayout() { const scheme = useColorScheme(); return <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}><AuthGate><Stack screenOptions={{ headerShown: false }} /></AuthGate></ThemeProvider>; }
