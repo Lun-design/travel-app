@@ -6,6 +6,11 @@ export async function listTrips() { const { data, error } = await supabase.from(
 export async function createTrip(input: Pick<Trip, 'title' | 'destination' | 'start_date' | 'end_date'> & { created_by: string }) {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError) throw authError;
+  const { data: session } = await supabase.auth.getSession();
+  console.log('[Supabase] createTrip auth context', {
+    userId: auth.user?.id ?? null,
+    hasAccessToken: Boolean(session.session?.access_token),
+  });
   const payload = buildTripPayload(input, auth.user?.id ?? '');
   const { data, error } = await supabase.from('trips').insert(payload).select().single();
   if (error) { console.error('[Supabase] createTrip failed', { message: error.message, details: error.details, hint: error.hint, code: error.code, status: (error as typeof error & { status?: number }).status }); throw error; }
