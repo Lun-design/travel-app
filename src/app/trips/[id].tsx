@@ -53,7 +53,7 @@ export default function TripDetailScreen() {
   const visible = filterAndSortItems(items, day);
   return <View style={styles.container}>
     <ScrollView contentContainerStyle={styles.content}>
-      <Pressable onPress={() => router.back()}><Text style={styles.back}>‹ 返回我的行程</Text></Pressable>
+      <Pressable onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/'); }}><Text style={styles.back}>‹ 返回我的行程</Text></Pressable>
       <Text style={styles.title}>{trip.title}</Text>
       <Text style={styles.destination}>{trip.destination}</Text>
       <Text style={styles.date}>{trip.start_date} ～ {trip.end_date}</Text>
