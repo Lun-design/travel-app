@@ -19,7 +19,14 @@ export async function joinTripByInvite(inviteCode: string): Promise<string> {
   if (error) throw error;
   return data as string;
 }
-export async function listTrips() { const { data, error } = await supabase.from('trips').select('*').order('start_date', { ascending: true }); if (error) throw error; return data as Trip[]; }
+export async function listTrips(): Promise<Trip[]> {
+  const { data, error } = await supabase.from('trips').select('*').order('start_date', { ascending: true });
+  if (error) {
+    console.error('[Supabase] listTrips failed', { message: error.message, details: error.details, hint: error.hint, code: error.code, status: (error as typeof error & { status?: number }).status });
+    throw error;
+  }
+  return (data ?? []) as Trip[];
+}
 export async function createTrip(input: Pick<Trip, 'title' | 'destination' | 'start_date' | 'end_date'> & { created_by: string }): Promise<void> {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError) throw authError;
