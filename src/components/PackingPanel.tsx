@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import { fetchWeatherForecast } from '@/lib/weather-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { createPackingItem, deletePackingItem, importPackingTemplate, listPackingItems, updatePackingItem, type PackingItem } from '@/lib/packing-api';
 import { generatePackingSuggestions, groupPackingItems, isPackingComplete, packingProgress, type PackingTemplate } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
+import { getAppTheme } from '@/lib/theme';
 
 const categories = ['證件', '電子產品', '衣物', '藥品', '隨身物品', '未分類'];
 const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪'];
@@ -17,6 +18,7 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
   tripStartDate?: string;
   items?: ItineraryItem[];
 }) {
+  const theme = getAppTheme(useColorScheme());
   const [items, setItems] = useState<PackingItem[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
@@ -73,7 +75,7 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
     finally { setBusy(false); }
   }
 
-  return <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+  return <ScrollView style={[styles.scroll, { backgroundColor: theme.colors.background }]} contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
     <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
     <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 AI 智慧建議清單</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>

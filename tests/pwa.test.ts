@@ -66,6 +66,10 @@ describe('PWA deployment configuration', () => {
     expect(serviceWorker).toContain("cache: 'no-store'");
     expect(serviceWorker).toContain('PRECACHE_URLS');
     expect(serviceWorker).toContain('BUILD_PRECACHED_URLS');
+    expect(serviceWorker).toContain('isCacheableResource');
+    expect(serviceWorker).toContain("request.destination === 'image'");
+    expect(serviceWorker).toContain("request.destination === 'document'");
+    expect(serviceWorker).toContain("response.type === 'opaque'");
   });
 
   it('defines a verified Vercel build and route fallback', () => {

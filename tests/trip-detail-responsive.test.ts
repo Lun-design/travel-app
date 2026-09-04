@@ -134,6 +134,38 @@ describe('trip detail responsive layout', () => {
     expect(native).toContain('reorderItineraryItems');
   });
 
+  it('renders skeletons and animates day/map transitions', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const skeleton = readFileSync(projectFile('src', 'components', 'SkeletonCard.tsx'), 'utf8');
+
+    expect(skeleton).toContain('Animated');
+    expect(detail).toContain('SkeletonCard');
+    expect(detail).toContain('isDayTransitioning');
+    expect(detail).toContain('isMapLoading');
+    expect(detail).toContain('LayoutAnimation.configureNext');
+  });
+
+  it('connects system dark mode to the trip detail palette', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+
+    expect(detail).toContain('useColorScheme');
+    expect(detail).toContain('getAppTheme');
+    expect(detail).toContain('theme.colors.background');
+    expect(detail).toContain('theme.colors.tabTrack');
+  });
+
+  it('exposes currency choices and custom split controls in the expense modal', () => {
+    const modal = readFileSync(projectFile('src', 'components', 'ExpenseModal.tsx'), 'utf8');
+    const list = readFileSync(projectFile('src', 'components', 'ExpenseList.tsx'), 'utf8');
+
+    expect(modal).toContain('SUPPORTED_CURRENCIES');
+    expect(modal).toContain('splitMode');
+    expect(modal).toContain('buildSplitAmounts');
+    expect(modal).toContain('自訂分攤');
+    expect(modal).toContain('convertToTwd');
+    expect(list).toContain('convertToTwd');
+  });
+
   it('keeps expense amounts inside full-width cards', () => {
     const expenseList = readFileSync(projectFile('src', 'components', 'ExpenseList.tsx'), 'utf8');
     const settlement = readFileSync(projectFile('src', 'components', 'SettlementCard.tsx'), 'utf8');

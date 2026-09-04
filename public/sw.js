@@ -37,15 +37,26 @@ function isSameOrigin(request) {
 
 function isStaticAsset(url) {
   return url.pathname.startsWith('/_expo/')
-    || /\.(?:js|css|png|jpe?g|gif|svg|webp|woff2?|ttf|json)$/.test(url.pathname);
+    || /\.(?:js|css|png|jpe?g|gif|svg|webp|woff2?|ttf|json|pdf)$/i.test(url.pathname);
+}
+
+function isCacheableResource(request, url) {
+  return isStaticAsset(url)
+    || request.destination === 'image'
+    || request.destination === 'document'
+    || /(?:documents|vouchers|travel-documents|tickets|receipts)/i.test(url.pathname)
+    || /\/(?:rest\/v1|storage\/v1)\//i.test(url.pathname);
 }
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET' || !isSameOrigin(request)) return;
-
+  if (request.method !== 'GET') return;
+  const sameOrigin = isSameOrigin(request);
   const url = new URL(request.url);
+  if (!sameOrigin && !isCacheableResource(request, url)) return;
+
   if (request.mode === 'navigate') {
+    if (!sameOrigin) return;
     event.respondWith((async () => {
       try {
         const response = await fetch(request, { cache: 'no-store' });
@@ -64,13 +75,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (!isStaticAsset(url)) return;
+  if (!isCacheableResource(request, url)) return;
   event.respondWith((async () => {
     const cache = await caches.open(RUNTIME_CACHE);
     const cached = await cache.match(request);
     const network = fetch(request)
       .then(async (response) => {
-        if (response.ok) await cache.put(request, response.clone());
+        if (response.ok || response.type === 'opaque') await cache.put(request, response.clone());
         return response;
       })
       .catch(() => undefined);

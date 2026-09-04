@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { deleteVoucher, listVouchers } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { VoucherPreviewModal } from './VoucherPreviewModal';
 import { VoucherUploadModal } from './VoucherUploadModal';
 import { PuppyMascot } from './PuppyMascot';
+import { getAppTheme } from '@/lib/theme';
 
 export function VouchersPanel({ tripId, userId, items }: { tripId: string; userId: string; items: ItineraryItem[] }) {
+  const theme = getAppTheme(useColorScheme());
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<Voucher | null>(null);
@@ -24,7 +26,7 @@ export function VouchersPanel({ tripId, userId, items }: { tripId: string; userI
     catch (error: any) { Alert.alert('刪除票券失敗', error?.message ?? '請稍後再試。'); }
   }
 
-  return <ScrollView contentContainerStyle={styles.container}>
+  return <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]} style={{ backgroundColor: theme.colors.background }}>
     <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.title}>🎫 預約與票券</Text><Text style={styles.subtitle}>集中管理門票、機票 QR Code 與飯店預約單。</Text></View><Pressable style={styles.upload} onPress={() => setUploading(true)}><Text style={styles.white}>＋ 新增</Text></Pressable></View>
     {vouchers.length ? vouchers.map((voucher) => <View key={voucher.id} style={styles.card}><Pressable style={styles.info} onPress={() => setPreview(voucher)}><Text style={styles.icon}>{voucher.file_type === 'pdf' ? '📄' : '🖼️'}</Text><View style={styles.content}><Text numberOfLines={2} style={styles.name}>{voucher.title}</Text><Text numberOfLines={2} style={styles.meta}>{voucher.file_type.toUpperCase()} · {itemName(voucher.item_id)}</Text></View></Pressable><Pressable style={styles.deleteButton} onPress={() => Alert.alert('刪除票券', `確定要刪除「${voucher.title}」嗎？`, [{ text: '取消' }, { text: '刪除', style: 'destructive', onPress: () => void remove(voucher) }])}><Text style={styles.delete}>刪除</Text></Pressable></View>) : <View style={styles.empty}><PuppyMascot puppy="-6" size={165} accessibilityLabel="目前沒有預約票券" /><Text style={styles.subtitle}>目前還沒有預約或票券</Text></View>}
     <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} onClose={() => setUploading(false)} onUploaded={load} />

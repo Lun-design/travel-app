@@ -1,11 +1,96 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { Expense } from '@/lib/expenses-api'; import type { TripMemberWithProfile } from '@/lib/trips';
-type Props = { visible: boolean; tripId?: string; expense?: Expense | null; members: TripMemberWithProfile[]; userId: string; onClose: () => void; onSave: (expense: Partial<Expense> & { trip_id: string; payer_id: string }, splits: { user_id: string; amount: number }[]) => Promise<void> };
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
+import type { Expense } from '@/lib/expenses-api';
+import type { TripMemberWithProfile } from '@/lib/trips';
+import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIES, type SplitMode } from '@/lib/exchange-rates';
+import { getAppTheme } from '@/lib/theme';
+
+type Props = {
+  visible: boolean;
+  tripId?: string;
+  expense?: Expense | null;
+  members: TripMemberWithProfile[];
+  userId: string;
+  onClose: () => void;
+  onSave: (expense: Partial<Expense> & { trip_id: string; payer_id: string }, splits: { user_id: string; amount: number }[]) => Promise<void>;
+};
+
 const EXPENSE_CATEGORIES = ['門票', '餐飲', '交通', '購物', '其他'] as const;
-export function ExpenseModal({ visible, tripId, expense, members, userId, onClose, onSave }: Props) { const [title, setTitle] = useState(''); const [amount, setAmount] = useState(''); const [currency, setCurrency] = useState('TWD'); const [payer, setPayer] = useState(userId); const [selected, setSelected] = useState<string[]>([]); const [saving, setSaving] = useState(false);
-  useEffect(() => { if (visible) { setTitle(expense?.title ?? ''); setAmount(expense ? String(expense.amount) : ''); setCurrency(expense?.currency ?? 'TWD'); setPayer(expense?.payer_id ?? userId); setSelected(expense?.splits.map((split) => split.user_id) ?? members.map((member) => member.user_id)); } }, [visible, expense, userId, members]); const [category, setCategory] = useState<string>(expense?.category && expense.category !== 'general' ? expense.category : '其他'); const share = useMemo(() => { const value = Number(amount); return selected.length && Number.isFinite(value) ? value / selected.length : 0; }, [amount, selected.length]);
-  useEffect(() => { if (visible) setCategory(expense?.category && expense.category !== 'general' ? expense.category : '其他'); }, [visible, expense]);
-  async function save() { const value = Number(amount); const currentTripId = tripId || expense?.trip_id || members[0]?.trip_id || ''; if (!title.trim()) return Alert.alert('欄位未完成', '請輸入旅費項目名稱。'); if (!Number.isFinite(value) || value <= 0) return Alert.alert('金額格式錯誤', '請輸入大於 0 的數字。'); if (!payer) return Alert.alert('付款人未選擇', '請選擇付款人。'); if (!selected.length) return Alert.alert('分攤成員未選擇', '請至少勾選一位分攤成員。'); setSaving(true); try { await onSave({ ...(expense?.id ? { id: expense.id } : {}), trip_id: currentTripId, payer_id: payer, title: title.trim(), amount: value, currency: currency.trim().toUpperCase() || 'TWD', category }, selected.map((user_id) => ({ user_id, amount: Math.round(share * 100) / 100 }))); onClose(); } catch (error: any) { console.error('[ExpenseModal] save failed', error); Alert.alert('儲存旅費失敗', error?.message || '請確認付款人與分攤成員是有效的 Supabase UUID。'); } finally { setSaving(false); } }
-  return <Modal visible={visible} animationType="slide" onRequestClose={onClose}><ScrollView contentContainerStyle={styles.container}><Text style={styles.title}>{expense ? '編輯旅費' : '新增旅費'}</Text><TextInput style={styles.input} placeholder="項目名稱，例如：晚餐" value={title} onChangeText={setTitle} /><View style={styles.row}><TextInput style={[styles.input, styles.flex]} placeholder="金額" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><TextInput style={styles.currency} value={currency} onChangeText={setCurrency} autoCapitalize="characters" /></View><Text style={styles.label}>費用類別</Text><View style={styles.chips}>{EXPENSE_CATEGORIES.map((option) => <Pressable key={option} style={[styles.chip, category === option && styles.selected]} onPress={() => setCategory(option)}><Text style={category === option ? styles.white : undefined}>{option}</Text></Pressable>)}</View><Text style={styles.label}>付款人</Text><View style={styles.chips}>{members.map((member) => <Pressable key={member.user_id} style={[styles.chip, payer === member.user_id && styles.selected]} onPress={() => setPayer(member.user_id)}><Text style={payer === member.user_id ? styles.white : undefined}>{member.profile?.display_name || member.user_id.slice(0, 8)}</Text></Pressable>)}</View><Text style={styles.label}>分攤成員（每人 {share ? share.toFixed(2) : '—'}）</Text><View style={styles.chips}>{members.map((member) => { const checked = selected.includes(member.user_id); return <Pressable key={member.user_id} style={[styles.chip, checked && styles.selected]} onPress={() => setSelected((current) => checked ? current.filter((id) => id !== member.user_id) : [...current, member.user_id])}><Text style={checked ? styles.white : undefined}>{checked ? '✓ ' : ''}{member.profile?.display_name || member.user_id.slice(0, 8)}</Text></Pressable>; })}</View><View style={styles.actions}><Pressable onPress={onClose}><Text>取消</Text></Pressable><Pressable style={styles.save} disabled={saving} onPress={save}><Text style={styles.white}>{saving ? '儲存中…' : '儲存旅費'}</Text></Pressable></View></ScrollView></Modal>; }
-const styles = StyleSheet.create({ container: { padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 27, fontWeight: '800' }, input: { borderWidth: 1, borderColor: '#dbe2ea', borderRadius: 12, padding: 13, backgroundColor: '#f8fafc' }, row: { flexDirection: 'row', gap: 8 }, flex: { flex: 1 }, currency: { width: 72, borderWidth: 1, borderColor: '#dbe2ea', borderRadius: 12, padding: 13, backgroundColor: '#f8fafc' }, label: { fontWeight: '700', color: '#334155', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { backgroundColor: '#e2e8f0', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: '#2563eb' }, white: { color: 'white', fontWeight: '700' }, actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, alignItems: 'center', marginTop: 12 }, save: { backgroundColor: '#2563eb', borderRadius: 12, padding: 13 } });
+
+export function ExpenseModal({ visible, tripId, expense, members, userId, onClose, onSave }: Props) {
+  const theme = getAppTheme(useColorScheme());
+  const [title, setTitle] = useState('');
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('TWD');
+  const [payer, setPayer] = useState(userId);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [splitMode, setSplitMode] = useState<SplitMode>('amount');
+  const [splitValues, setSplitValues] = useState<Record<string, string>>({});
+  const [category, setCategory] = useState<string>('其他');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setTitle(expense?.title ?? '');
+    setAmount(expense ? String(expense.amount) : '');
+    setCurrency(normalizeCurrency(expense?.currency));
+    setPayer(expense?.payer_id ?? userId);
+    const expenseSplits = expense?.splits ?? [];
+    setSelected(expenseSplits.length ? expenseSplits.map((split) => split.user_id) : members.map((member) => member.user_id));
+    setSplitValues(Object.fromEntries(expenseSplits.map((split) => [split.user_id, String(split.amount)])));
+    setSplitMode('amount');
+    setCategory(expense?.category && expense.category !== 'general' ? expense.category : '其他');
+  }, [visible, expense, userId, members]);
+
+  const total = Number(amount);
+  const splitAmounts = useMemo(() => {
+    try { return buildSplitAmounts(total, selected, splitValues, splitMode); } catch { return {}; }
+  }, [total, selected, splitValues, splitMode]);
+
+  async function save() {
+    const currentTripId = tripId || expense?.trip_id || members[0]?.trip_id || '';
+    if (!title.trim()) return Alert.alert('欄位未完成', '請輸入旅費項目名稱。');
+    if (!Number.isFinite(total) || total <= 0) return Alert.alert('金額格式錯誤', '請輸入大於 0 的數字。');
+    if (!payer) return Alert.alert('付款人未選擇', '請選擇付款人。');
+    if (!selected.length) return Alert.alert('分攤成員未選擇', '請至少勾選一位分攤成員。');
+    let amounts: Record<string, number>;
+    try { amounts = buildSplitAmounts(total, selected, splitValues, splitMode); } catch (error) {
+      Alert.alert('分攤設定錯誤', error instanceof Error ? error.message : '請檢查自訂分攤金額或比例。');
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({ ...(expense?.id ? { id: expense.id } : {}), trip_id: currentTripId, payer_id: payer, title: title.trim(), amount: total, currency: normalizeCurrency(currency), category }, selected.map((user_id) => ({ user_id, amount: amounts[user_id] })));
+      onClose();
+    } catch (error: any) {
+      console.error('[ExpenseModal] save failed', error);
+      Alert.alert('儲存旅費失敗', error?.message || '請確認付款人與分攤成員是有效的 Supabase UUID。');
+    } finally { setSaving(false); }
+  }
+
+  return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.title, { color: theme.colors.text }]}>{expense ? '編輯旅費' : '新增旅費'}</Text>
+      <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="項目名稱，例如：晚餐" placeholderTextColor={theme.colors.muted} value={title} onChangeText={setTitle} />
+      <View style={styles.row}><TextInput style={[styles.input, styles.flex, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="金額" placeholderTextColor={theme.colors.muted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><View style={styles.currencyChoices}>{SUPPORTED_CURRENCIES.map((option) => <Pressable key={option} style={[styles.currencyChip, normalizeCurrency(currency) === option && styles.selected]} onPress={() => setCurrency(option)}><Text style={normalizeCurrency(currency) === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View></View>
+      <Text style={[styles.conversion, { color: theme.colors.muted }]}>≈ TWD {Number.isFinite(total) ? convertToTwd(total, currency).toFixed(2) : '—'}</Text>
+      <Text style={[styles.label, { color: theme.colors.text }]}>費用類別</Text>
+      <View style={styles.chips}>{EXPENSE_CATEGORIES.map((option) => <Pressable key={option} style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, category === option && styles.selected]} onPress={() => setCategory(option)}><Text style={category === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View>
+      <Text style={[styles.label, { color: theme.colors.text }]}>付款人</Text>
+      <View style={styles.chips}>{members.map((member) => <Pressable key={member.user_id} style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, payer === member.user_id && styles.selected]} onPress={() => setPayer(member.user_id)}><Text style={payer === member.user_id ? styles.white : { color: theme.colors.text }}>{member.profile?.display_name || member.user_id.slice(0, 8)}</Text></Pressable>)}</View>
+      <Text style={[styles.label, { color: theme.colors.text }]}>分攤方式：自訂分攤</Text>
+      <View style={styles.chips}><Pressable style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, splitMode === 'amount' && styles.selected]} onPress={() => setSplitMode('amount')}><Text style={splitMode === 'amount' ? styles.white : { color: theme.colors.text }}>金額</Text></Pressable><Pressable style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, splitMode === 'ratio' && styles.selected]} onPress={() => setSplitMode('ratio')}><Text style={splitMode === 'ratio' ? styles.white : { color: theme.colors.text }}>比例 %</Text></Pressable></View>
+      <View style={styles.memberRows}>{members.map((member) => { const checked = selected.includes(member.user_id); return <View key={member.user_id} style={styles.memberRow}><Pressable style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, checked && styles.selected]} onPress={() => setSelected((current) => checked ? current.filter((id) => id !== member.user_id) : [...current, member.user_id])}><Text style={checked ? styles.white : { color: theme.colors.text }}>{checked ? '✓ ' : ''}{member.profile?.display_name || member.user_id.slice(0, 8)}</Text></Pressable>{checked ? <TextInput style={[styles.splitInput, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} keyboardType="decimal-pad" placeholder={splitMode === 'ratio' ? '比例 %' : '自訂金額'} placeholderTextColor={theme.colors.muted} value={splitValues[member.user_id] ?? ''} onChangeText={(value) => setSplitValues((current) => ({ ...current, [member.user_id]: value }))} /> : null}<Text style={[styles.previewAmount, { color: theme.colors.muted }]}>{splitAmounts[member.user_id] === undefined ? '' : `≈ ${splitAmounts[member.user_id].toFixed(2)}`}</Text></View>; })}</View>
+      <View style={styles.actions}><Pressable onPress={onClose}><Text style={{ color: theme.colors.muted }}>取消</Text></Pressable><Pressable style={styles.save} disabled={saving} onPress={() => void save()}><Text style={styles.white}>{saving ? '儲存中…' : '儲存旅費'}</Text></Pressable></View>
+    </ScrollView>
+  </Modal>;
+}
+
+const styles = StyleSheet.create({
+  container: { flexGrow: 1, padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 27, fontWeight: '800' },
+  input: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 13 }, row: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, flex: { flex: 1 },
+  currencyChoices: { width: 128, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }, currencyChip: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 7, backgroundColor: '#e2e8f0' }, conversion: { fontSize: 12, fontWeight: '700' },
+  label: { fontWeight: '700', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: '#2563eb' }, white: { color: 'white', fontWeight: '700' },
+  memberRows: { gap: 8 }, memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }, splitInput: { width: 92, minHeight: 40, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9 }, previewAmount: { marginLeft: 'auto', fontSize: 12 },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, alignItems: 'center', marginTop: 12 }, save: { backgroundColor: '#2563eb', borderRadius: 12, padding: 13 },
+});

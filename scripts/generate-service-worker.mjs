@@ -21,7 +21,7 @@ const source = await readFile(sourcePath, 'utf8');
 const distFiles = await listFiles(path.join(root, 'dist'));
 const precachedFiles = distFiles
   .filter((file) => path.basename(file) !== 'sw.js')
-  .filter((file) => /\.(?:html|js|css|png|jpe?g|gif|svg|webp|woff2?|ttf|json|ico)$/i.test(file))
+  .filter((file) => /\.(?:html|js|css|png|jpe?g|gif|svg|webp|woff2?|ttf|json|ico|pdf)$/i.test(file))
   .map((file) => `/${path.relative(path.join(root, 'dist'), file).split(path.sep).join('/')}`);
 const safeVersion = deploymentVersion.replace(/[^a-zA-Z0-9._-]/g, '-');
 const serviceWorker = source

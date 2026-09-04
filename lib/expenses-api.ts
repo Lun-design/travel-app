@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { convertToTwd } from './exchange-rates';
 
 export type ExpenseSplit = { id?: string; expense_id?: string; user_id: string; amount: number };
 export type Expense = { id: string; trip_id: string; payer_id: string; title: string; amount: number; currency: string; category: string | null; created_at: string; splits: ExpenseSplit[] };
@@ -32,9 +33,12 @@ export async function deleteExpense(expenseId: string): Promise<void> { const { 
 
 export function calculateBalances(expenses: Expense[]): Settlement[] {
   const net = new Map<string, number>();
-  for (const expense of expenses) { net.set(expense.payer_id, (net.get(expense.payer_id) ?? 0) + Number(expense.amount)); for (const split of expense.splits) net.set(split.user_id, (net.get(split.user_id) ?? 0) - Number(split.amount)); }
+  for (const expense of expenses) {
+    net.set(expense.payer_id, (net.get(expense.payer_id) ?? 0) + convertToTwd(Number(expense.amount), expense.currency));
+    for (const split of expense.splits) net.set(split.user_id, (net.get(split.user_id) ?? 0) - convertToTwd(Number(split.amount), expense.currency));
+  }
   const creditors = [...net].filter(([, amount]) => amount > 0.009).map(([userId, amount]) => ({ userId, amount })).sort((a, b) => b.amount - a.amount);
   const debtors = [...net].filter(([, amount]) => amount < -0.009).map(([userId, amount]) => ({ userId, amount: -amount })).sort((a, b) => b.amount - a.amount); const result: Settlement[] = []; let i = 0; let j = 0;
-  while (i < debtors.length && j < creditors.length) { const amount = Math.round(Math.min(debtors[i].amount, creditors[j].amount) * 100) / 100; result.push({ from: debtors[i].userId, to: creditors[j].userId, amount, currency: expenses[0]?.currency ?? 'TWD' }); debtors[i].amount -= amount; creditors[j].amount -= amount; if (debtors[i].amount < 0.01) i++; if (creditors[j].amount < 0.01) j++; }
+  while (i < debtors.length && j < creditors.length) { const amount = Math.round(Math.min(debtors[i].amount, creditors[j].amount) * 100) / 100; result.push({ from: debtors[i].userId, to: creditors[j].userId, amount, currency: 'TWD' }); debtors[i].amount -= amount; creditors[j].amount -= amount; if (debtors[i].amount < 0.01) i++; if (creditors[j].amount < 0.01) j++; }
   return result;
 }
