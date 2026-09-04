@@ -1,13 +1,16 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { mapMarkersForDay, type ItineraryItem } from '@/lib/itinerary';
+import { getTripDetailLayout } from '@/lib/trip-detail-layout';
 
 export function TripMap({ items, day }: { items: ItineraryItem[]; day: number }) {
+  const { width } = useWindowDimensions();
+  const layout = getTripDetailLayout(width);
   const markers = mapMarkersForDay(items, day);
   const document = useMemo(() => createLeafletDocument(markers), [markers]);
 
   if (!markers.length) {
-    return <View style={styles.empty}>
+    return <View style={[styles.empty, { minHeight: layout.mapMinHeight }]}>
       <Text style={styles.emptyIcon}>🗺️</Text>
       <Text style={styles.title}>尚無可顯示的景點</Text>
       <Text style={styles.hint}>新增或編輯景點座標後，就會顯示在地圖上。</Text>
@@ -19,7 +22,7 @@ export function TripMap({ items, day }: { items: ItineraryItem[]; day: number })
     title={`Day ${day} 景點路線地圖`}
     srcDoc={document}
     sandbox="allow-scripts allow-same-origin"
-    style={iframeStyle}
+    style={{ ...iframeStyle, minHeight: layout.mapMinHeight }}
   />;
 }
 
@@ -38,6 +41,8 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
     .numbered-marker span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #2563eb; color: white; border: 3px solid white; box-shadow: 0 3px 10px rgba(15, 23, 42, .3); font-weight: 800; }
     .popup-title { font-size: 14px; font-weight: 800; margin-bottom: 3px; }
     .popup-description { color: #475569; line-height: 1.4; }
+    .leaflet-top.leaflet-left { top: 12px; left: 12px; }
+    .leaflet-top.leaflet-left .leaflet-control { margin: 0; }
   </style>
 </head>
 <body>
@@ -45,7 +50,9 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
     const points = ${data};
-    const map = L.map('map', { zoomControl: true });
+    const compactMap = window.matchMedia('(max-width: 480px)').matches;
+    const map = L.map('map', { zoomControl: false });
+    L.control.zoom({ position: 'topleft' }).addTo(map);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -68,7 +75,10 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
     });
     if (coordinates.length > 1) {
       L.polyline(coordinates, { color: '#2563eb', weight: 4, opacity: .9 }).addTo(map);
-      map.fitBounds(coordinates, { padding: [35, 35] });
+      map.fitBounds(coordinates, {
+        paddingTopLeft: [48, 48],
+        paddingBottomRight: compactMap ? [170, 78] : [48, 48]
+      });
     } else {
       map.setView(coordinates[0], 14);
     }
@@ -81,13 +91,12 @@ const iframeStyle: React.CSSProperties = {
   display: 'block',
   width: '100%',
   height: '100%',
-  minHeight: 320,
   border: 0,
   backgroundColor: '#dbeafe',
 };
 
 const styles = StyleSheet.create({
-  empty: { flex: 1, minHeight: 320, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 8 },
+  empty: { flex: 1, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 8 },
   emptyIcon: { fontSize: 30 },
   title: { color: '#0f172a', fontSize: 17, fontWeight: '800' },
   hint: { color: '#475569', textAlign: 'center' },
