@@ -9,10 +9,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "vitest run",
+    "test": "vitest run --config vitest.config.mjs",
+    "test:ci": "vitest run --config vitest.config.mjs --reporter=default",
     "type-check": "tsc --noEmit",
     "build:web": "expo export --platform web && node scripts/generate-service-worker.mjs",
-    "build": "npm run type-check && npm test && npm run build:web"
+    "build": "npm run type-check && npm run test:ci && npm run build:web"
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.12",

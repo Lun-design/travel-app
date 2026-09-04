@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createWeatherService,
+  fetchWeatherForecast,
   isWeatherAlert,
   parseOpenMeteoResponse,
   weatherCodeToPresentation,
 } from '../lib/weather-api';
+import { blockedNetworkFetch } from './setup';
 
 describe('weather helpers', () => {
   it('maps Open-Meteo weather codes to UI presentation', () => {
@@ -85,6 +87,7 @@ describe('weather helpers', () => {
   });
 
   it('returns a mock weather summary when Open-Meteo fails', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const fetchMock = vi.fn().mockRejectedValue(new Error('network unavailable'));
     const service = createWeatherService(fetchMock);
 
@@ -94,5 +97,20 @@ describe('weather helpers', () => {
       temperatureMaxC: 24,
       precipitationProbability: 10,
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
+  });
+
+  it('keeps the default weather singleton offline in the test environment', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(fetchWeatherForecast(24.12345, 121.54321, '2099-01-01')).resolves.toMatchObject({
+      date: '2099-01-01',
+      temperatureMinC: 24,
+      temperatureMaxC: 24,
+      precipitationProbability: 10,
+    });
+    expect(blockedNetworkFetch).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
   });
 });

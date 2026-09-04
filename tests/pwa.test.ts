@@ -42,7 +42,7 @@ describe('PWA deployment configuration', () => {
     expect(vercel.rewrites?.some((rewrite) => rewrite.destination === '/index.html')).toBe(true);
     expect(packageJson.scripts?.['type-check']).toBe('tsc --noEmit');
     expect(packageJson.scripts?.build).toContain('npm run type-check');
-    expect(packageJson.scripts?.build).toContain('npm test');
+    expect(packageJson.scripts?.build).toContain('npm run test:ci');
     expect(packageJson.scripts?.['build:web']).toContain('generate-service-worker.mjs');
   });
 });
