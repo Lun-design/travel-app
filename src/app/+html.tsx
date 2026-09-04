@@ -16,10 +16,10 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="出遊由起來" />
+        <meta name="apple-mobile-web-app-title" content="大白小白出遊去" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icon.png" />
-        <link rel="icon" type="image/png" sizes="48x48" href="/favicon.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
         <script dangerouslySetInnerHTML={{ __html: serviceWorkerBootstrap }} />
         <ScrollViewStyleReset />
       </head>

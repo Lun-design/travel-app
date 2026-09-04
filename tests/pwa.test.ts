@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -9,8 +9,8 @@ describe('PWA deployment configuration', () => {
     const manifest = JSON.parse(readFileSync(projectFile('public', 'manifest.json'), 'utf8')) as Record<string, unknown>;
     const html = readFileSync(projectFile('src', 'app', '+html.tsx'), 'utf8');
 
-    expect(manifest.name).toContain('出遊由起來');
-    expect(manifest.short_name).toBe('出遊由起來');
+    expect(manifest.name).toBe('大白小白出遊去');
+    expect(manifest.short_name).toBe('大白出遊');
     expect(manifest.start_url).toBe('/');
     expect(manifest.display).toBe('standalone');
     expect(manifest.background_color).toBe('#ffffff');
@@ -20,6 +20,41 @@ describe('PWA deployment configuration', () => {
     expect(html).toContain('apple-mobile-web-app-title');
     expect(html).toContain('apple-touch-icon');
     expect(html).toContain("/manifest.json");
+  });
+
+  it('points Expo and PWA branding to the custom puppy PNG icons', () => {
+    const appConfig = JSON.parse(readFileSync(projectFile('app.json'), 'utf8')) as {
+      expo?: {
+        name?: string;
+        icon?: string;
+        ios?: { icon?: string };
+        android?: { adaptiveIcon?: { foregroundImage?: string; backgroundImage?: string; monochromeImage?: string } };
+        web?: { favicon?: string; name?: string; shortName?: string };
+      };
+    };
+    const manifest = JSON.parse(readFileSync(projectFile('public', 'manifest.json'), 'utf8')) as {
+      name?: string;
+      short_name?: string;
+      icons?: Array<{ src?: string; sizes?: string; type?: string }>;
+    };
+
+    expect(appConfig.expo?.name).toBe('大白小白出遊去');
+    expect(appConfig.expo?.icon).toBe('./icon.png');
+    expect(appConfig.expo?.ios?.icon).toBe('./icon.png');
+    expect(appConfig.expo?.android?.adaptiveIcon?.foregroundImage).toBe('./icon.png');
+    expect(appConfig.expo?.android?.adaptiveIcon?.backgroundImage).toBeUndefined();
+    expect(appConfig.expo?.android?.adaptiveIcon?.monochromeImage).toBeUndefined();
+    expect(appConfig.expo?.web?.favicon).toBe('./favicon.png');
+    expect(appConfig.expo?.web?.name).toBe('大白小白出遊去');
+    expect(appConfig.expo?.web?.shortName).toBe('大白出遊');
+    expect(existsSync(projectFile('icon.png'))).toBe(true);
+    expect(existsSync(projectFile('favicon.png'))).toBe(true);
+    expect(manifest.name).toBe('大白小白出遊去');
+    expect(manifest.short_name).toBe('大白出遊');
+    expect(manifest.icons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ src: '/icon.png', sizes: '192x192', type: 'image/png' }),
+      expect.objectContaining({ src: '/icon.png', sizes: '512x512', type: 'image/png' }),
+    ]));
   });
 
   it('uses versioned caches and activates the latest service worker', () => {
