@@ -53,6 +53,37 @@ type RuntimeWithWebSocket = {
   WebSocket?: WebSocketConstructor;
 };
 
+type SupabaseRuntime = RuntimeWithWebSocket & {
+  window?: unknown;
+  navigator?: {
+    product?: string;
+  };
+};
+
+export type SupabaseAuthRuntimeOptions = {
+  autoRefreshToken: boolean;
+  persistSession: boolean;
+  detectSessionInUrl: boolean;
+};
+
+/**
+ * Expo static export evaluates the root layout in Node.js. Browser auth timers,
+ * URL parsing and persistent storage must stay disabled in that environment.
+ */
+export function getSupabaseAuthOptions(
+  runtime: SupabaseRuntime = globalThis as SupabaseRuntime,
+): SupabaseAuthRuntimeOptions {
+  const isBrowser = runtime.window !== undefined;
+  const isReactNative = runtime.navigator?.product === 'ReactNative';
+  const isInteractiveRuntime = isBrowser || isReactNative;
+
+  return {
+    autoRefreshToken: isInteractiveRuntime,
+    persistSession: isInteractiveRuntime,
+    detectSessionInUrl: isBrowser,
+  };
+}
+
 /** Select native WebSocket where available and a safe fallback otherwise. */
 export function getRealtimeOptions(
   runtime: RuntimeWithWebSocket = globalThis as RuntimeWithWebSocket,

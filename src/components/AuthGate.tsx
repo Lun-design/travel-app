@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
-import { onSupabaseAuthRecovery, pingSupabase, supabase } from '@/lib/supabase';
+import {
+  isSupabaseConfigured,
+  onSupabaseAuthRecovery,
+  pingSupabase,
+  supabase,
+  SUPABASE_CONFIGURATION_MESSAGE,
+} from '@/lib/supabase';
 import { authRedirectTarget, authStatus, friendlyAuthError, isInvalidSessionError, type AuthStatus } from '@/lib/auth';
 import { PuppyMascot } from './PuppyMascot';
 
@@ -16,6 +22,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
+
+    if (!isSupabaseConfigured) {
+      setRecoveryMessage(SUPABASE_CONFIGURATION_MESSAGE);
+      setStatus('signedOut');
+      return () => {
+        active = false;
+      };
+    }
 
     async function clearInvalidLocalSession(error: unknown) {
       console.error('[AuthGate] invalid session cleared', error);

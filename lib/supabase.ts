@@ -1,14 +1,29 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
-import { readSupabaseConfig } from './supabase-config';
-import { getRealtimeOptions } from './supabase-runtime';
+import { resolveSupabaseConfig } from './supabase-config';
+import { getRealtimeOptions, getSupabaseAuthOptions } from './supabase-runtime';
 import { buildSupabaseHealthcheckUrl } from './supabase-health';
 import { createAuthAwareFetch, JWT_RECOVERY_MESSAGE } from './supabase-auth-recovery';
 
-const { url, anonKey } = readSupabaseConfig(process.env as Record<string, string | undefined>);
-console.info('[Supabase] public environment loaded', { url: Boolean(url), anonKey: Boolean(anonKey) });
+// Keep dot-notation references explicit so Expo can inline EXPO_PUBLIC values
+// into the browser bundle. Dynamic reads from `process.env` are not inlined.
+const config = resolveSupabaseConfig({
+  EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+});
+const { url, anonKey } = config;
+
+export const isSupabaseConfigured = config.configured;
+export const SUPABASE_CONFIGURATION_MESSAGE = config.configured
+  ? ''
+  : `Supabase 尚未設定：${config.missing.join('、')}。請在 Vercel 專案環境變數補齊後重新部署。`;
+
+if (config.configured) {
+  console.info('[Supabase] public environment loaded', { url: true, anonKey: true });
+} else {
+  console.warn(`[Supabase] ${SUPABASE_CONFIGURATION_MESSAGE}`);
+}
 
 let supabaseClient: SupabaseClient | null = null;
 let recoveryListener: ((error: unknown) => void) | null = null;
@@ -49,13 +64,7 @@ const authAwareFetch = createAuthAwareFetch({
 });
 
 export const supabase = createClient(url, anonKey, {
-  auth: {
-    // Keep the SDK's timer-based refresh enabled; the fetch wrapper below also
-    // handles a token rejected early because of server/device clock skew.
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: Platform.OS === 'web',
-  },
+  auth: getSupabaseAuthOptions(),
   global: { fetch: authAwareFetch },
   realtime: getRealtimeOptions(),
 });
