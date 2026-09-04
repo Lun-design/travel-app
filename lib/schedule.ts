@@ -29,11 +29,17 @@ export type ScheduledItem = {
 
 function parseTime(value: string | null | undefined): number | null {
   if (typeof value !== 'string' || !value) return null;
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  // Supabase returns PostgreSQL `time` values as HH:mm:ss, while the form
+  // stores the shorter HH:mm representation. Accept both forms so an
+  // explicit start time is never mistaken for an unset value.
+  const match = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/.exec(value.trim());
   if (!match) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
-  return hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60 ? hours * 60 + minutes : null;
+  const seconds = match[3] === undefined ? 0 : Number(match[3]);
+  return hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60 && seconds >= 0 && seconds < 60
+    ? hours * 60 + minutes
+    : null;
 }
 
 function formatTime(totalMinutes: number): string {

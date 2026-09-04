@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { buildRouteSegments, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
+import { tripDateForDay } from '@/lib/trip-dates';
+import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
+import type { Voucher } from '@/lib/vouchers';
 import type { ScheduleContext, ScheduledItem } from '@/lib/schedule';
+import { PuppyMascot } from './PuppyMascot';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍜', hotel: '🛏️', flight: '✈️', trail: '🥾', outdoor: '🌲' };
 
@@ -11,7 +15,39 @@ export type ItineraryTimelineProps = {
   onDelete: (item: ItineraryItem) => void;
   onReorder?: (items: { id: string; position: number }[]) => Promise<void>;
   scheduleContext?: ScheduleContext;
+  vouchers?: Voucher[];
+  onPreviewVoucher?: (voucher: Voucher) => void;
 };
+
+/** Load one cached daily weather summary per located item without blocking the timeline. */
+export function useWeatherByItem(items: ItineraryItem[], context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber'>) {
+  const [weatherById, setWeatherById] = useState<Record<string, WeatherSummary>>({});
+  const itemKey = items.map((item) => `${item.id}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
+
+  useEffect(() => {
+    let active = true;
+    const date = context ? tripDateForDay(context.tripStartDate, context.dayNumber) : null;
+    const weatherItems = date ? items : [];
+    setWeatherById({});
+    if (!date || !weatherItems.length) return () => { active = false; };
+
+    void Promise.all(weatherItems.map(async (item) => {
+      const latitude = item.latitude === null || item.latitude === undefined ? null : Number(item.latitude);
+      const longitude = item.longitude === null || item.longitude === undefined ? null : Number(item.longitude);
+      const weather = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? await fetchWeatherForecast(latitude, longitude, date)
+        : createMockWeatherSummary(date);
+      return [item.id, weather] as const;
+    })).then((entries) => {
+      if (!active) return;
+      setWeatherById(Object.fromEntries(entries.flatMap(([id, weather]) => weather ? [[id, weather]] : [])) as Record<string, WeatherSummary>);
+    });
+
+    return () => { active = false; };
+  }, [context?.dayNumber, context?.tripStartDate, itemKey]);
+
+  return weatherById;
+}
 
 export function segmentsForItems(items: ItineraryItem[]) {
   return items.length ? buildRouteSegments(items, items[0].day_number) : [];
@@ -21,16 +57,21 @@ export function orderPayload(items: ItineraryItem[]) {
   return items.map(({ id, position }) => ({ id, position }));
 }
 
-export function TimelineCard({ item, segment, scheduled, grip, active, onEdit, onDelete }: {
+export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, grip, active, onEdit, onDelete }: {
   item: ItineraryItem;
   segment?: RouteSegment;
   scheduled?: ScheduledItem;
+  weather?: WeatherSummary;
+  vouchers?: Voucher[];
+  onPreviewVoucher?: (voucher: Voucher) => void;
   grip: React.ReactNode;
   active?: boolean;
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => void;
 }) {
   const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
+  const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
+  const [favorite, setFavorite] = useState(false);
   return <View>
     <View style={styles.row}>
       <View style={styles.rail}><View style={styles.line} /><View style={styles.dot} /></View>
@@ -44,23 +85,41 @@ export function TimelineCard({ item, segment, scheduled, grip, active, onEdit, o
           <View style={styles.content}>
             <View style={styles.cardHeader}>
               <Text style={styles.time}>{scheduled?.arrivalTime ?? item.time ?? '未設定'}{scheduled?.estimated ? ' · 推算' : ''}</Text>
-              <Text style={styles.category}>{icons[item.category] ?? '📌'} {item.category}</Text>
+              <View style={styles.categoryWrap}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食景點" /> : null}<Text numberOfLines={1} style={styles.category}>{icons[item.category] ?? '📌'} {item.category}</Text></View>
             </View>
+            {weather ? <View style={styles.weatherRow}>
+              {!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="適合出遊" /> : null}
+              <Text style={styles.weatherText}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>
+              {weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>降雨 {Math.round(weather.precipitationProbability)}%</Text> : null}
+            </View> : null}
+            {weather && isWeatherAlert(weather) ? <View style={styles.weatherAlerts}>
+              {weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘 / 降雨預警</Text> : null}
+              {weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}
+            </View> : null}
             <Text style={styles.name}>{item.location_name}</Text>
             <Text style={styles.duration}>⏱ 停留 {duration} 分鐘 · 離開 {scheduled?.departureTime ?? '—'}</Text>
             {item.address ? <Text style={styles.address}>{item.address}</Text> : null}
             {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
-            <View style={styles.actions}><Pressable onPress={() => onEdit(item)}><Text style={styles.edit}>編輯</Text></Pressable><Pressable onPress={() => onDelete(item)}><Text style={styles.delete}>刪除</Text></Pressable></View>
+            <View style={styles.actions}><Pressable onPress={() => onEdit(item)}><Text style={styles.edit}>編輯</Text></Pressable><Pressable onPress={() => onDelete(item)}><Text style={styles.delete}>刪除</Text></Pressable>{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable onPress={() => onPreviewVoucher(itemVouchers[0])}><Text style={styles.voucher}>🎫 檢視票券{itemVouchers.length > 1 ? ` (${itemVouchers.length})` : ''}</Text></Pressable> : null}<Pressable onPress={() => setFavorite((current) => !current)}><View style={styles.favorite}>{favorite ? <PuppyMascot puppy="-3" size={28} accessibilityLabel="已收藏景點" /> : <Text style={styles.favoriteText}>♡ 收藏</Text>}</View></Pressable></View>
           </View>
         </View>
       </View>
     </View>
-    {segment ? <View style={styles.transition}><Text style={styles.transitionIcon}>🚗</Text><Text style={styles.transitionText}>下一站 {formatDistance(segment.distanceKm)} · 車程約 {segment.estimatedDriveMinutes} 分鐘</Text></View> : null}
+    {segment ? <View style={styles.transition}><PuppyMascot puppy="-8" size={46} style={styles.inlineMascot} accessibilityLabel="下一站交通" /><Text style={styles.transitionText}>下一站 {formatDistance(segment.distanceKm)} · 車程約 {segment.estimatedDriveMinutes} 分鐘</Text></View> : null}
   </View>;
 }
 
+function formatTemperature(weather: WeatherSummary) {
+  const min = weather.temperatureMinC === null ? null : Math.round(weather.temperatureMinC);
+  const max = weather.temperatureMaxC === null ? null : Math.round(weather.temperatureMaxC);
+  if (min !== null && max !== null) return `${min}–${max}°C`;
+  if (max !== null) return `${max}°C`;
+  if (min !== null) return `${min}°C`;
+  return '氣溫未明';
+}
+
 export function EmptyTimeline() {
-  return <View style={styles.empty}><Text style={styles.emptyIcon}>🗺️</Text><Text style={styles.emptyText}>這一天還沒有安排景點。</Text></View>;
+  return <View style={styles.empty}><PuppyMascot puppy="-7" size={165} accessibilityLabel="尚未安排景點" /><Text style={styles.emptyText}>這一天還沒有安排景點。</Text></View>;
 }
 
 export function NativeGripHandle({ label, onLongPress }: { label: string; onLongPress: () => void }) {
@@ -89,7 +148,15 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: 5 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   time: { color: '#2563eb', fontWeight: '800' },
-  category: { color: '#64748b', fontSize: 12 },
+  category: { color: '#64748b', fontSize: 12, flexShrink: 1 },
+  categoryWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  inlineMascot: { flexShrink: 0 },
+  weatherRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  weatherText: { color: '#334155', fontSize: 12, fontWeight: '700' },
+  rainProbability: { color: '#2563eb', fontSize: 12, fontWeight: '800' },
+  weatherAlerts: { gap: 4 },
+  weatherWarning: { alignSelf: 'flex-start', color: '#075985', backgroundColor: '#e0f2fe', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' },
+  extremeWarning: { alignSelf: 'flex-start', color: '#9a3412', backgroundColor: '#ffedd5', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' },
   name: { color: '#0f172a', fontSize: 18, fontWeight: '800' },
   duration: { color: '#475569', fontSize: 13 },
   warningStack: { position: 'absolute', top: 10, right: 10, zIndex: 2, alignItems: 'flex-end', gap: 4, maxWidth: '72%' },
@@ -100,7 +167,10 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 16, marginTop: 5 },
   edit: { color: '#2563eb', fontWeight: '700' },
   delete: { color: '#dc2626', fontWeight: '700' },
+  voucher: { color: '#7c3aed', fontWeight: '700' },
+  favorite: { minWidth: 48, alignItems: 'center', justifyContent: 'center' },
+  favoriteText: { color: '#64748b', fontWeight: '700' },
   transition: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -5, marginBottom: 10, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' },
   transitionIcon: { fontSize: 13 },
-  transitionText: { color: '#1d4ed8', fontSize: 12, fontWeight: '700' },
+  transitionText: { color: '#1d4ed8', fontSize: 12, fontWeight: '700', flexShrink: 1 },
 });

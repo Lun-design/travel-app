@@ -9,7 +9,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "type-check": "tsc --noEmit",
+    "build:web": "expo export --platform web && node scripts/generate-service-worker.mjs",
+    "build": "npm run type-check && npm test && npm run build:web"
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.12",

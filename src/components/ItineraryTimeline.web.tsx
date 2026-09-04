@@ -4,13 +4,14 @@ import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-p
 import { reorderItineraryItems, type ItineraryItem } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
-import { EmptyTimeline, orderPayload, segmentsForItems, TimelineCard, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
+import { EmptyTimeline, orderPayload, segmentsForItems, TimelineCard, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 
-export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, scheduleContext }: ItineraryTimelineProps) {
+export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(items);
   const segments = useMemo(() => segmentsForItems(localItems), [localItems]);
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
   const scheduleById = useMemo(() => new Map(scheduled.map((entry) => [entry.item.id, entry])), [scheduled]);
+  const weatherById = useWeatherByItem(localItems, scheduleContext);
   useEffect(() => setLocalItems(items), [items]);
 
   async function finishDrag(result: DropResult) {
@@ -32,7 +33,7 @@ export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, schedule
       {(dropProvided) => <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} style={dropZoneStyle}>
         {localItems.map((item, index) => <Draggable key={item.id} draggableId={item.id} index={index}>
           {(dragProvided, snapshot) => <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={{ ...dragProvided.draggableProps.style, zIndex: snapshot.isDragging ? 10 : undefined }}>
-            <TimelineCard item={item} scheduled={scheduleById.get(item.id)} segment={segments.find((segment) => segment.fromId === item.id)} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging} onEdit={onEdit} onDelete={onDelete} />
+            <TimelineCard item={item} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging} onEdit={onEdit} onDelete={onDelete} />
           </div>}
         </Draggable>)}
         {dropProvided.placeholder as React.ReactNode}

@@ -10,6 +10,45 @@ export type ItineraryItem = {
   opening_hours?: OpeningHours | null;
 };
 
+/**
+ * Values accepted by the itinerary editor before they are sent to Supabase.
+ * The form uses strings for some fields, so keep this normalization in a
+ * pure helper that can also be covered without loading the Supabase client.
+ */
+export type ItineraryItemSaveInput = Partial<ItineraryItem> & { trip_id: string; created_by: string };
+
+function normalizeTimeValue(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(trimmed);
+  if (!match) return trimmed;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return trimmed;
+  return `${String(hours).padStart(2, '0')}:${match[2]}`;
+}
+
+/** Normalize form/AI values while preserving omitted fields for partial updates. */
+export function normalizeItineraryItemPayload(item: ItineraryItemSaveInput): ItineraryItemSaveInput {
+  const payload = { ...item };
+  if (item.day_number !== undefined) {
+    const dayNumber = Number(item.day_number);
+    if (Number.isFinite(dayNumber)) payload.day_number = Math.max(1, Math.trunc(dayNumber));
+  }
+  if ('time' in item) payload.time = normalizeTimeValue(item.time) ?? null;
+  if ('duration_minutes' in item) {
+    const duration = item.duration_minutes == null ? null : Number(item.duration_minutes);
+    payload.duration_minutes = duration !== null && Number.isFinite(duration) && duration > 0
+      ? Math.round(duration)
+      : null;
+  }
+  if ('opening_hours' in item) payload.opening_hours = item.opening_hours ?? null;
+  return payload;
+}
+
 export type Coordinate = { latitude: number; longitude: number };
 export type MapMarkerData = Coordinate & {
   id: string;

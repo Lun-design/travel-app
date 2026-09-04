@@ -7,6 +7,9 @@ describe('auth helpers', () => {
   it('translates invalid credentials', () => expect(friendlyAuthError(new Error('Invalid login credentials'))).toBe('Email 或密碼不正確。'));
   it('explains an already registered email', () => expect(friendlyAuthError(new Error('User already registered'))).toContain('請改用登入或其他 Email'));
   it('explains a network fetch failure', () => expect(friendlyAuthError(new TypeError('Failed to fetch'))).toBe('無法連線至 Supabase 伺服器，請檢查網路或 .env 設定。'));
+  it('explains a JWT clock-skew failure and asks for time synchronization', () => {
+    expect(friendlyAuthError({ code: 'PGRST303', message: 'JWT issued at future' })).toContain('同步裝置時間');
+  });
   it('recognizes a future-issued JWT as an invalid local session', () => {
     expect(isInvalidSessionError({ code: 'PGRST303', message: 'JWT issued at future' })).toBe(true);
   });

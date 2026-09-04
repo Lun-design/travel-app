@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDaySchedule, isOpenAt, type ScheduleItem } from '../lib/schedule';
+import { parseGoogleOpeningHours } from '../lib/google-places';
 
 const item = (overrides: Partial<ScheduleItem>): ScheduleItem => ({
   id: overrides.id ?? 'item',
@@ -41,6 +42,31 @@ describe('buildDaySchedule', () => {
 
     expect(schedule[1].arrivalTime).toBe('10:30');
     expect(schedule[1].overlapWarning).toBe(true);
+  });
+
+  it('preserves explicit PostgreSQL time values with seconds and detects overlap', () => {
+    const schedule = buildDaySchedule([
+      item({ id: 'restaurant', time: '14:00:00', duration_minutes: 60 }),
+      item({ id: 'conflict', position: 1, time: '14:15:00', duration_minutes: 30 }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, defaultDepartureTime: '09:00' });
+
+    expect(schedule.map((entry) => entry.arrivalTime)).toEqual(['14:00', '14:15']);
+    expect(schedule[0].estimated).toBe(false);
+    expect(schedule[1].overlapWarning).toBe(true);
+  });
+
+  it('does not warn for a Day 3 14:00 arrival inside a parsed afternoon interval', () => {
+    const openingHours = parseGoogleOpeningHours({
+      weekdayDescriptions: ['Thursday: 11:30 AM–2 PM, 2:00–4:30 PM, 5:30–9:30 PM'],
+    });
+    const [entry] = buildDaySchedule([item({
+      time: '14:00:00',
+      opening_hours: openingHours,
+      duration_minutes: 60,
+    })], { tripStartDate: '2026-01-20', dayNumber: 3, defaultDepartureTime: '09:00' });
+
+    expect(entry.arrivalTime).toBe('14:00');
+    expect(entry.openingWarning).toBe(false);
   });
 
   it('uses the selected itinerary day when checking weekly opening hours', () => {

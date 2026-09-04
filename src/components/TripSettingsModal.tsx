@@ -1,35 +1,48 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { isValidTripDateRange } from '@/lib/trip-dates';
 
 type Props = {
   visible: boolean;
+  startDate: string;
+  endDate: string;
   departureTime: string | null | undefined;
   onClose: () => void;
-  onSave: (defaultDepartureTime: string | null) => Promise<void>;
+  onSave: (changes: { start_date: string; end_date: string; default_departure_time: string | null }) => Promise<void>;
 };
 
-export function TripSettingsModal({ visible, departureTime, onClose, onSave }: Props) {
-  const [value, setValue] = useState('');
+export function TripSettingsModal({ visible, startDate, endDate, departureTime, onClose, onSave }: Props) {
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [departure, setDeparture] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setValue(departureTime ?? '');
+      setStart(startDate);
+      setEnd(endDate);
+      setDeparture(departureTime ?? '');
       setError('');
     }
-  }, [departureTime, visible]);
+  }, [departureTime, endDate, startDate, visible]);
 
   async function save() {
-    const trimmed = value.trim();
-    if (trimmed && !/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmed)) {
+    const trimmedStart = start.trim();
+    const trimmedEnd = end.trim();
+    const trimmedDeparture = departure.trim();
+    if (!isValidTripDateRange(trimmedStart, trimmedEnd)) {
+      setError('請輸入有效日期，且結束日期不可早於開始日期（YYYY-MM-DD）。');
+      return;
+    }
+    if (trimmedDeparture && !/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmedDeparture)) {
       setError('請使用 HH:mm 格式，例如 09:00。');
       return;
     }
     setSaving(true);
     setError('');
     try {
-      await onSave(trimmed || null);
+      await onSave({ start_date: trimmedStart, end_date: trimmedEnd, default_departure_time: trimmedDeparture || null });
       onClose();
     } catch (cause: any) {
       console.error('[TripSettingsModal] save failed', cause);
@@ -43,8 +56,13 @@ export function TripSettingsModal({ visible, departureTime, onClose, onSave }: P
     <View style={styles.backdrop}>
       <View style={styles.card}>
         <Text style={styles.title}>行程設定</Text>
+        <Text style={styles.label}>開始日期</Text>
+        <TextInput style={styles.input} value={start} onChangeText={setStart} placeholder="2026-01-20" autoCapitalize="none" keyboardType="numbers-and-punctuation" />
+        <Text style={styles.label}>結束日期</Text>
+        <TextInput style={styles.input} value={end} onChangeText={setEnd} placeholder="2026-01-23" autoCapitalize="none" keyboardType="numbers-and-punctuation" />
+        <Text style={styles.helper}>請使用 YYYY-MM-DD 格式；結束日期不可早於開始日期。</Text>
         <Text style={styles.label}>預設每日出發時間</Text>
-        <TextInput style={styles.input} value={value} onChangeText={setValue} placeholder="09:00" autoCapitalize="none" />
+        <TextInput style={styles.input} value={departure} onChangeText={setDeparture} placeholder="09:00" autoCapitalize="none" />
         <Text style={styles.helper}>若景點沒有填開始時間，會依此時間推算；留白時使用 09:00。</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>

@@ -47,6 +47,19 @@ describe('parseGoogleOpeningHours', () => {
       weekdayDescriptions: ['Monday: 9:00 AM – 5:00 PM'],
     })?.monday).toEqual({ closed: false, periods: [{ open: '09:00', close: '17:00' }] });
   });
+
+  it('inherits the range meridiem when Google omits it on later intervals', () => {
+    expect(parseGoogleOpeningHours({
+      weekdayDescriptions: ['Thursday: 11:30 AM–2 PM, 2:30–4:30 PM, 5:30–9:30 PM'],
+    })?.thursday).toEqual({
+      closed: false,
+      periods: [
+        { open: '11:30', close: '14:00' },
+        { open: '14:30', close: '16:30' },
+        { open: '17:30', close: '21:30' },
+      ],
+    });
+  });
 });
 
 describe('Google Places API mapping', () => {

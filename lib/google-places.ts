@@ -82,6 +82,10 @@ function parseClockToken(value: string): string | null {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+function clockMeridiem(value: string): string | null {
+  return value.replace(/[\u202f\u00a0]/g, ' ').trim().match(/(?:上午|下午|晚上|中午|AM|PM)$/iu)?.[0] ?? null;
+}
+
 function parseDescriptionPeriods(value: string): OpeningPeriod[] | null {
   const normalized = value.replace(/[\u202f\u00a0]/g, ' ').trim();
   if (/^(closed|休息|公休|無營業|暫停營業)$/iu.test(normalized)) return [];
@@ -90,8 +94,13 @@ function parseDescriptionPeriods(value: string): OpeningPeriod[] | null {
   const range = new RegExp(`(${clock})\\s*(?:-|–|—|~|〜|至|到|to)\\s*(${clock})`, 'giu');
   const periods: OpeningPeriod[] = [];
   for (const match of normalized.matchAll(range)) {
-    const open = parseClockToken(match[1]);
-    const close = parseClockToken(match[2]);
+    const openMarker = clockMeridiem(match[1]);
+    const closeMarker = clockMeridiem(match[2]);
+    // Google often writes `2:30–4:30 PM`, omitting the meridiem on the
+    // opening endpoint. Inherit the endpoint's marker before converting to
+    // 24-hour time; otherwise the interval is incorrectly parsed as 02:30.
+    const open = parseClockToken(openMarker || !closeMarker ? match[1] : `${match[1]} ${closeMarker}`);
+    const close = parseClockToken(closeMarker || !openMarker ? match[2] : `${match[2]} ${openMarker}`);
     if (open && close) periods.push({ open, close });
   }
   return periods.length ? periods : null;

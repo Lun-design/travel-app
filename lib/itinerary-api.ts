@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { ItineraryItem } from './itinerary';
+import { normalizeItineraryItemPayload, type ItineraryItem, type ItineraryItemSaveInput } from './itinerary';
 
 export async function listItineraryItems(tripId: string): Promise<ItineraryItem[]> {
   const { data, error } = await supabase.from('itinerary_items').select('*').eq('trip_id', tripId).order('day_number').order('position');
@@ -13,10 +13,11 @@ export async function updateItineraryItemsOrder(items: { id: string; position: n
   if (failed?.error) throw failed.error;
 }
 
-export async function saveItineraryItem(item: Partial<ItineraryItem> & { trip_id: string; created_by: string }): Promise<ItineraryItem> {
-  const query = item.id
-    ? supabase.from('itinerary_items').update(item).eq('id', item.id).select().single()
-    : supabase.from('itinerary_items').insert(item).select().single();
+export async function saveItineraryItem(item: ItineraryItemSaveInput): Promise<ItineraryItem> {
+  const payload = normalizeItineraryItemPayload(item);
+  const query = payload.id
+    ? supabase.from('itinerary_items').update(payload).eq('id', payload.id).select().single()
+    : supabase.from('itinerary_items').insert(payload).select().single();
   const { data, error } = await query;
   if (error) throw error;
   return data as ItineraryItem;
