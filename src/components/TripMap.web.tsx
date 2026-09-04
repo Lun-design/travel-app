@@ -1,13 +1,25 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { mapMarkersForDay, type ItineraryItem } from '@/lib/itinerary';
 import { getTripDetailLayout } from '@/lib/trip-detail-layout';
 
-export function TripMap({ items, day }: { items: ItineraryItem[]; day: number }) {
+export function TripMap({ items, day, onMarkerPress }: { items: ItineraryItem[]; day: number; onMarkerPress?: (itemId: string) => void }) {
   const { width } = useWindowDimensions();
   const layout = getTripDetailLayout(width);
   const markers = mapMarkersForDay(items, day);
   const document = useMemo(() => createLeafletDocument(markers), [markers]);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (!onMarkerPress) return;
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (event.data?.type !== 'trip-map-marker-press' || typeof event.data.itemId !== 'string') return;
+      onMarkerPress(event.data.itemId);
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onMarkerPress]);
 
   if (!markers.length) {
     return <View style={[styles.empty, { minHeight: layout.mapMinHeight }]}>
@@ -18,6 +30,7 @@ export function TripMap({ items, day }: { items: ItineraryItem[]; day: number })
   }
 
   return <iframe
+    ref={iframeRef}
     key={`${day}-${markers.map((marker) => marker.id).join('-')}`}
     title={`Day ${day} 景點路線地圖`}
     srcDoc={document}
@@ -71,7 +84,10 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
         description.textContent = point.description;
         popup.appendChild(description);
       }
-      L.marker([point.latitude, point.longitude], { icon: icon }).addTo(map).bindPopup(popup);
+      const marker = L.marker([point.latitude, point.longitude], { icon: icon }).addTo(map).bindPopup(popup);
+      marker.on('click', function () {
+        window.parent.postMessage({ type: 'trip-map-marker-press', itemId: point.id }, '*');
+      });
     });
     if (coordinates.length > 1) {
       L.polyline(coordinates, { color: '#2563eb', weight: 4, opacity: .9 }).addTo(map);

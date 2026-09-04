@@ -73,7 +73,7 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
     finally { setBusy(false); }
   }
 
-  return <ScrollView contentContainerStyle={styles.container}>
+  return <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
     <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
     <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 AI 智慧建議清單</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
@@ -94,7 +94,8 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: 4, paddingBottom: 100, gap: 13 },
+  scroll: { flex: 1, width: '100%', maxWidth: '100%', minHeight: 0, overflow: 'hidden' },
+  container: { width: '100%', maxWidth: '100%', minHeight: 0, boxSizing: 'border-box', padding: 4, paddingBottom: 100, gap: 13 },
   progressCard: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: '#eff6ff', borderRadius: 17, padding: 14, gap: 12 },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   progressTitle: { color: '#1e3a8a', fontWeight: '800', flexShrink: 1 },

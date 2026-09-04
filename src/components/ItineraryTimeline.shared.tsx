@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { buildRouteSegments, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
 import type { Voucher } from '@/lib/vouchers';
 import type { ScheduleContext, ScheduledItem } from '@/lib/schedule';
+import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
 import { PuppyMascot } from './PuppyMascot';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍜', hotel: '🛏️', flight: '✈️', trail: '🥾', outdoor: '🌲' };
@@ -14,6 +15,7 @@ export type ItineraryTimelineProps = {
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => void;
   onReorder?: (items: { id: string; position: number }[]) => Promise<void>;
+  focusedItemId?: string | null;
   scheduleContext?: ScheduleContext;
   vouchers?: Voucher[];
   onPreviewVoucher?: (voucher: Voucher) => void;
@@ -71,6 +73,7 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
 }) {
   const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
+  const navigationUrl = getGoogleMapsDirectionsUrl(item.latitude, item.longitude);
   const [favorite, setFavorite] = useState(false);
   return <View>
     <View style={styles.row}>
@@ -100,6 +103,7 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
             <Text style={styles.duration}>⏱ 停留 {duration} 分鐘 · 離開 {scheduled?.departureTime ?? '—'}</Text>
             {item.address ? <Text style={styles.address}>{item.address}</Text> : null}
             {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
+            {navigationUrl ? <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={styles.navigation}>🧭 開啟 Google Maps 導航</Text></Pressable> : null}
             <View style={styles.actions}><Pressable onPress={() => onEdit(item)}><Text style={styles.edit}>編輯</Text></Pressable><Pressable onPress={() => onDelete(item)}><Text style={styles.delete}>刪除</Text></Pressable>{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable onPress={() => onPreviewVoucher(itemVouchers[0])}><Text style={styles.voucher}>🎫 檢視票券{itemVouchers.length > 1 ? ` (${itemVouchers.length})` : ''}</Text></Pressable> : null}<Pressable onPress={() => setFavorite((current) => !current)}><View style={styles.favorite}>{favorite ? <PuppyMascot puppy="-3" size={28} accessibilityLabel="已收藏景點" /> : <Text style={styles.favoriteText}>♡ 收藏</Text>}</View></Pressable></View>
           </View>
         </View>
@@ -164,6 +168,7 @@ const styles = StyleSheet.create({
   overlapWarning: { alignSelf: 'flex-start', color: '#991b1b', backgroundColor: '#fee2e2', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' },
   address: { color: '#64748b', fontSize: 13 },
   notes: { color: '#475569', fontSize: 13, fontStyle: 'italic' },
+  navigation: { alignSelf: 'flex-start', color: '#1d4ed8', fontSize: 12, fontWeight: '800', paddingVertical: 2 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 5 },
   edit: { color: '#2563eb', fontWeight: '700' },
   delete: { color: '#dc2626', fontWeight: '700' },

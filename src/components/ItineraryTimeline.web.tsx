@@ -6,7 +6,7 @@ import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { EmptyTimeline, orderPayload, segmentsForItems, TimelineCard, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 
-export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher }: ItineraryTimelineProps) {
+export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(items);
   const segments = useMemo(() => segmentsForItems(localItems), [localItems]);
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
@@ -32,8 +32,8 @@ export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, schedule
     <Droppable droppableId="itinerary-timeline">
       {(dropProvided) => <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} style={dropZoneStyle}>
         {localItems.map((item, index) => <Draggable key={item.id} draggableId={item.id} index={index}>
-          {(dragProvided, snapshot) => <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={{ ...dragProvided.draggableProps.style, zIndex: snapshot.isDragging ? 10 : undefined }}>
-            <TimelineCard item={item} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging} onEdit={onEdit} onDelete={onDelete} />
+          {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={{ ...dragProvided.draggableProps.style, zIndex: snapshot.isDragging ? 10 : undefined }}>
+            <TimelineCard item={item} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} />
           </div>}
         </Draggable>)}
         {dropProvided.placeholder as React.ReactNode}

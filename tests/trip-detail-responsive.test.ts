@@ -69,6 +69,33 @@ describe('trip detail responsive layout', () => {
     expect(detail).toContain("mapPane: { width: '100%', maxWidth: '100%', minWidth: 0");
   });
 
+  it('keeps the segmented control from shrinking when child panels change', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const packing = readFileSync(projectFile('src', 'components', 'PackingPanel.tsx'), 'utf8');
+
+    expect(detail).toMatch(/tabScroller: \{[^}]*minHeight: 44[^}]*height: 44[^}]*flexShrink: 0/);
+    expect(detail).toMatch(/tabs: \{[^}]*minHeight: 44[^}]*height: 44[^}]*flexShrink: 0/);
+    expect(packing).toMatch(/container: \{[^}]*width: '100%'[^}]*maxWidth: '100%'[^}]*minHeight: 0/);
+    expect(packing).not.toContain('position: \'absolute\'');
+  });
+
+  it('connects map markers to timeline focus and provides a directions URL', async () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const webMap = readFileSync(projectFile('src', 'components', 'TripMap.web.tsx'), 'utf8');
+    const nativeMap = readFileSync(projectFile('src', 'components', 'TripMap.native.tsx'), 'utf8');
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const { getGoogleMapsDirectionsUrl } = await import('../lib/map-links');
+
+    expect(getGoogleMapsDirectionsUrl(25.033, 121.565)).toBe('https://www.google.com/maps/dir/?api=1&destination=25.033%2C121.565&travelmode=driving');
+    expect(getGoogleMapsDirectionsUrl(null, 121.565)).toBeNull();
+    expect(detail).toContain('onMarkerPress={handleMapMarkerPress}');
+    expect(detail).toContain('focusedItemId={focusedItemId}');
+    expect(webMap).toContain('trip-map-marker-press');
+    expect(nativeMap).toContain('onPress={() => onMarkerPress?.(marker.id)}');
+    expect(timeline).toContain('getGoogleMapsDirectionsUrl');
+    expect(timeline).toContain('🧭 開啟 Google Maps 導航');
+  });
+
   it('keeps expense amounts inside full-width cards', () => {
     const expenseList = readFileSync(projectFile('src', 'components', 'ExpenseList.tsx'), 'utf8');
     const settlement = readFileSync(projectFile('src', 'components', 'SettlementCard.tsx'), 'utf8');
@@ -83,7 +110,7 @@ describe('trip detail responsive layout', () => {
   it('wraps packing progress and template controls on narrow screens', () => {
     const packing = readFileSync(projectFile('src', 'components', 'PackingPanel.tsx'), 'utf8');
 
-    expect(packing).toContain("container: { width: '100%', maxWidth: '100%', boxSizing: 'border-box'");
+    expect(packing).toMatch(/container: \{[^}]*width: '100%'[^}]*maxWidth: '100%'[^}]*boxSizing: 'border-box'/);
     expect(packing).toContain("progressCard: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box'");
     expect(packing).toContain("progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap'");
     expect(packing).toContain("templates: { flexDirection: 'row', flexWrap: 'wrap'");

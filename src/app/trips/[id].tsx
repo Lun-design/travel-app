@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { getTrip, listTripMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { filterAndSortItems, type ItineraryItem } from '@/lib/itinerary';
@@ -19,9 +19,19 @@ export default function TripDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>(); const router = useRouter(); const { width } = useWindowDimensions(); const tripId = Array.isArray(id) ? id[0] : id;
   const layout = getTripDetailLayout(width);
   const headerMascotSize = width >= 1100 ? 150 : width >= 800 ? 125 : width >= 600 ? 96 : 72;
-  const [trip, setTrip] = useState<Trip | null>(null); const [members, setMembers] = useState<TripMemberWithProfile[]>([]); const [items, setItems] = useState<ItineraryItem[]>([]); const [expenses, setExpenses] = useState<Expense[]>([]); const [vouchers, setVouchers] = useState<Voucher[]>([]); const [previewVoucher, setPreviewVoucher] = useState<Voucher | null>(null); const [userId, setUserId] = useState(''); const [day, setDay] = useState(1); const [tab, setTab] = useState<Tab>('timeline'); const [isMapOpen, setIsMapOpen] = useState(() => getDefaultMapOpen(width)); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [itemModal, setItemModal] = useState(false); const [expenseModal, setExpenseModal] = useState(false); const [editingItem, setEditingItem] = useState<ItineraryItem | null>(null); const [editingExpense, setEditingExpense] = useState<Expense | null>(null); const [inviteVisible, setInviteVisible] = useState(false); const [settingsVisible, setSettingsVisible] = useState(false);
+  const [trip, setTrip] = useState<Trip | null>(null); const [members, setMembers] = useState<TripMemberWithProfile[]>([]); const [items, setItems] = useState<ItineraryItem[]>([]); const [expenses, setExpenses] = useState<Expense[]>([]); const [vouchers, setVouchers] = useState<Voucher[]>([]); const [previewVoucher, setPreviewVoucher] = useState<Voucher | null>(null); const [userId, setUserId] = useState(''); const [day, setDay] = useState(1); const [tab, setTab] = useState<Tab>('timeline'); const [isMapOpen, setIsMapOpen] = useState(() => getDefaultMapOpen(width)); const [focusedItemId, setFocusedItemId] = useState<string | null>(null); const timelineScrollRef = useRef<ScrollView>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [itemModal, setItemModal] = useState(false); const [expenseModal, setExpenseModal] = useState(false); const [editingItem, setEditingItem] = useState<ItineraryItem | null>(null); const [editingExpense, setEditingExpense] = useState<Expense | null>(null); const [inviteVisible, setInviteVisible] = useState(false); const [settingsVisible, setSettingsVisible] = useState(false);
   const days = useMemo(() => trip ? tripDayNumbers(trip.start_date, trip.end_date) : [1], [trip]);
   const memberName = (memberId: string) => members.find((member) => member.user_id === memberId)?.profile?.display_name || memberId.slice(0, 8);
+  function handleMapMarkerPress(itemId: string) {
+    setFocusedItemId(itemId);
+    const index = visibleItems.findIndex((item) => item.id === itemId);
+    if (index < 0) return;
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.getElementById(`itinerary-item-${itemId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    timelineScrollRef.current?.scrollTo({ y: index * 160, animated: true });
+  }
   async function reorderItems(order: { id: string; position: number }[]) { const previous = items; const positions = new Map(order.map((entry) => [entry.id, entry.position])); setItems((current) => current.map((item) => positions.has(item.id) ? { ...item, position: positions.get(item.id)! } : item)); try { await updateItineraryItemsOrder(order); } catch (cause) { setItems(previous); throw cause; } }
   async function load() { if (!tripId) return; setLoading(true); setError(''); try { const [{ data: auth }, tripData, memberData, itemData, expenseData, voucherData] = await Promise.all([supabase.auth.getUser(), getTrip(tripId), listTripMembers(tripId), listItineraryItems(tripId), listExpenses(tripId), listVouchers(tripId)]); setUserId(auth.user?.id ?? ''); setTrip(tripData); setMembers(memberData); setItems(itemData); setExpenses(expenseData); setVouchers(voucherData); } catch (cause: any) { console.error('[TripDetail] load failed', cause); setError(cause?.message ?? '無法載入行程資料。'); } finally { setLoading(false); } }
   useEffect(() => { void load(); }, [tripId]);
@@ -33,10 +43,10 @@ export default function TripDetailScreen() {
     {error ? <Text style={styles.error}>{error}</Text> : null}
     {trip.created_by === userId ? <Pressable style={styles.settingsButton} onPress={() => setSettingsVisible(true)}><Text style={styles.settingsText}>⚙️ 行程設定</Text></Pressable> : null}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroller} contentContainerStyle={styles.tabs}>{tabs.map((item) => <Pressable key={item.value} style={[styles.tab, tab === item.value && styles.activeTab]} onPress={() => setTab(item.value)}><Text numberOfLines={1} style={[styles.tabLabel, tab === item.value ? styles.activeText : styles.tabText]}>{item.label}</Text></Pressable>)}</ScrollView>
-    {tab === 'timeline' && <><DayTabs days={days} selected={day} onChange={setDay} /><Pressable style={styles.mapToggle} onPress={() => setIsMapOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>{isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}><TripMap items={items} day={day} /></View>}<ScrollView style={styles.timelinePane} contentContainerStyle={[styles.paneContent, { paddingHorizontal: layout.panePadding, paddingTop: layout.panePadding }]}><Text style={styles.paneTitle}>Day {day} 行程</Text><ItineraryTimeline items={visibleItems} vouchers={vouchers} onPreviewVoucher={setPreviewVoucher} scheduleContext={{ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time }} onEdit={(item) => { setEditingItem(item); setItemModal(true); }} onDelete={async (item) => { await deleteItineraryItem(item.id); await load(); }} onReorder={reorderItems} /></ScrollView><Pressable style={[styles.fab, { right: layout.fabRight, bottom: layout.fabBottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={[styles.buttonText, { fontSize: layout.fabFontSize }]}>＋ 新增景點／活動</Text></Pressable></>}
+    {tab === 'timeline' && <><DayTabs days={days} selected={day} onChange={(nextDay) => { setDay(nextDay); setFocusedItemId(null); }} /><Pressable style={styles.mapToggle} onPress={() => setIsMapOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>{isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}><TripMap items={items} day={day} onMarkerPress={handleMapMarkerPress} /></View>}<ScrollView ref={timelineScrollRef} style={styles.timelinePane} contentContainerStyle={[styles.paneContent, { paddingHorizontal: layout.panePadding, paddingTop: layout.panePadding }]}><Text style={styles.paneTitle}>Day {day} 行程</Text><ItineraryTimeline items={visibleItems} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={setPreviewVoucher} scheduleContext={{ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time }} onEdit={(item) => { setEditingItem(item); setItemModal(true); }} onDelete={async (item) => { await deleteItineraryItem(item.id); await load(); }} onReorder={reorderItems} /></ScrollView><Pressable style={[styles.fab, { right: layout.fabRight, bottom: layout.fabBottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={[styles.buttonText, { fontSize: layout.fabFontSize }]}>＋ 新增景點／活動</Text></Pressable></>}
     {tab === 'expenses' && <ScrollView contentContainerStyle={styles.panel}><SettlementCard settlements={calculateBalances(expenses)} labelFor={memberName} /><ExpenseList expenses={expenses} members={members} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={async (expense) => { await deleteExpense(expense.id); await load(); }} /><Pressable style={styles.primary} onPress={() => { setEditingExpense(null); setExpenseModal(true); }}><Text style={styles.buttonText}>＋ 新增旅費</Text></Pressable></ScrollView>}
-    {tab === 'packing' && <PackingPanel tripId={tripId} members={members} destination={trip.destination} tripStartDate={trip.start_date} items={items} />}
-    {tab === 'documents' && <VouchersPanel tripId={tripId} userId={userId} items={items} />}
+    {tab === 'packing' && <View style={styles.panelContainer}><PackingPanel tripId={tripId} members={members} destination={trip.destination} tripStartDate={trip.start_date} items={items} /></View>}
+    {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel tripId={tripId} userId={userId} items={items} /></View>}
     <ItineraryItemModal visible={itemModal} item={editingItem} day={day} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId} userId={userId} onClose={() => setItemModal(false)} onSave={async (data) => {
       const saved = await saveItineraryItem(data);
       setItems((current) => {
@@ -71,9 +81,9 @@ const styles = StyleSheet.create({
   inviteText: { color: '#3730a3', fontWeight: '700' },
   settingsButton: { alignSelf: 'flex-start', marginBottom: 8, borderRadius: 12, backgroundColor: '#e0e7ff', paddingHorizontal: 12, paddingVertical: 8 },
   settingsText: { color: '#3730a3', fontWeight: '700' },
-  tabScroller: { width: '100%', maxWidth: '100%', height: 52, maxHeight: 52, flexGrow: 0, marginBottom: 7 },
-  tabs: { minWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#e2e8f0', borderRadius: 13, paddingVertical: 4, paddingRight: 4, paddingLeft: 12 },
-  tab: { height: 44, flexGrow: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10 },
+  tabScroller: { width: '100%', maxWidth: '100%', minHeight: 44, height: 44, flexGrow: 0, flexShrink: 0, marginBottom: 7 },
+  tabs: { minWidth: '100%', minHeight: 44, height: 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#e2e8f0', borderRadius: 13, paddingVertical: 4, paddingRight: 4, paddingLeft: 12 },
+  tab: { height: 36, flexGrow: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10 },
   tabLabel: { lineHeight: 20, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false },
   activeTab: { backgroundColor: 'white' },
   tabText: { color: '#64748b', fontWeight: '700' },
@@ -84,6 +94,7 @@ const styles = StyleSheet.create({
   paneContent: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', paddingBottom: 100 },
   paneTitle: { fontSize: 18, fontWeight: '800' },
   mapPane: { width: '100%', maxWidth: '100%', minWidth: 0, backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', marginBottom: 12 },
+  panelContainer: { flex: 1, minHeight: 0, width: '100%', maxWidth: '100%', overflow: 'hidden' },
   panel: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', paddingBottom: 100, paddingTop: 8 },
   primary: { alignSelf: 'center', backgroundColor: '#2563eb', borderRadius: 13, paddingHorizontal: 20, paddingVertical: 13, marginTop: 18 },
   fab: { position: 'absolute', zIndex: 20, elevation: 8, borderRadius: 24, backgroundColor: '#2563eb' },

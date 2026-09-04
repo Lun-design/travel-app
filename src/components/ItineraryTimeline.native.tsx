@@ -6,7 +6,7 @@ import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { EmptyTimeline, NativeGripHandle, orderPayload, segmentsForItems, TimelineCard, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 
-export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher }: ItineraryTimelineProps) {
+export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(items);
   const segments = useMemo(() => segmentsForItems(localItems), [localItems]);
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
@@ -33,7 +33,7 @@ export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, schedule
     activationDistance={8}
     onDragEnd={({ data }) => void finishDrag(data)}
     renderItem={({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => <View>
-      <TimelineCard item={item} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive} onEdit={onEdit} onDelete={onDelete} />
+      <TimelineCard item={item} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} />
     </View>}
   />;
 }
