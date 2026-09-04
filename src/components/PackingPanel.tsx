@@ -76,10 +76,10 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
   return <ScrollView contentContainerStyle={styles.container}>
     <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
     <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 AI 智慧建議清單</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
-    <Text style={styles.sectionTitle}>快速匯入範本</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text>📋 {value}</Text></Pressable>)}</ScrollView>
+    <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
     <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={setName} onSubmitEditing={() => void add()} /><Pressable style={styles.addButton} onPress={() => void add()} disabled={busy}><Text style={styles.white}>新增</Text></Pressable></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={category === value ? styles.white : undefined}>{value}</Text></Pressable>)}</ScrollView>
-    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable onPress={() => { const next = members.find((member) => member.user_id !== item.assigned_to); if (next) void updatePackingItem(item.id, { assigned_to: next.user_id }).then(load); }}><Text style={styles.assignee}>{label(item.assigned_to)}</Text></Pressable><Pressable onPress={() => void deletePackingItem(item.id).then(load)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
+    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} onPress={() => { const next = members.find((member) => member.user_id !== item.assigned_to); if (next) void updatePackingItem(item.id, { assigned_to: next.user_id }).then(load); }}><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></Pressable><Pressable onPress={() => void deletePackingItem(item.id).then(load)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
     <Modal visible={celebrateVisible} transparent animationType="fade" onRequestClose={() => setCelebrateVisible(false)}>
       <View style={styles.modalBackdrop}>
         <View style={styles.celebrateCard}>
@@ -94,37 +94,39 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 4, paddingBottom: 100, gap: 13 },
-  progressCard: { backgroundColor: '#eff6ff', borderRadius: 17, padding: 16, gap: 12 },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  progressTitle: { color: '#1e3a8a', fontWeight: '800' },
-  progressValue: { color: '#2563eb', fontWeight: '800' },
+  container: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: 4, paddingBottom: 100, gap: 13 },
+  progressCard: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: '#eff6ff', borderRadius: 17, padding: 14, gap: 12 },
+  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  progressTitle: { color: '#1e3a8a', fontWeight: '800', flexShrink: 1 },
+  progressValue: { color: '#2563eb', fontSize: 13, fontWeight: '800', flexShrink: 0 },
   track: { height: 9, backgroundColor: '#dbeafe', borderRadius: 8, overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: '#2563eb', borderRadius: 8 },
-  aiButton: { backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 15, padding: 14, gap: 3 },
+  aiButton: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 15, padding: 14, gap: 3 },
   aiText: { color: '#9a3412', fontSize: 16, fontWeight: '800' },
   aiHint: { color: '#c2410c', fontSize: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '800', marginTop: 4 },
-  templates: { gap: 8 },
-  template: { paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'white', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  addRow: { flexDirection: 'row', gap: 8 },
-  input: { flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: '#dbe2ea', borderRadius: 12, padding: 12 },
-  addButton: { backgroundColor: '#2563eb', borderRadius: 12, justifyContent: 'center', paddingHorizontal: 16 },
+  templates: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', gap: 8 },
+  template: { maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 9, backgroundColor: 'white', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+  templateText: { fontSize: 13 },
+  addRow: { width: '100%', maxWidth: '100%', flexDirection: 'row', gap: 8 },
+  input: { flex: 1, minWidth: 0, backgroundColor: 'white', borderWidth: 1, borderColor: '#dbe2ea', borderRadius: 12, padding: 12 },
+  addButton: { flexShrink: 0, backgroundColor: '#2563eb', borderRadius: 12, justifyContent: 'center', paddingHorizontal: 14 },
   white: { color: 'white', fontWeight: '800' },
   categoryRow: { gap: 8 },
   category: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: '#e2e8f0' },
   categorySelected: { backgroundColor: '#2563eb' },
-  group: { backgroundColor: 'white', borderRadius: 15, overflow: 'hidden' },
-  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 14, backgroundColor: '#f1f5f9' },
+  group: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', backgroundColor: 'white', borderRadius: 15, overflow: 'hidden' },
+  groupHeader: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', padding: 14, backgroundColor: '#f1f5f9', boxSizing: 'border-box' },
   groupTitle: { fontWeight: '800' },
   groupCount: { color: '#64748b' },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 9, padding: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  item: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', flexDirection: 'row', alignItems: 'center', gap: 7, padding: 11, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   checkbox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#94a3b8', alignItems: 'center', justifyContent: 'center' },
   checked: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   checkText: { color: 'white', fontWeight: '800' },
-  itemName: { flex: 1, fontSize: 15 },
+  itemName: { flex: 1, minWidth: 0, flexShrink: 1, fontSize: 14 },
   done: { textDecorationLine: 'line-through', color: '#94a3b8' },
-  assignee: { color: '#2563eb', fontSize: 12 },
+  assigneeButton: { flexShrink: 1, maxWidth: '28%' },
+  assignee: { color: '#2563eb', fontSize: 11 },
   delete: { color: '#dc2626', fontSize: 22 },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15,23,42,.45)' },
   celebrateCard: { width: '100%', maxWidth: 360, alignItems: 'center', gap: 8, padding: 24, borderRadius: 24, backgroundColor: 'white' },
