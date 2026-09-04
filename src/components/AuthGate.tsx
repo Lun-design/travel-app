@@ -1,13 +1,80 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { pingSupabase, supabase } from '@/lib/supabase';
-import { authStatus } from '@/lib/auth';
+import { authRedirectTarget, authStatus, isInvalidSessionError, type AuthStatus } from '@/lib/auth';
+
+type GateStatus = 'loading' | AuthStatus;
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const router = useRouter(); const pathname = usePathname(); const [status, setStatus] = useState<'loading' | 'signedOut' | 'unverified' | 'authenticated'>('loading');
-  useEffect(() => { let active = true; pingSupabase().then((result) => console.info('[Supabase] ping result', result)); supabase.auth.getSession().then(({ data }) => { if (active) setStatus(authStatus(data.session?.user ?? null)); }); const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => { if (active) setStatus(authStatus(session?.user ?? null)); }); return () => { active = false; sub.subscription.unsubscribe(); }; }, []);
-  useEffect(() => { if (status === 'loading') return; if (status === 'signedOut' && pathname !== '/login') router.replace('/login'); if (status === 'authenticated' && pathname === '/login') router.replace('/'); if (status === 'unverified' && pathname !== '/login') router.replace('/login'); }, [status, pathname]);
-  if (status === 'loading') return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator /></View>;
-  return <>{children}</>;
+  const router = useRouter();
+  const pathname = usePathname();
+  const [status, setStatus] = useState<GateStatus>('loading');
+  const [recoveryMessage, setRecoveryMessage] = useState('');
+  const redirectTarget = status === 'loading' ? null : authRedirectTarget(status, pathname);
+
+  useEffect(() => {
+    let active = true;
+
+    async function clearInvalidLocalSession(error: unknown) {
+      console.error('[AuthGate] invalid session cleared', error);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (signOutError) {
+        console.error('[AuthGate] local sign out failed', signOutError);
+      }
+      if (active) {
+        setRecoveryMessage('登入憑證已失效，請重新登入。');
+        setStatus('signedOut');
+      }
+    }
+
+    async function restoreSession() {
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError && isInvalidSessionError(sessionError)) return clearInvalidLocalSession(sessionError);
+        const session = sessionData.session;
+        if (!session) {
+          if (active) setStatus('signedOut');
+          return;
+        }
+
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError && isInvalidSessionError(userError)) return clearInvalidLocalSession(userError);
+        if (userError) console.error('[AuthGate] session validation failed', userError);
+        if (active) setStatus(authStatus(userData.user ?? session.user));
+      } catch (error) {
+        if (isInvalidSessionError(error)) return clearInvalidLocalSession(error);
+        console.error('[AuthGate] session restore failed', error);
+        if (active) setStatus('signedOut');
+      }
+    }
+
+    void pingSupabase().then((result) => console.info('[Supabase] ping result', result));
+    void restoreSession();
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setStatus(authStatus(session?.user ?? null));
+    });
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (redirectTarget) router.replace(redirectTarget);
+  }, [redirectTarget, router]);
+
+  if (status === 'loading' || redirectTarget) return <View style={styles.center}><ActivityIndicator /></View>;
+  return <>
+    {recoveryMessage && pathname === '/login' ? <View style={styles.notice}><Text style={styles.noticeText}>{recoveryMessage}</Text></View> : null}
+    {children}
+  </>;
 }
+
+const styles = {
+  center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
+  notice: { backgroundColor: '#fff7ed', borderBottomWidth: 1, borderBottomColor: '#fed7aa', paddingVertical: 9, paddingHorizontal: 16 },
+  noticeText: { color: '#9a3412', textAlign: 'center' as const, fontWeight: '700' as const },
+};

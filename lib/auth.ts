@@ -13,3 +13,18 @@ export function friendlyAuthError(error: unknown) {
   if (/rate limit/i.test(message)) return '操作太頻繁，請稍後再試。';
   return '操作失敗，請稍後再試。';
 }
+
+export function isInvalidSessionError(error: unknown) {
+  const value = error as { code?: string; message?: string } | null;
+  const code = value?.code ?? '';
+  const message = value?.message ?? String(error);
+  return code === 'PGRST303'
+    || code === 'bad_jwt'
+    || /jwt.*(?:future|expired|invalid)|issued at future|invalid.*jwt|token.*expired/i.test(message);
+}
+
+export function authRedirectTarget(status: AuthStatus, pathname: string): '/' | '/login' | null {
+  if ((status === 'signedOut' || status === 'unverified') && pathname !== '/login') return '/login';
+  if (status === 'authenticated' && pathname === '/login') return '/';
+  return null;
+}
