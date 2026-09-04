@@ -59,7 +59,7 @@ export function orderPayload(items: ItineraryItem[]) {
   return items.map(({ id, position }) => ({ id, position }));
 }
 
-export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, grip, active, onEdit, onDelete }: {
+export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, grip, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: {
   item: ItineraryItem;
   segment?: RouteSegment;
   scheduled?: ScheduledItem;
@@ -70,6 +70,10 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
   active?: boolean;
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }) {
   const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
@@ -104,7 +108,7 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
             {item.address ? <Text style={styles.address}>{item.address}</Text> : null}
             {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
             {navigationUrl ? <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={styles.navigation}>🧭 開啟 Google Maps 導航</Text></Pressable> : null}
-            <View style={styles.actions}><Pressable onPress={() => onEdit(item)}><Text style={styles.edit}>編輯</Text></Pressable><Pressable onPress={() => onDelete(item)}><Text style={styles.delete}>刪除</Text></Pressable>{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable onPress={() => onPreviewVoucher(itemVouchers[0])}><Text style={styles.voucher}>🎫 檢視票券{itemVouchers.length > 1 ? ` (${itemVouchers.length})` : ''}</Text></Pressable> : null}<Pressable onPress={() => setFavorite((current) => !current)}><View style={styles.favorite}>{favorite ? <PuppyMascot puppy="-3" size={28} accessibilityLabel="已收藏景點" /> : <Text style={styles.favoriteText}>♡ 收藏</Text>}</View></Pressable></View>
+            <View style={styles.actions}>{onMoveUp ? <Pressable accessibilityRole="button" accessibilityLabel="上移景點" disabled={!canMoveUp} onPress={onMoveUp}><Text style={[styles.reorderText, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}{onMoveDown ? <Pressable accessibilityRole="button" accessibilityLabel="下移景點" disabled={!canMoveDown} onPress={onMoveDown}><Text style={[styles.reorderText, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}<Pressable onPress={() => onEdit(item)}><Text style={styles.edit}>編輯</Text></Pressable><Pressable onPress={() => onDelete(item)}><Text style={styles.delete}>刪除</Text></Pressable>{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable onPress={() => onPreviewVoucher(itemVouchers[0])}><Text style={styles.voucher}>🎫 檢視票券{itemVouchers.length > 1 ? ` (${itemVouchers.length})` : ''}</Text></Pressable> : null}<Pressable onPress={() => setFavorite((current) => !current)}><View style={styles.favorite}>{favorite ? <PuppyMascot puppy="-3" size={28} accessibilityLabel="已收藏景點" /> : <Text style={styles.favoriteText}>♡ 收藏</Text>}</View></Pressable></View>
           </View>
         </View>
       </View>
@@ -170,6 +174,8 @@ const styles = StyleSheet.create({
   notes: { color: '#475569', fontSize: 13, fontStyle: 'italic' },
   navigation: { alignSelf: 'flex-start', color: '#1d4ed8', fontSize: 12, fontWeight: '800', paddingVertical: 2 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 5 },
+  reorderText: { color: '#475569', fontWeight: '800' },
+  disabledAction: { color: '#cbd5e1' },
   edit: { color: '#2563eb', fontWeight: '700' },
   delete: { color: '#dc2626', fontWeight: '700' },
   voucher: { color: '#7c3aed', fontWeight: '700' },

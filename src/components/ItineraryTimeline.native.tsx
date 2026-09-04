@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
-import type { ItineraryItem } from '@/lib/itinerary';
+import { reorderItineraryItems, type ItineraryItem } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { EmptyTimeline, NativeGripHandle, orderPayload, segmentsForItems, TimelineCard, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
@@ -25,6 +25,21 @@ export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, schedule
     }
   }
 
+  async function moveItem(itemId: string, direction: -1 | 1) {
+    const sourceIndex = localItems.findIndex((item) => item.id === itemId);
+    const destinationIndex = sourceIndex + direction;
+    if (sourceIndex < 0 || destinationIndex < 0 || destinationIndex >= localItems.length) return;
+    const ordered = reorderItineraryItems(localItems, sourceIndex, destinationIndex);
+    if (ordered === localItems) return;
+    setLocalItems(ordered);
+    try {
+      await (onReorder ? onReorder(orderPayload(ordered)) : updateItineraryItemsOrder(orderPayload(ordered)));
+    } catch (error) {
+      setLocalItems(items);
+      Alert.alert('排序更新失敗', error instanceof Error ? error.message : '請稍後再試。');
+    }
+  }
+
   if (!localItems.length) return <EmptyTimeline />;
   return <DraggableFlatList
     data={localItems}
@@ -33,7 +48,7 @@ export function ItineraryTimeline({ items, onEdit, onDelete, onReorder, schedule
     activationDistance={8}
     onDragEnd={({ data }) => void finishDrag(data)}
     renderItem={({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => <View>
-      <TimelineCard item={item} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} />
+      <TimelineCard item={item} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={() => { void moveItem(item.id, -1); }} onMoveDown={() => { void moveItem(item.id, 1); }} canMoveUp={localItems.findIndex((entry) => entry.id === item.id) > 0} canMoveDown={localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1} />
     </View>}
   />;
 }

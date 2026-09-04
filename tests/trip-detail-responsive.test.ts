@@ -96,6 +96,44 @@ describe('trip detail responsive layout', () => {
     expect(timeline).toContain('🧭 開啟 Google Maps 導航');
   });
 
+  it('lays out the trip header as title and metadata rows with safe-area padding', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+
+    expect(detail).toContain("import { useSafeAreaInsets } from 'react-native-safe-area-context';");
+    expect(detail).toContain('const insets = useSafeAreaInsets();');
+    expect(detail).toContain('styles.headerTitleRow');
+    expect(detail).toContain('styles.headerMetaRow');
+    expect(detail).toContain('paddingTop: insets.top');
+    expect(detail).toContain('paddingBottom: 22 + insets.bottom');
+    expect(detail).toContain('bottom: layout.fabBottom + insets.bottom');
+  });
+
+  it('shows an offline cache indicator and a tab overflow hint', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+
+    expect(detail).toContain('navigator.onLine');
+    expect(detail).toContain('offlineBar');
+    expect(detail).toContain('📡 離線模式：已載入快取行程');
+    expect(detail).toContain('styles.tabShell');
+    expect(detail).toContain('styles.tabScrollHint');
+    expect(detail).toContain('pointerEvents="none"');
+  });
+
+  it('offers accessible up and down controls for timeline cards', () => {
+    const shared = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const web = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.web.tsx'), 'utf8');
+    const native = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.native.tsx'), 'utf8');
+
+    expect(shared).toContain('▲ 上移');
+    expect(shared).toContain('▼ 下移');
+    expect(shared).toContain('onMoveUp');
+    expect(shared).toContain('onMoveDown');
+    expect(web).toContain('async function moveItem');
+    expect(web).toContain('reorderItineraryItems');
+    expect(native).toContain('async function moveItem');
+    expect(native).toContain('reorderItineraryItems');
+  });
+
   it('keeps expense amounts inside full-width cards', () => {
     const expenseList = readFileSync(projectFile('src', 'components', 'ExpenseList.tsx'), 'utf8');
     const settlement = readFileSync(projectFile('src', 'components', 'SettlementCard.tsx'), 'utf8');
