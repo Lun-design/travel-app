@@ -38,6 +38,15 @@ describe('trip detail responsive layout', () => {
     });
   });
 
+  it('defaults the map closed on narrow screens and open on desktop', async () => {
+    const { getDefaultMapOpen } = await import('../lib/trip-detail-layout');
+
+    expect(getDefaultMapOpen(375)).toBe(false);
+    expect(getDefaultMapOpen(479)).toBe(false);
+    expect(getDefaultMapOpen(480)).toBe(true);
+    expect(getDefaultMapOpen(1024)).toBe(true);
+  });
+
   it('keeps tabs content-sized and horizontally scrollable', () => {
     const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
 
@@ -47,6 +56,17 @@ describe('trip detail responsive layout', () => {
     expect(detail).toContain('contentContainerStyle={styles.tabs}');
     expect(detail).toContain('paddingLeft: 12');
     expect(detail).toContain("container: { flex: 1, width: '100%', maxWidth: '100%', overflow: 'hidden'");
+  });
+
+  it('renders the map as a flow card controlled by an explicit toggle', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+
+    expect(detail).toContain('const [isMapOpen, setIsMapOpen] = useState(() => getDefaultMapOpen(width));');
+    expect(detail).toContain('🗺️ 查看地圖路線 (點擊展開)');
+    expect(detail).toContain('🗺️ 隱藏地圖');
+    expect(detail).toContain('onPress={() => setIsMapOpen((current) => !current)}');
+    expect(detail).toContain('{isMapOpen && <View style={[styles.mapPane');
+    expect(detail).toContain("mapPane: { width: '100%', maxWidth: '100%', minWidth: 0");
   });
 
   it('keeps expense amounts inside full-width cards', () => {

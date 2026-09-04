@@ -1,5 +1,9 @@
 const COMPACT_BREAKPOINT = 480;
 
+export function getDefaultMapOpen(width: number) {
+  return width >= COMPACT_BREAKPOINT;
+}
+
 export function getTripDetailLayout(width: number) {
   const compact = width <= COMPACT_BREAKPOINT;
 
