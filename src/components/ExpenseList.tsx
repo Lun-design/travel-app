@@ -3,10 +3,10 @@ import { Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native'
 import type { Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { convertToTwd } from '@/lib/exchange-rates';
-import { getAppTheme } from '@/lib/theme';
+import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 
-export function ExpenseList({ expenses, members, onEdit, onDelete }: { expenses: Expense[]; members: TripMemberWithProfile[]; onEdit: (expense: Expense) => void; onDelete: (expense: Expense) => void }) {
-  const theme = getAppTheme(useColorScheme());
+export function ExpenseList({ expenses, members, onEdit, onDelete, themeMode = 'system' }: { expenses: Expense[]; members: TripMemberWithProfile[]; onEdit: (expense: Expense) => void; onDelete: (expense: Expense) => void; themeMode?: ThemeMode }) {
+  const theme = getThemeForMode(themeMode, useColorScheme());
   const name = (id: string) => members.find((member) => member.user_id === id)?.profile?.display_name || id.slice(0, 8);
   if (!expenses.length) return <View style={styles.empty}><Text style={styles.icon}>💸</Text><Text style={[styles.muted, { color: theme.colors.muted }]}>目前沒有旅費紀錄</Text></View>;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAppTheme } from '../lib/theme';
+import { getAppTheme, getThemeForMode } from '../lib/theme';
 
 describe('app theme', () => {
   it('exposes readable light and dark palettes', () => {
@@ -11,5 +11,8 @@ describe('app theme', () => {
     expect(light.colors.background).not.toBe(dark.colors.background);
     expect(dark.colors.text).toBe('#f8fafc');
     expect(dark.colors.surface).toBe('#1e293b');
+    expect(getThemeForMode('light', 'dark').isDark).toBe(false);
+    expect(getThemeForMode('dark', 'light').isDark).toBe(true);
+    expect(getThemeForMode('system', 'dark').isDark).toBe(true);
   });
 });

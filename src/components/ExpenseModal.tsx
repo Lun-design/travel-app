@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 import type { Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIES, type SplitMode } from '@/lib/exchange-rates';
-import { getAppTheme } from '@/lib/theme';
+import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 
 type Props = {
   visible: boolean;
@@ -11,14 +11,15 @@ type Props = {
   expense?: Expense | null;
   members: TripMemberWithProfile[];
   userId: string;
+  themeMode?: ThemeMode;
   onClose: () => void;
   onSave: (expense: Partial<Expense> & { trip_id: string; payer_id: string }, splits: { user_id: string; amount: number }[]) => Promise<void>;
 };
 
 const EXPENSE_CATEGORIES = ['門票', '餐飲', '交通', '購物', '其他'] as const;
 
-export function ExpenseModal({ visible, tripId, expense, members, userId, onClose, onSave }: Props) {
-  const theme = getAppTheme(useColorScheme());
+export function ExpenseModal({ visible, tripId, expense, members, userId, themeMode = 'system', onClose, onSave }: Props) {
+  const theme = getThemeForMode(themeMode, useColorScheme());
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('TWD');

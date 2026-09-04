@@ -6,10 +6,10 @@ import type { ItineraryItem } from '@/lib/itinerary';
 import { VoucherPreviewModal } from './VoucherPreviewModal';
 import { VoucherUploadModal } from './VoucherUploadModal';
 import { PuppyMascot } from './PuppyMascot';
-import { getAppTheme } from '@/lib/theme';
+import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 
-export function VouchersPanel({ tripId, userId, items }: { tripId: string; userId: string; items: ItineraryItem[] }) {
-  const theme = getAppTheme(useColorScheme());
+export function VouchersPanel({ tripId, userId, items, themeMode = 'system' }: { tripId: string; userId: string; items: ItineraryItem[]; themeMode?: ThemeMode }) {
+  const theme = getThemeForMode(themeMode, useColorScheme());
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<Voucher | null>(null);

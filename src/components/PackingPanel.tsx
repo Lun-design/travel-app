@@ -6,19 +6,20 @@ import { createPackingItem, deletePackingItem, importPackingTemplate, listPackin
 import { generatePackingSuggestions, groupPackingItems, isPackingComplete, packingProgress, type PackingTemplate } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
-import { getAppTheme } from '@/lib/theme';
+import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 
 const categories = ['證件', '電子產品', '衣物', '藥品', '隨身物品', '未分類'];
 const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪'];
 
-export function PackingPanel({ tripId, members, destination = '', tripStartDate, items: itineraryItems = [] }: {
+export function PackingPanel({ tripId, members, destination = '', tripStartDate, items: itineraryItems = [], themeMode }: {
   tripId: string;
   members: TripMemberWithProfile[];
   destination?: string;
   tripStartDate?: string;
   items?: ItineraryItem[];
+  themeMode?: ThemeMode;
 }) {
-  const theme = getAppTheme(useColorScheme());
+  const theme = getThemeForMode(themeMode ?? 'system', useColorScheme());
   const [items, setItems] = useState<PackingItem[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');

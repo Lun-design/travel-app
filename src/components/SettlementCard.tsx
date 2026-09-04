@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import type { Settlement } from '@/lib/expenses-api';
-import { getAppTheme } from '@/lib/theme';
+import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { PuppyMascot } from './PuppyMascot';
 
-export function SettlementCard({ settlements, labelFor }: { settlements: Settlement[]; labelFor: (id: string) => string }) {
-  const theme = getAppTheme(useColorScheme());
+export function SettlementCard({ settlements, labelFor, themeMode = 'system' }: { settlements: Settlement[]; labelFor: (id: string) => string; themeMode?: ThemeMode }) {
+  const theme = getThemeForMode(themeMode, useColorScheme());
   const [showCelebration, setShowCelebration] = useState(false);
   const previousCount = useRef(settlements.length);
   useEffect(() => { if (previousCount.current > 0 && settlements.length === 0) setShowCelebration(true); previousCount.current = settlements.length; }, [settlements.length]);

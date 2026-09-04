@@ -134,6 +134,17 @@ describe('trip detail responsive layout', () => {
     expect(native).toContain('reorderItineraryItems');
   });
 
+  it('uses theme-aware time badges and roomy action hit targets', () => {
+    const shared = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const dayTabs = readFileSync(projectFile('src', 'components', 'DayTabs.tsx'), 'utf8');
+    expect(shared).toContain('theme.colors.surfaceMuted');
+    expect(shared).toContain('actionButton');
+    expect(shared).toContain('paddingHorizontal: 10');
+    expect(detail).toContain('marginBottom: 12');
+    expect(dayTabs).toContain('marginTop: 4');
+  });
+
   it('renders skeletons and animates day/map transitions', () => {
     const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
     const skeleton = readFileSync(projectFile('src', 'components', 'SkeletonCard.tsx'), 'utf8');
@@ -152,6 +163,17 @@ describe('trip detail responsive layout', () => {
     expect(detail).toContain('getAppTheme');
     expect(detail).toContain('theme.colors.background');
     expect(detail).toContain('theme.colors.tabTrack');
+    expect(detail).toContain('themeMode');
+    expect(detail).toContain('loadThemeMode');
+    expect(detail).toContain('saveThemeMode');
+  });
+
+  it('exposes a three-way theme selector in settings', () => {
+    const settings = readFileSync(projectFile('src', 'components', 'TripSettingsModal.tsx'), 'utf8');
+    expect(settings).toContain('☀️ 明亮');
+    expect(settings).toContain('🌙 暗黑');
+    expect(settings).toContain('📱 跟隨系統');
+    expect(settings).toContain('onThemeModeChange');
   });
 
   it('exposes currency choices and custom split controls in the expense modal', () => {

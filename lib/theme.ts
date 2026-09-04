@@ -14,6 +14,8 @@ export type AppTheme = {
     warningText: string;
   };
 };
+export type ThemeMode = 'light' | 'dark' | 'system';
+export const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
 
 const lightTheme: AppTheme = {
   isDark: false,
@@ -35,4 +37,8 @@ const darkTheme: AppTheme = {
 
 export function getAppTheme(scheme: string | null | undefined): AppTheme {
   return scheme === 'dark' ? darkTheme : lightTheme;
+}
+
+export function getThemeForMode(mode: ThemeMode, systemScheme: string | null | undefined): AppTheme {
+  return getAppTheme(mode === 'system' ? systemScheme : mode);
 }
