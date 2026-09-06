@@ -2,11 +2,24 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { formatFlightTitle, parseFlightText } from '../lib/ai-parser';
-import { canSaveItineraryItem, submitItineraryItem } from '../lib/itinerary';
+import { canSaveItineraryItem, submitItineraryItem, resolveItineraryContext } from '../lib/itinerary';
 
 describe('itinerary item form validation', () => {
-  it.each([undefined, null, 'invalid', {}])('reports an invalid save callback without a TypeError: %s', async (callback) => {
-    await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '手動景點' }, callback as Parameters<typeof submitItineraryItem>[1])).rejects.toThrow('儲存功能尚未就緒');
+  it.each([undefined, null, 'invalid', {}])('saves using URL context and the API fallback without callback props: %s', async (callback) => {
+    const context = resolveItineraryContext({ routeId: ['trip-from-url'], dayIndex: null });
+    const saved: unknown[] = [];
+    await expect(submitItineraryItem({ trip_id: context.tripId, day_number: context.day, created_by: 'u', location_name: '手動景點' }, callback as Parameters<typeof submitItineraryItem>[1], async (payload) => { saved.push(payload); })).resolves.toBe(true);
+    expect(saved).toEqual([{ trip_id: 'trip-from-url', day_number: 1, created_by: 'u', location_name: '手動景點' }]);
+  });
+  it('preserves explicit context and converts zero-based dayIndex', () => {
+    expect(resolveItineraryContext({ tripId: 'explicit', routeId: 'url', day: 3, dayIndex: 0 })).toEqual({ tripId: 'explicit', day: 3 });
+    expect(resolveItineraryContext({ tripId: '', routeId: 'url', dayIndex: 2 })).toEqual({ tripId: 'url', day: 3 });
+    expect(resolveItineraryContext({ routeId: 'url' })).toEqual({ tripId: 'url', day: 1 });
+  });
+  it('does not retry failed callbacks through fallback and risk duplicate writes', async () => {
+    let fallbackCalls = 0;
+    await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('denied'); }, async () => { fallbackCalls++; })).rejects.toThrow('denied');
+    expect(fallbackCalls).toBe(0);
   });
   it('propagates the actual database failure for the UI to display', async () => {
     await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('permission denied'); })).rejects.toThrow('permission denied');
@@ -33,7 +46,7 @@ describe('itinerary item form validation', () => {
     expect(canSaveItineraryItem(formatFlightTitle(flight!))).toBe(true);
 
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryItemModal.tsx'), 'utf8');
-    expect(source).toContain('await submitItineraryItem(payload, onSave);');
+    expect(source).toContain('await submitItineraryItem(payload, onSave,');
     expect(source).toContain('disabled={!titleValid || saving}');
     expect(source).toContain('setAddress(getFlightDestinationAddress(flight) ?? \'\')');
     expect(source).toContain('setDuration(flight.durationMinutes === null ? \'\' : String(flight.durationMinutes))');

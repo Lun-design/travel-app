@@ -1,4 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { saveItineraryItem } from '@/lib/itinerary-api';
+import { supabase } from '@/lib/supabase';
+import { resolveItineraryContext } from '@/lib/itinerary';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { canSaveItineraryItem, submitItineraryItem, type ItineraryItem, type OpeningHours } from '@/lib/itinerary';
 import { canAutocompletePlaces, createDebouncedGeocodingSearch, fetchOverpassOpeningHours, getGeocodingAttribution, searchPlaces, type GeocodingResult } from '@/lib/geocoding';
@@ -15,17 +19,21 @@ type AutoHoursStatus = 'idle' | 'loading' | 'found' | 'missing';
 type Props = {
   visible: boolean;
   item?: ItineraryItem | null;
-  day?: number;
+  day?: number | null;
+  dayIndex?: number | null;
   tripStartDate?: string;
   tripEndDate?: string;
   tripId?: string;
   userId?: string;
   onClose: () => void;
-  onSave: (data: any) => Promise<void>;
+  onSave?: (data: any) => Promise<void>;
   onDelete?: () => Promise<void>;
 };
 
-export function ItineraryItemModal({ visible, item, day = 1, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onDelete }: Props) {
+export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onDelete }: Props) {
+  const route = useLocalSearchParams<{ id?: string | string[] }>();
+  const context = resolveItineraryContext({ tripId, itemTripId: item?.trip_id, routeId: route.id, day: dayProp, dayIndex });
+  const day = context.day;
   const [name, setName] = useState('');
   const [savedAndClosed, setSavedAndClosed] = useState(false);
   useEffect(() => { if (visible) setSavedAndClosed(false); }, [visible]);
@@ -189,8 +197,8 @@ export function ItineraryItemModal({ visible, item, day = 1, tripStartDate, trip
     const safeDay = Number.isFinite(selectedDay) && selectedDay > 0 ? Math.trunc(selectedDay) : 1;
     const payload = {
       ...(item?.id ? { id: item.id } : {}),
-      trip_id: tripId ?? item?.trip_id ?? 'unassigned-trip',
-      created_by: item?.created_by ?? userId ?? 'anonymous-user',
+      trip_id: context.tripId,
+      created_by: item?.created_by || userId || '',
       day_number: safeDay,
       location_name: name.trim(),
       address: address.trim() || null,
@@ -206,7 +214,13 @@ export function ItineraryItemModal({ visible, item, day = 1, tripStartDate, trip
 
     setSaving(true);
     try {
-      const submitted = await submitItineraryItem(payload, onSave);
+      const submitted = await submitItineraryItem(payload, onSave, async (safePayload) => {
+        if (!safePayload.trip_id) throw new Error('無法辨識行程，請從行程頁開啟新增景點。');
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        if (!data.user) throw new Error('請先登入再儲存景點。');
+        await saveItineraryItem({ ...safePayload, created_by: item?.created_by || data.user.id }, { offlineScope: { tripId: safePayload.trip_id, userId: data.user.id } });
+      });
       if (!submitted) { setSaveMessage('請輸入景點名稱。'); return; }
       setSavedAndClosed(true);
       if (typeof onClose === 'function') {

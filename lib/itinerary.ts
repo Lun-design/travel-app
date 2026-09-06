@@ -33,11 +33,21 @@ export function canSaveItineraryItem(title: unknown): title is string {
 export async function submitItineraryItem(
   payload: ItineraryItemSaveInput,
   onSave: ((data: ItineraryItemSaveInput) => Promise<void>) | null | undefined,
+  fallbackSave?: (data: ItineraryItemSaveInput) => Promise<void>,
 ): Promise<boolean> {
   if (!canSaveItineraryItem(payload.location_name)) return false;
-  if (typeof onSave !== 'function') throw new Error('儲存功能尚未就緒，請重新開啟行程後再試。');
-  await onSave(payload);
+  const save = typeof onSave === 'function' ? onSave : fallbackSave;
+  if (typeof save !== 'function') throw new Error('無法連接儲存服務。');
+  await save(payload);
   return true;
+}
+
+/** Editor day is one-based; legacy dayIndex is zero-based. */
+export function resolveItineraryContext(input: { tripId?: string | null; itemTripId?: string | null; routeId?: string | string[]; day?: number | null; dayIndex?: number | null }) {
+  const routeId = Array.isArray(input.routeId) ? input.routeId[0] : input.routeId;
+  const tripId = [input.tripId, input.itemTripId, routeId].find((value) => typeof value === 'string' && value.trim())?.trim() ?? '';
+  const candidate = input.day ?? ((input.dayIndex ?? 0) + 1);
+  return { tripId, day: Number.isFinite(candidate) && candidate >= 1 ? Math.trunc(candidate) : 1 };
 }
 
 function normalizeTimeValue(value: unknown): string | null | undefined {
