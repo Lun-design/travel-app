@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { formatFlightTitle, parseFlightText } from '../lib/ai-parser';
 import { canSaveItineraryItem } from '../lib/itinerary';
 
 describe('itinerary item form validation', () => {
@@ -18,5 +19,17 @@ describe('itinerary item form validation', () => {
     expect(source).toContain('const titleValid = canSaveItineraryItem(name);');
     expect(source).toContain('disabled={!titleValid || saving}');
     expect(source).toContain('zIndex: 1000');
+  });
+
+  it('keeps the save action enabled for an AI-generated flight title and submits it', () => {
+    const flight = parseFlightText('台北...飛往大阪...06:30~10:10...BR178');
+    expect(flight).not.toBeNull();
+    expect(canSaveItineraryItem(formatFlightTitle(flight!))).toBe(true);
+
+    const source = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryItemModal.tsx'), 'utf8');
+    expect(source).toContain('await onSave(payload);');
+    expect(source).toContain('disabled={!titleValid || saving}');
+    expect(source).toContain('setAddress(getFlightDestinationAddress(flight) ?? \'\')');
+    expect(source).toContain('setDuration(flight.durationMinutes === null ? \'\' : String(flight.durationMinutes))');
   });
 });

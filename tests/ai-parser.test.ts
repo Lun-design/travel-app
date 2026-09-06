@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatFlightRoute, formatFlightTitle, formatTimeHHmm, parseFlightText, parseItineraryNote } from '../lib/ai-parser';
+import { formatFlightRoute, formatFlightTitle, formatTimeHHmm, getFlightDestinationAddress, parseFlightText, parseItineraryNote } from '../lib/ai-parser';
 
 describe('parseFlightText', () => {
   it('extracts a StarLux booking message into normalized flight fields', () => {
@@ -46,7 +46,7 @@ describe('formatFlightTitle', () => {
       flightNumber: 'JX800',
       departureAirport: 'TPE',
       arrivalAirport: 'NRT',
-    })).toBe('\u661f\u5b87\u822a\u7a7a JX800 (TPE \u2192 NRT)');
+    })).toBe('\u661f\u5b87\u822a\u7a7a JX800 (TPE \u2794 NRT)');
   });
 
   it('formats a route for reuse in the address field', () => {
@@ -65,7 +65,7 @@ describe('formatFlightTitle', () => {
       departureAirport: '\u53f0\u5317\u6843\u5712',
       arrivalAirport: '\u6771\u4eac\u6210\u7530',
     });
-    expect(formatFlightTitle(result!)).toBe('\u661f\u5b87\u822a\u7a7a JX800 (\u53f0\u5317\u6843\u5712 \u2192 \u6771\u4eac\u6210\u7530)');
+    expect(formatFlightTitle(result!)).toBe('\u661f\u5b87\u822a\u7a7a JX800 (TPE \u2794 NRT)');
   });
 
   it('accepts 至 as a Chinese route separator', () => {
@@ -73,6 +73,27 @@ describe('formatFlightTitle', () => {
       departureAirport: '\u6843\u5712',
       arrivalAirport: '\u6210\u7530',
     });
+  });
+
+  it('parses ellipsis-separated Chinese flight routes and calculates duration', () => {
+    const result = parseFlightText('台北...飛往大阪...06:30~10:10...BR178');
+
+    expect(result).toMatchObject({
+      airlineName: '長榮航空',
+      flightNumber: 'BR178',
+      departureTime: '06:30',
+      arrivalTime: '10:10',
+      departureAirport: '台北',
+      arrivalAirport: '大阪',
+      durationMinutes: 220,
+    });
+    expect(formatFlightTitle(result!)).toBe('長榮航空 BR178 (TPE ➔ KIX)');
+    expect(getFlightDestinationAddress(result!)).toBe('關西國際機場');
+  });
+
+  it('never uses a bare IATA route as the destination address', () => {
+    expect(getFlightDestinationAddress({ arrivalAirport: 'KIX' })).toBe('關西國際機場');
+    expect(getFlightDestinationAddress({ arrivalAirport: 'ZZZ' })).toBeNull();
   });
 });
 

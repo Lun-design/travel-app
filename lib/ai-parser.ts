@@ -17,6 +17,8 @@ export type ParsedFlight = {
   departureAirport: string | null;
   arrivalAirport: string | null;
   confirmationCode: string | null;
+  /** Estimated elapsed flight time in minutes, when both clocks are known. */
+  durationMinutes: number | null;
 };
 
 export type ParseFlightOptions = {
@@ -38,6 +40,42 @@ export type FlightTitleInput = Pick<ParsedFlight, 'airlineName' | 'flightNumber'
 
 export type FlightRouteInput = Pick<ParsedFlight, 'departureAirport' | 'arrivalAirport'>;
 
+type AirportAlias = { code: string; name: string; aliases: string[] };
+
+const AIRPORT_ALIASES: AirportAlias[] = [
+  { code: 'TPE', name: '\u6843\u5712\u570b\u969b\u6a5f\u5834', aliases: ['TPE', '\u53f0\u5317', '\u6843\u5712', '\u6843\u5712\u6a5f\u5834', '\u53f0\u5317\u6843\u5712', '\u53f0\u5317\u6843\u5712\u6a5f\u5834'] },
+  { code: 'KIX', name: '\u95dc\u897f\u570b\u969b\u6a5f\u5834', aliases: ['KIX', '\u5927\u962a', '\u5927\u962a\u95dc\u897f', '\u95dc\u897f', '\u95dc\u897f\u6a5f\u5834', '\u95dc\u897f\u570b\u969b\u6a5f\u5834'] },
+  { code: 'NRT', name: '\u6210\u7530\u570b\u969b\u6a5f\u5834', aliases: ['NRT', '\u6210\u7530', '\u6210\u7530\u6a5f\u5834', '\u6771\u4eac\u6210\u7530'] },
+  { code: 'HND', name: '\u6771\u4eac\u7fbd\u7530\u6a5f\u5834', aliases: ['HND', '\u7fbd\u7530', '\u6771\u4eac\u7fbd\u7530', '\u7fbd\u7530\u6a5f\u5834'] },
+  { code: 'TSA', name: '\u53f0\u5317\u677e\u5c71\u6a5f\u5834', aliases: ['TSA', '\u677e\u5c71', '\u53f0\u5317\u677e\u5c71', '\u677e\u5c71\u6a5f\u5834'] },
+  { code: 'NGO', name: '\u4e2d\u90e8\u570b\u969b\u6a5f\u5834', aliases: ['NGO', '\u540d\u53e4\u5c4b', '\u540d\u53e4\u5c4b\u4e2d\u90e8', '\u4e2d\u90e8\u6a5f\u5834'] },
+  { code: 'ICN', name: '\u4ec1\u5ddd\u570b\u969b\u6a5f\u5834', aliases: ['ICN', '\u4ec1\u5ddd', '\u9996\u723e\u4ec1\u5ddd'] },
+  { code: 'GMP', name: '\u91d1\u6d66\u6a5f\u5834', aliases: ['GMP', '\u91d1\u6d66'] },
+  { code: 'FUK', name: '\u798f\u5ca1\u6a5f\u5834', aliases: ['FUK', '\u798f\u5ca1'] },
+];
+
+function findAirportAlias(value: string | null | undefined): AirportAlias | null {
+  const token = value?.trim();
+  if (!token) return null;
+  return AIRPORT_ALIASES.find((airport) => airport.aliases.some((alias) => token.toUpperCase() === alias.toUpperCase() || token.includes(alias))) ?? null;
+}
+
+function formatFlightEndpoint(value: string | null): string | null {
+  const token = value?.trim();
+  if (!token) return null;
+  return findAirportAlias(token)?.code ?? token.toUpperCase();
+}
+
+/** Return a useful destination address, never a bare route/code placeholder. */
+export function getFlightDestinationAddress({ arrivalAirport }: Pick<ParsedFlight, 'arrivalAirport'>): string | null {
+  const token = arrivalAirport?.trim();
+  if (!token) return null;
+  const known = findAirportAlias(token);
+  if (known) return known.name;
+  if (/^[A-Z]{3}$/i.test(token)) return null;
+  return /\u6a5f\u5834|airport/i.test(token) ? token : null;
+}
+
 /** Format both endpoints when a complete route is available. */
 export function formatFlightRoute({ departureAirport, arrivalAirport }: FlightRouteInput): string | null {
   const departure = departureAirport?.trim();
@@ -48,7 +86,9 @@ export function formatFlightRoute({ departureAirport, arrivalAirport }: FlightRo
 /** Build the display title used when a parsed flight is saved as an itinerary item. */
 export function formatFlightTitle({ airlineName, flightNumber, departureAirport, arrivalAirport }: FlightTitleInput): string {
   const base = [airlineName?.trim(), flightNumber.trim()].filter(Boolean).join(' ');
-  const route = formatFlightRoute({ departureAirport, arrivalAirport });
+  const departure = formatFlightEndpoint(departureAirport);
+  const arrival = formatFlightEndpoint(arrivalAirport);
+  const route = departure && arrival ? `${departure} \u2794 ${arrival}` : null;
   return `${base || flightNumber.trim()}${route ? ` (${route})` : ''}`;
 }
 
@@ -214,6 +254,18 @@ function extractAirportTokens(input: string): TextToken[] {
   while ((match = iataPattern.exec(input))) iataTokens.push({ value: match[0], index: match.index });
   if (iataTokens.length >= 2) return iataTokens;
 
+  // Some booking messages place ellipses/punctuation around the route
+  // connector (for example: city...flight-to-city...06:30~10:10).
+  const ellipsisRoutePattern = /([\u4e00-\u9fffA-Za-z0-9\u00b7]{2,24})[\s\u002e\u2026\uFF0C,\u3001]{0,8}(?:\u98db\u5f80|\u524d\u5f80|\u5230|\u81f3|\u5f80|\u2192|->)[\s\u002e\u2026\uFF0C,\u3001]{0,8}([\u4e00-\u9fffA-Za-z0-9\u00b7]{2,24})/gu;
+  const ellipsisRouteTokens: TextToken[] = [];
+  while ((match = ellipsisRoutePattern.exec(input))) {
+    const departure = match[1].trim();
+    const arrival = match[2].trim();
+    ellipsisRouteTokens.push({ value: departure, index: match.index });
+    ellipsisRouteTokens.push({ value: arrival, index: match.index + match[0].lastIndexOf(arrival) });
+  }
+  if (ellipsisRouteTokens.length >= 2) return ellipsisRouteTokens;
+
   const routeTokens: TextToken[] = [];
   const routePattern = /([\u4e00-\u9fffA-Za-z0-9·]{2,24})\s*(?:\u5230|\u81f3|\u5f80|\u98db\u5f80|\u2192|->)\s*([\u4e00-\u9fffA-Za-z0-9·]{2,24})/gu;
   while ((match = routePattern.exec(input))) {
@@ -234,6 +286,27 @@ function extractConfirmationCode(input: string): string | null {
   const labeled = /(?:\u78ba\u8a8d|\u8a02\u4f4d|\u9810\u8a02|\u9810\u7d04|booking|confirmation|record\s*locator|pnr)(?:\u78bc|\u4ee3\u865f|\u4ee3\u78bc|\u865f|\s*code)?\s*[:#：-]?\s*([A-Z0-9]{5,8})/i.exec(input);
   if (labeled) return labeled[1].toUpperCase();
   return null;
+}
+
+/** Calculate elapsed flight time, allowing an overnight arrival. */
+export function calculateFlightDurationMinutes(
+  departureTime: string | null | undefined,
+  arrivalTime: string | null | undefined,
+  departureDate?: string | null,
+  arrivalDate?: string | null,
+): number | null {
+  const departure = formatTimeHHmm(departureTime);
+  const arrival = formatTimeHHmm(arrivalTime);
+  if (!departure || !arrival) return null;
+  const toMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  let duration = toMinutes(arrival) - toMinutes(departure);
+  if (departureDate && arrivalDate) {
+    const from = Date.parse(`${departureDate}T00:00:00Z`);
+    const to = Date.parse(`${arrivalDate}T00:00:00Z`);
+    if (Number.isFinite(from) && Number.isFinite(to)) duration += Math.round((to - from) / 60000);
+  }
+  while (duration < 0) duration += 24 * 60;
+  return duration > 0 ? duration : null;
 }
 
 /** Parse a flight number and common booking-message fields. */
@@ -261,6 +334,12 @@ export function parseFlightText(input: string, options: ParseFlightOptions = {})
     departureAirport: airports[0]?.value ?? null,
     arrivalAirport: airports[1]?.value ?? null,
     confirmationCode: extractConfirmationCode(text),
+    durationMinutes: calculateFlightDurationMinutes(
+      times[0]?.time ?? null,
+      times[1]?.time ?? null,
+      datesForFields[0] ?? null,
+      datesForFields[1] ?? datesForFields[0] ?? null,
+    ),
   };
 }
 

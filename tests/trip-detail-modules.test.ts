@@ -20,4 +20,17 @@ describe('trip detail module boundaries', () => {
     expect(source).toContain('reload');
     expect(source).toContain('resolveConflict');
   });
+
+  it('places Today Mode at the top of the timeline with completion and rescue actions', () => {
+    const timeline = read('src/components/trip-detail/TimelinePanel.tsx');
+    const card = read('src/components/TodayFocusCard.tsx');
+    const rescue = read('src/components/OfflineRescueCardModal.tsx');
+
+    expect(timeline).toContain('<TodayFocusCard');
+    expect(timeline).toContain('onComplete');
+    expect(card).toContain('findActiveOrNextSpot');
+    expect(card).toContain('getGoogleMapsDirectionsUrl');
+    expect(card).toContain('OfflineRescueCardModal');
+    expect(rescue).toContain('離線備忘／救命卡');
+  });
 });

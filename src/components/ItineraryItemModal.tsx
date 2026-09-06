@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { canSaveItineraryItem, type ItineraryItem, type OpeningHours } from '@/lib/itinerary';
 import { canAutocompletePlaces, createDebouncedGeocodingSearch, fetchOverpassOpeningHours, getGeocodingAttribution, searchPlaces, type GeocodingResult } from '@/lib/geocoding';
 import { fetchGooglePlaceDetails, hasGooglePlacesApiKey, searchGooglePlaces } from '@/lib/google-places';
-import { formatFlightRoute, formatFlightTitle, formatTimeHHmm, parseFlightText, parseItineraryNote } from '@/lib/ai-parser';
+import { formatFlightTitle, formatTimeHHmm, getFlightDestinationAddress, parseFlightText, parseItineraryNote } from '@/lib/ai-parser';
 import { tripDayNumberForDate } from '@/lib/trip-dates';
 import { ManualLocationMap } from './ManualLocationMap';
 import { OpeningHoursEditor } from './OpeningHoursEditor';
@@ -237,7 +237,8 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
       setResults([]);
       setName(formatFlightTitle(flight));
       setTime(formatTimeHHmm(flight.departureTime) ?? '');
-      setAddress(formatFlightRoute(flight) ?? '');
+      setAddress(getFlightDestinationAddress(flight) ?? '');
+      setDuration(flight.durationMinutes === null ? '' : String(flight.durationMinutes));
       if (flight.confirmationCode) setNotes(`確認碼：${flight.confirmationCode}`);
       const dateLabel = flight.departureDate ? `（${flight.departureDate}）` : '';
       const dateWarning = dateResult.status === 'outside' ? '；日期不在目前行程範圍，請確認 Day' : dateResult.status === 'unavailable' ? '；請確認此日期對應的 Day' : '';
