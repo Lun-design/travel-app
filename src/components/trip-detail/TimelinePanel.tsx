@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, LayoutAnimation, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, LayoutAnimation, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { TimelineViewport } from './TimelineViewport';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { ItineraryItem } from '@/lib/itinerary';
 import type { Trip } from '@/lib/trips';
@@ -53,17 +54,16 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     try { await exportTripCalendar(trip, items); }
     catch (error: any) { Alert.alert('匯出失敗', error?.message ?? '無法建立行事曆檔案。'); }
   }
-  const TimelineScroll = layout.compact ? View : ScrollView;
+  const { width, height } = useWindowDimensions();
   return <>
     <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable></View>
     <DayTabs days={days} selected={day} onChange={onDayChange} themeMode={themeMode} />
     <TodayFocusCard schedule={scheduled} items={visibleItems} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} compact={layout.compact} />
     <Pressable style={styles.mapToggle} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
-    <TimelineScroll {...(!layout.compact ? { ref: timelineScrollRef, contentContainerStyle: [styles.paneContent, { paddingHorizontal: layout.panePadding, paddingTop: layout.panePadding }] } : {})} style={layout.compact ? styles.mobileTimeline : styles.timelinePane}>
+    <TimelineViewport width={width} height={height}>
       {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onReorder={onReorder} />}
-    </TimelineScroll>
-    <Pressable style={[styles.fab, layout.compact && styles.mobileFab, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth }]} onPress={onAdd}><Text numberOfLines={1} style={[styles.buttonText, { fontSize: layout.fabFontSize }]}>＋ 新增景點／活動</Text></Pressable>
+    </TimelineViewport>
   </>;
 }
 

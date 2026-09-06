@@ -36,6 +36,7 @@ export async function submitItineraryItem(
   fallbackSave?: (data: ItineraryItemSaveInput) => Promise<void>,
 ): Promise<boolean> {
   if (!canSaveItineraryItem(payload.location_name)) return false;
+  if (!payload.trip_id?.trim()) throw new Error('找不到行程 ID (Trip ID missing)');
   const save = typeof onSave === 'function' ? onSave : fallbackSave;
   if (typeof save !== 'function') throw new Error('無法連接儲存服務。');
   await save(payload);
@@ -43,9 +44,14 @@ export async function submitItineraryItem(
 }
 
 /** Editor day is one-based; legacy dayIndex is zero-based. */
-export function resolveItineraryContext(input: { tripId?: string | null; itemTripId?: string | null; routeId?: string | string[]; day?: number | null; dayIndex?: number | null }) {
+export function resolveItineraryContext(input: { tripId?: string | null; itemTripId?: string | null; routeId?: string | string[]; routeTripId?: string | string[]; activeTripId?: string | null; pathname?: string; day?: number | null; dayIndex?: number | null }) {
   const routeId = Array.isArray(input.routeId) ? input.routeId[0] : input.routeId;
-  const tripId = [input.tripId, input.itemTripId, routeId].find((value) => typeof value === 'string' && value.trim())?.trim() ?? '';
+  const routeTripId = Array.isArray(input.routeTripId) ? input.routeTripId[0] : input.routeTripId;
+  const pathname = input.pathname ?? (typeof window !== 'undefined' ? window.location.pathname : '');
+  const match = /\/trips\/([^/]+)/.exec(pathname);
+  let pathId = '';
+  try { pathId = match ? decodeURIComponent(match[1]) : ''; } catch { /* Invalid URL encoding is not a usable trip ID. */ }
+  const tripId = [input.tripId, input.itemTripId, routeId, routeTripId, input.activeTripId, pathId].find((value) => typeof value === 'string' && value.trim() && !/^(?:undefined|null|\[id\]|\[tripId\])$/.test(value.trim()))?.trim() ?? '';
   const candidate = input.day ?? ((input.dayIndex ?? 0) + 1);
   return { tripId, day: Number.isFinite(candidate) && candidate >= 1 ? Math.trunc(candidate) : 1 };
 }

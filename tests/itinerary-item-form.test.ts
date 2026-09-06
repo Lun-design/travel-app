@@ -1,10 +1,36 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatFlightTitle, parseFlightText } from '../lib/ai-parser';
 import { canSaveItineraryItem, submitItineraryItem, resolveItineraryContext } from '../lib/itinerary';
 
 describe('itinerary item form validation', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each([
+    [{ routeId: 'search-id' }, 'search-id'],
+    [{ routeTripId: ['search-trip'] }, 'search-trip'],
+    [{ activeTripId: 'active-trip' }, 'active-trip'],
+    [{}, 'mobile-trip'],
+  ])('saves with mobile fallbacks when trip props are absent: %j', async (input, expectedId) => {
+    vi.stubGlobal('window', { location: { pathname: '/trips/mobile-trip' } });
+    const context = resolveItineraryContext(input);
+    const saveApi = vi.fn(async () => {});
+    await expect(submitItineraryItem({ trip_id: context.tripId, day_number: context.day, created_by: 'user', location_name: '手機新增景點' }, undefined, saveApi)).resolves.toBe(true);
+    expect(saveApi).toHaveBeenCalledWith(expect.objectContaining({ trip_id: expectedId, day_number: 1 }));
+  });
+  it('reports the specific missing ID without calling the save API', async () => {
+    vi.stubGlobal('window', { location: { pathname: '/login' } });
+    const context = resolveItineraryContext({});
+    const saveApi = vi.fn(async () => {});
+    await expect(submitItineraryItem({ trip_id: context.tripId, created_by: 'user', location_name: '景點' }, saveApi)).rejects.toThrow('找不到行程 ID (Trip ID missing)');
+    expect(saveApi).not.toHaveBeenCalled();
+  });
+  it('reads the latest pathname at submission and rejects route placeholders', () => {
+    vi.stubGlobal('window', { location: { pathname: '/trips/%5Bid%5D' } });
+    expect(resolveItineraryContext({}).tripId).toBe('');
+    window.location.pathname = '/trips/new-trip';
+    expect(resolveItineraryContext({}).tripId).toBe('new-trip');
+  });
   it.each([undefined, null, 'invalid', {}])('saves using URL context and the API fallback without callback props: %s', async (callback) => {
     const context = resolveItineraryContext({ routeId: ['trip-from-url'], dayIndex: null });
     const saved: unknown[] = [];

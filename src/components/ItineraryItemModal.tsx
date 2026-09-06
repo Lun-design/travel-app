@@ -3,6 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { saveItineraryItem } from '@/lib/itinerary-api';
 import { supabase } from '@/lib/supabase';
 import { resolveItineraryContext } from '@/lib/itinerary';
+import { useActiveTripId } from '@/contexts/ActiveTripContext';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { canSaveItineraryItem, submitItineraryItem, type ItineraryItem, type OpeningHours } from '@/lib/itinerary';
 import { canAutocompletePlaces, createDebouncedGeocodingSearch, fetchOverpassOpeningHours, getGeocodingAttribution, searchPlaces, type GeocodingResult } from '@/lib/geocoding';
@@ -31,8 +32,10 @@ type Props = {
 };
 
 export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onDelete }: Props) {
-  const route = useLocalSearchParams<{ id?: string | string[] }>();
-  const context = resolveItineraryContext({ tripId, itemTripId: item?.trip_id, routeId: route.id, day: dayProp, dayIndex });
+  const route = useLocalSearchParams<{ id?: string | string[]; tripId?: string | string[] }>();
+  const activeTripId = useActiveTripId();
+  const contextInput = { tripId, itemTripId: item?.trip_id, routeId: route.id, routeTripId: route.tripId, activeTripId, day: dayProp, dayIndex };
+  const context = resolveItineraryContext(contextInput);
   const day = context.day;
   const [name, setName] = useState('');
   const [savedAndClosed, setSavedAndClosed] = useState(false);
@@ -197,7 +200,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, trip
     const safeDay = Number.isFinite(selectedDay) && selectedDay > 0 ? Math.trunc(selectedDay) : 1;
     const payload = {
       ...(item?.id ? { id: item.id } : {}),
-      trip_id: context.tripId,
+      trip_id: resolveItineraryContext(contextInput).tripId,
       created_by: item?.created_by || userId || '',
       day_number: safeDay,
       location_name: name.trim(),
@@ -215,7 +218,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, trip
     setSaving(true);
     try {
       const submitted = await submitItineraryItem(payload, onSave, async (safePayload) => {
-        if (!safePayload.trip_id) throw new Error('無法辨識行程，請從行程頁開啟新增景點。');
+        if (!safePayload.trip_id) throw new Error('找不到行程 ID (Trip ID missing)');
         const { data, error } = await supabase.auth.getUser();
         if (error) throw error;
         if (!data.user) throw new Error('請先登入再儲存景點。');
