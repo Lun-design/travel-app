@@ -5,6 +5,7 @@ import type { TripMemberWithProfile } from '@/lib/trips';
 import type { SupportedCurrency } from '@/lib/exchange-rates';
 import type { ThemeMode } from '@/lib/theme';
 import { EDITORIAL_COLORS } from '@/lib/theme';
+import { getProfileDisplayName } from '@/lib/profiles';
 import { ExpenseList } from '@/components/ExpenseList';
 import { SettlementCard } from '@/components/SettlementCard';
 
@@ -21,7 +22,7 @@ type Props = {
 
 export function ExpensesPanel({ expenses, members, rates, rateLabel, themeMode, onEdit, onDelete, onAdd }: Props) {
   return <ScrollView contentContainerStyle={styles.panel}>
-    <SettlementCard themeMode={themeMode} settlements={calculateBalances(expenses, rates)} labelFor={(memberId) => members.find((member) => member.user_id === memberId)?.profile?.display_name || memberId.slice(0, 8)} />
+    <SettlementCard themeMode={themeMode} members={members} settlements={calculateBalances(expenses, rates)} labelFor={(memberId) => getProfileDisplayName(members.find((member) => member.user_id === memberId)?.profile, memberId.slice(0, 8))} />
     <ExpenseList themeMode={themeMode} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} onEdit={onEdit} onDelete={onDelete} />
     <Pressable style={styles.primary} onPress={onAdd}><Text style={styles.buttonText}>＋ 新增旅費</Text></Pressable>
   </ScrollView>;

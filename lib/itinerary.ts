@@ -17,6 +17,14 @@ export type ItineraryItem = {
  */
 export type ItineraryItemSaveInput = Partial<ItineraryItem> & { trip_id: string; created_by: string };
 
+/**
+ * A manually entered title is sufficient to save an itinerary item. Address,
+ * coordinates and search metadata are optional and can be completed later.
+ */
+export function canSaveItineraryItem(title: unknown): title is string {
+  return typeof title === 'string' && title.trim().length > 0;
+}
+
 function normalizeTimeValue(value: unknown): string | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;

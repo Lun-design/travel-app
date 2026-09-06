@@ -7,6 +7,7 @@ import { calculateBalances, deleteExpense, listExpenses, saveExpense, type Expen
 import { exchangeRateService, getDefaultExchangeRateSnapshot, type ExchangeRateSnapshot } from '@/lib/exchange-rates';
 import { listVouchers } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
+import { getCurrentProfile, updateCurrentProfile, type Profile } from '@/lib/profiles';
 import { offlineStore, type OfflineMutation } from '@/lib/offline-store';
 import { offlineSyncService } from '@/lib/offline-replay';
 
@@ -16,6 +17,7 @@ export function useTripDetailData(tripId: string | undefined) {
   const [items, setItems] = useState<ItineraryItem[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [userId, setUserId] = useState('');
   const [rateSnapshot, setRateSnapshot] = useState<ExchangeRateSnapshot>(() => getDefaultExchangeRateSnapshot());
   const [loading, setLoading] = useState(true);
@@ -41,19 +43,23 @@ export function useTripDetailData(tripId: string | undefined) {
       const auth = await supabase.auth.getSession().then(({ data }) => data.session?.user ?? null).catch(() => null);
       const scope = { userId: auth?.id ?? 'anonymous', tripId };
       const options = { offlineScope: scope };
-      const [tripData, memberData, itemData, expenseData, voucherData] = await Promise.all([
+      const [tripData, memberData, itemData, expenseData, voucherData, profileData] = await Promise.all([
         getTrip(tripId, options),
         listTripMembers(tripId, options),
         listItineraryItems(tripId, options),
         listExpenses(tripId, options),
         listVouchers(tripId).catch(() => null),
+        getCurrentProfile().catch(() => null),
       ]);
       const cached = await offlineStore.getSnapshot(scope);
       const resolvedVouchers = voucherData ?? cached?.vouchers ?? [];
-      setUserId(auth?.id ?? ''); setTrip(tripData); setMembers(memberData); setItems(itemData); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]);
+      const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
+      const resolvedProfile = profileData ?? (memberProfile ? { id: auth?.id ?? '', display_name: memberProfile.display_name, full_name: memberProfile.full_name, email: memberProfile.email, avatar_url: memberProfile.avatar_url, updated_at: new Date().toISOString() } : null);
+      const resolvedMembers = resolvedProfile ? memberData.map((member) => member.user_id === resolvedProfile.id ? { ...member, profile: { ...member.profile, display_name: resolvedProfile.display_name, full_name: resolvedProfile.full_name, email: resolvedProfile.email, avatar_url: resolvedProfile.avatar_url } } : member) : memberData;
+      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(itemData); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]);
       await offlineStore.putSnapshot(scope, {
         trip: tripData,
-        members: memberData,
+        members: resolvedMembers,
         itineraryItems: itemData,
         expenses: expenseData,
         packingItems: cached?.packingItems ?? [],
@@ -106,6 +112,12 @@ export function useTripDetailData(tripId: string | undefined) {
   const lockRate = useCallback(async (currency: string, rate: number) => {
     setRateSnapshot(await exchangeRateService.setManualRate(currency, rate));
   }, []);
+  const saveProfile = useCallback(async (input: Pick<Profile, 'display_name' | 'avatar_url'>) => {
+    const updated = await updateCurrentProfile(input);
+    setProfile(updated);
+    setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member));
+    return updated;
+  }, []);
   const resolveConflict = useCallback(async (id: string, resolution: 'keep-local' | 'use-remote') => {
     await offlineSyncService.resolveConflict(id, resolution);
     await refreshSyncStatus();
@@ -113,9 +125,9 @@ export function useTripDetailData(tripId: string | undefined) {
   }, [refreshSyncStatus, reload]);
 
   return {
-    trip, setTrip, members, setMembers, items, setItems, expenses, setExpenses, vouchers, setVouchers, userId,
+    trip, setTrip, members, setMembers, items, setItems, expenses, setExpenses, vouchers, setVouchers, profile, setProfile, userId,
     rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, offlineScope,
-    reload, resolveConflict, saveItem, removeItem, reorderItems, removeExpense, saveExpenseRecord, saveTripSettings, lockRate,
+    reload, resolveConflict, saveItem, removeItem, reorderItems, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
   };
 }
 

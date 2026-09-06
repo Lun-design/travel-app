@@ -8,7 +8,14 @@ import { offlineStore } from './offline-store';
 export type Trip = { id: string; title: string; destination: string; start_date: string; end_date: string; invite_code: string; created_by: string; default_departure_time: string | null; timezone: string };
 export type TripUpdateInput = Partial<Pick<Trip, 'start_date' | 'end_date' | 'default_departure_time' | 'timezone'>>;
 export type TripMember = { trip_id: string; user_id: string; role: 'owner' | 'editor' | 'viewer'; joined_at: string };
-export type TripMemberWithProfile = TripMember & { profile?: { display_name: string | null; avatar_url: string | null } | null };
+export type TripMemberWithProfile = TripMember & {
+  profile?: {
+    display_name: string | null;
+    full_name?: string | null;
+    email?: string | null;
+    avatar_url: string | null;
+  } | null;
+};
 export type TripWithMembers = { trip: Trip; members: TripMemberWithProfile[] };
 
 function normalizeTrip(row: unknown): Trip {
@@ -39,7 +46,7 @@ export async function listTripMembers(tripId: string, options: OfflineApiOptions
   const store = options.store ?? offlineStore;
   const scope = await resolveOfflineScope(tripId, options.offlineScope, currentUserId);
   try {
-    const { data, error } = await supabase.from('trip_members').select('*, profile:profiles(display_name, avatar_url)').eq('trip_id', tripId).order('joined_at');
+    const { data, error } = await supabase.from('trip_members').select('*, profile:profiles(display_name, full_name, email, avatar_url)').eq('trip_id', tripId).order('joined_at');
     if (error) throw error;
     const members = (data ?? []) as TripMemberWithProfile[];
     await patchOfflineSnapshot(store, scope, { members });

@@ -22,6 +22,7 @@ import { ExpensesPanel } from '@/components/trip-detail/ExpensesPanel';
 import { VoucherPreviewModal } from '@/components/VoucherPreviewModal';
 import { VouchersPanel } from '@/components/VouchersPanel';
 import { TripSettingsModal } from '@/components/TripSettingsModal';
+import { UserProfileModal } from '@/components/UserProfileModal';
 import { useTripDetailData } from '@/hooks/useTripDetailData';
 
 export default function TripDetailScreen() {
@@ -49,6 +50,7 @@ export default function TripDetailScreen() {
   const [editingExpense, setEditingExpense] = useState<any>(null);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [profileVisible, setProfileVisible] = useState(false);
   const timelineScrollRef = useRef<ScrollView>(null);
   const days = useMemo(() => data.trip ? tripDayNumbers(data.trip.start_date, data.trip.end_date) : [1], [data.trip]);
   const visibleItems = useMemo(() => data.items.filter((item) => item.day_number === day).sort((left, right) => left.position - right.position), [data.items, day]);
@@ -84,7 +86,7 @@ export default function TripDetailScreen() {
   const trip = data.trip;
 
   return <View style={[styles.container, { backgroundColor: theme.colors.background, paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
-    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} />
+    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onProfile={() => setProfileVisible(true)} />
      {data.isOffline ? <View style={[styles.offlineBar, { backgroundColor: theme.colors.warningSurface, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.warningText }]}>📡 離線模式：已載入快取行程</Text></View> : null}
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
@@ -98,6 +100,7 @@ export default function TripDetailScreen() {
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
     <VoucherPreviewModal voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />
     <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
+    <UserProfileModal visible={profileVisible} profile={data.profile} themeMode={themeMode} onClose={() => setProfileVisible(false)} onSaved={(updated) => { data.setProfile(updated); data.setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member)); }} />
   </View>;
 }
 

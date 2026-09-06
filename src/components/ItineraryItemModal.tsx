@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { ItineraryItem, OpeningHours } from '@/lib/itinerary';
+import { canSaveItineraryItem, type ItineraryItem, type OpeningHours } from '@/lib/itinerary';
 import { canAutocompletePlaces, createDebouncedGeocodingSearch, fetchOverpassOpeningHours, getGeocodingAttribution, searchPlaces, type GeocodingResult } from '@/lib/geocoding';
 import { fetchGooglePlaceDetails, hasGooglePlacesApiKey, searchGooglePlaces } from '@/lib/google-places';
 import { formatFlightRoute, formatFlightTitle, formatTimeHHmm, parseFlightText, parseItineraryNote } from '@/lib/ai-parser';
@@ -51,6 +51,7 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
   const suppressNextSearch = useRef(false);
   const searchController = useRef(createDebouncedGeocodingSearch(searchPlaces, 400));
   const autocompleteEnabled = canAutocompletePlaces();
+  const titleValid = canSaveItineraryItem(name);
 
   useEffect(() => {
     if (!visible) return;
@@ -173,7 +174,7 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
 
   async function save() {
     if (saving) return;
-    if (!name.trim()) {
+    if (!titleValid) {
       Alert.alert('欄位未完成', '請輸入景點名稱。');
       return;
     }
@@ -346,7 +347,7 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
       <View style={styles.actions}>
         <Pressable onPress={onClose}><Text style={styles.cancel}>取消</Text></Pressable>
         {item && onDelete ? <Pressable onPress={() => Alert.alert('刪除景點', '確定要刪除這個景點嗎？', [{ text: '取消' }, { text: '刪除', style: 'destructive', onPress: onDelete }])}><Text style={styles.delete}>刪除</Text></Pressable> : null}
-        <Pressable style={[styles.save, saving && styles.saveDisabled]} onPress={() => void save()} disabled={saving}>{saving ? <ActivityIndicator color="white" /> : <Text style={styles.white}>儲存</Text>}</Pressable>
+        <Pressable style={[styles.save, (!titleValid || saving) && styles.saveDisabled]} onPress={() => void save()} disabled={!titleValid || saving}>{saving ? <ActivityIndicator color="white" /> : <Text style={styles.white}>儲存</Text>}</Pressable>
       </View>
     </ScrollView>
   </Modal>;
@@ -389,7 +390,7 @@ const styles = StyleSheet.create({
   hoursHeading: { gap: 4 },
   hoursLoading: { color: EDITORIAL_COLORS.terracotta, fontSize: 12 },
   hoursHint: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 17 },
-  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 20, marginTop: 12 },
+  actions: { position: 'relative', zIndex: 1000, elevation: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 20, marginTop: 12, paddingTop: 8, backgroundColor: EDITORIAL_COLORS.paper },
   cancel: { color: EDITORIAL_COLORS.taupe, fontWeight: '600', minHeight: 44, paddingVertical: 12 },
   delete: { color: EDITORIAL_COLORS.dangerText, fontWeight: '700', minHeight: 44, paddingVertical: 12 },
   save: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 13 },

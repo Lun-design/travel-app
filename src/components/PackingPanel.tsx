@@ -8,6 +8,8 @@ import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { offlineStore } from '@/lib/offline-store';
+import { getProfileDisplayName } from '@/lib/profiles';
+import { ProfileAvatar } from './ProfileAvatar';
 
 const categories = ['證件', '電子產品', '衣物', '藥品', '隨身物品', '未分類'];
 const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪'];
@@ -34,7 +36,8 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const progress = useMemo(() => packingProgress(items), [items]);
   const groups = useMemo(() => groupPackingItems(items), [items]);
   const hasExistingItem = (candidate: { name: string; category: string }) => items.some((item) => packingItemKey(item) === packingItemKey(candidate));
-  const label = (id: string | null) => id ? members.find((member) => member.user_id === id)?.profile?.display_name || id.slice(0, 8) : '未指派';
+  const memberFor = (id: string | null) => id ? members.find((member) => member.user_id === id) : undefined;
+  const label = (id: string | null) => id ? getProfileDisplayName(memberFor(id)?.profile, id.slice(0, 8)) : '未指派';
 
   async function load() {
     try { setItems(await listPackingItems(tripId, { offlineScope, store: offlineStore })); }
@@ -88,7 +91,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
     <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={setName} onSubmitEditing={() => void add()} /><Pressable style={styles.addButton} onPress={() => void add()} disabled={busy}><Text style={styles.white}>新增</Text></Pressable></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={category === value ? styles.white : undefined}>{value}</Text></Pressable>)}</ScrollView>
-    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} onPress={() => { const next = members.find((member) => member.user_id !== item.assigned_to); if (next) void updatePackingItem(item.id, { assigned_to: next.user_id }).then(load); }}><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></Pressable><Pressable onPress={() => void deletePackingItem(item.id).then(load)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
+    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} onPress={() => { const next = members.find((member) => member.user_id !== item.assigned_to); if (next) void updatePackingItem(item.id, { assigned_to: next.user_id }).then(load); }}><ProfileAvatar profile={memberFor(item.assigned_to)?.profile} userId={item.assigned_to ?? undefined} size={26} /><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></Pressable><Pressable onPress={() => void deletePackingItem(item.id).then(load)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
     <Modal visible={celebrateVisible} transparent animationType="fade" onRequestClose={() => setCelebrateVisible(false)}>
       <View style={styles.modalBackdrop}>
         <View style={styles.celebrateCard}>
@@ -135,7 +138,7 @@ const styles = StyleSheet.create({
   checkText: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
   itemName: { flex: 1, minWidth: 0, flexShrink: 1, fontSize: 14 },
   done: { textDecorationLine: 'line-through', color: '#94a3b8' },
-  assigneeButton: { flexShrink: 1, maxWidth: '28%' },
+  assigneeButton: { flexShrink: 1, maxWidth: '34%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },
   assignee: { color: EDITORIAL_COLORS.terracotta, fontSize: 11 },
   delete: { color: EDITORIAL_COLORS.dangerText, fontSize: 22, minHeight: 44, paddingVertical: 10 },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(31,31,31,.45)' },
