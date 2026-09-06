@@ -1,3 +1,5 @@
+import { offlineStore } from './offline-store';
+
 const RUNTIME_CACHE_PREFIX = 'travel-planner-runtime-';
 const OFFLINE_STORAGE_PREFIX = 'travel-planner-offline:';
 
@@ -18,6 +20,9 @@ function getController(): ServiceWorkerController | null {
  * Static assets are deliberately retained so the PWA shell can still open.
  */
 export async function clearOfflineCache(): Promise<void> {
+  try { await offlineStore.clearAll(); } catch {
+    // IndexedDB may be unavailable in Safari private mode; continue clearing other stores.
+  }
   const cacheStorage = typeof caches === 'undefined' ? null : caches;
   if (cacheStorage) {
     try {

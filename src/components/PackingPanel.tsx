@@ -2,17 +2,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import { fetchWeatherForecast } from '@/lib/weather-api';
 import type { ItineraryItem } from '@/lib/itinerary';
-import { createPackingItem, deletePackingItem, importPackingTemplate, listPackingItems, updatePackingItem, type PackingItem } from '@/lib/packing-api';
+import { createPackingItem, deletePackingItem as deletePackingItemRemote, importPackingTemplate, listPackingItems, updatePackingItem as updatePackingItemRemote, type PackingItem } from '@/lib/packing-api';
 import { generatePackingSuggestions, groupPackingItems, isPackingComplete, packingProgress, type PackingTemplate } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
+import { offlineStore } from '@/lib/offline-store';
 
 const categories = ['證件', '電子產品', '衣物', '藥品', '隨身物品', '未分類'];
 const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪'];
 
-export function PackingPanel({ tripId, members, destination = '', tripStartDate, items: itineraryItems = [], themeMode }: {
+export function PackingPanel({ tripId, userId = 'anonymous', members, destination = '', tripStartDate, items: itineraryItems = [], themeMode }: {
   tripId: string;
+  userId?: string;
   members: TripMemberWithProfile[];
   destination?: string;
   tripStartDate?: string;
@@ -26,12 +28,15 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
   const [category, setCategory] = useState('未分類');
   const [busy, setBusy] = useState(false);
   const [celebrateVisible, setCelebrateVisible] = useState(false);
+  const offlineScope = { userId, tripId };
+  const deletePackingItem = (id: string) => deletePackingItemRemote(id, { offlineScope, store: offlineStore });
+  const updatePackingItem = (id: string, patch: Parameters<typeof updatePackingItemRemote>[1], options = { offlineScope, store: offlineStore }) => updatePackingItemRemote(id, patch, options);
   const progress = useMemo(() => packingProgress(items), [items]);
   const groups = useMemo(() => groupPackingItems(items), [items]);
   const label = (id: string | null) => id ? members.find((member) => member.user_id === id)?.profile?.display_name || id.slice(0, 8) : '未指派';
 
   async function load() {
-    try { setItems(await listPackingItems(tripId)); }
+    try { setItems(await listPackingItems(tripId, { offlineScope, store: offlineStore })); }
     catch (error: any) { Alert.alert('載入清單失敗', error?.message ?? '請稍後再試。'); }
   }
   useEffect(() => { void load(); }, [tripId]);
@@ -40,7 +45,7 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
     const next = !item.is_checked;
     setItems((current) => current.map((value) => value.id === item.id ? { ...value, is_checked: next, is_packed: next } : value));
     try {
-      await updatePackingItem(item.id, { is_checked: next, is_packed: next });
+      await updatePackingItem(item.id, { is_checked: next, is_packed: next }, { offlineScope, store: offlineStore });
       const nextItems = items.map((value) => value.id === item.id ? { ...value, is_checked: next, is_packed: next } : value);
       if (next && isPackingComplete(nextItems)) setCelebrateVisible(true);
     }
@@ -50,14 +55,14 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
   async function add() {
     if (!name.trim()) return;
     setBusy(true);
-    try { const item = await createPackingItem({ trip_id: tripId, category, name: name.trim() }); setItems((current) => [...current, item]); setName(''); }
+    try { const item = await createPackingItem({ trip_id: tripId, category, name: name.trim() }, { offlineScope, store: offlineStore }); setItems((current) => [...current, item]); setName(''); }
     catch (error: any) { Alert.alert('新增項目失敗', error?.message ?? '請稍後再試。'); }
     finally { setBusy(false); }
   }
 
   async function importTemplate(template: PackingTemplate) {
     setBusy(true);
-    try { await importPackingTemplate(tripId, template); await load(); }
+    try { await importPackingTemplate(tripId, template, { offlineScope, store: offlineStore }); await load(); }
     catch (error: any) { Alert.alert('匯入範本失敗', error?.message ?? '請稍後再試。'); }
     finally { setBusy(false); }
   }
@@ -70,7 +75,7 @@ export function PackingPanel({ tripId, members, destination = '', tripStartDate,
       const existingNames = new Set(items.map((item) => item.name.trim().toLocaleLowerCase()));
       const suggestions = generatePackingSuggestions(destination, weather).filter((item) => !existingNames.has(item.name.toLocaleLowerCase()));
       if (!suggestions.length) { Alert.alert('清單已很完整', '目前沒有新的建議項目。'); return; }
-      await Promise.all(suggestions.map((item) => createPackingItem({ trip_id: tripId, category: item.category, name: item.name })));
+      await Promise.all(suggestions.map((item) => createPackingItem({ trip_id: tripId, category: item.category, name: item.name }, { offlineScope, store: offlineStore })));
       await load();
     } catch (error: any) { Alert.alert('產生建議失敗', error?.message ?? '請稍後再試。'); }
     finally { setBusy(false); }
