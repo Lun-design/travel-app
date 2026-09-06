@@ -232,6 +232,16 @@ describe('trip detail responsive layout', () => {
     expect(packing).not.toContain('contentContainerStyle={styles.templates}');
   });
 
+  it('uses one outer vertical scroll container for the packing panel', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const packing = readFileSync(projectFile('src', 'components', 'PackingPanel.tsx'), 'utf8');
+
+    expect(detail).toContain('<ScrollView style={styles.panelScroll}');
+    expect(detail).toContain('panelScrollContent');
+    expect(packing).toContain('return <View style={[styles.root');
+    expect(packing).not.toContain('return <ScrollView style={[styles.scroll');
+  });
+
   it('constrains voucher and document cards to the viewport', () => {
     const vouchers = readFileSync(projectFile('src', 'components', 'VouchersPanel.tsx'), 'utf8');
     const documents = readFileSync(projectFile('src', 'components', 'DocumentsPanel.tsx'), 'utf8');

@@ -1,13 +1,21 @@
 import { supabase } from './supabase';
 import type { PackingTemplate } from './packing-utils';
-import { templateItems } from './packing-utils';
+import { dedupePackingItems, packingItemKey, templateItems } from './packing-utils';
 import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueueOffline, updateOfflineCollection, type OfflineApiOptions } from './offline-data';
 import { offlineStore } from './offline-store';
 
 export type PackingItem = { id: string; trip_id: string; category: string; name: string; item_name?: string; is_checked: boolean; is_packed?: boolean; assigned_to: string | null; created_at: string };
+export type PackingMutationOptions = OfflineApiOptions & { existingItems?: PackingItem[] };
 
 export function normalizePackingItem(row: any): PackingItem {
   return { ...row, name: row.item_name || row.name, item_name: row.item_name || row.name, is_checked: row.is_packed ?? row.is_checked ?? false, is_packed: row.is_packed ?? row.is_checked ?? false } as PackingItem;
+}
+
+async function knownPackingItems(store: typeof offlineStore | undefined, scope: Awaited<ReturnType<typeof resolveOfflineScope>>, options: PackingMutationOptions): Promise<PackingItem[]> {
+  if (options.existingItems) return options.existingItems;
+  if (!store) return [];
+  const snapshot = await store.getSnapshot(scope);
+  return (snapshot?.packingItems ?? []).map(normalizePackingItem);
 }
 
 function optimisticPackingItem(item: Pick<PackingItem, 'trip_id' | 'category' | 'name'> & Partial<Pick<PackingItem, 'assigned_to'>>, id: string): PackingItem {
@@ -29,18 +37,21 @@ export async function listPackingItems(tripId: string, options: OfflineApiOption
   }
 }
 
-export async function createPackingItem(item: Pick<PackingItem, 'trip_id' | 'category' | 'name'> & Partial<Pick<PackingItem, 'assigned_to'>>, options: OfflineApiOptions = {}): Promise<PackingItem> {
+export async function createPackingItem(item: Pick<PackingItem, 'trip_id' | 'category' | 'name'> & Partial<Pick<PackingItem, 'assigned_to'>>, options: PackingMutationOptions = {}): Promise<PackingItem> {
   const store = options.store ?? offlineStore;
   const scope = await resolveOfflineScope(item.trip_id, options.offlineScope);
+  const existing = (await knownPackingItems(store, scope, options)).find((value) => packingItemKey(value) === packingItemKey(item));
+  if (existing) return existing;
+  const normalizedItem = { ...item, name: item.name.trim() };
   try {
-    const { data, error } = await supabase.from('packing_items').insert({ trip_id: item.trip_id, category: item.category, name: item.name, item_name: item.name, is_checked: false, is_packed: false, assigned_to: item.assigned_to ?? null }).select().single();
+    const { data, error } = await supabase.from('packing_items').insert({ trip_id: normalizedItem.trip_id, category: normalizedItem.category, name: normalizedItem.name, item_name: normalizedItem.name, is_checked: false, is_packed: false, assigned_to: normalizedItem.assigned_to ?? null }).select().single();
     if (error) throw error;
     const saved = normalizePackingItem(data);
     if (store) await updateOfflineCollection<PackingItem>(store, scope, 'packingItems', (items) => [...items, saved]);
     return saved;
   } catch (error) {
     if (!options.replaying && shouldQueueOffline(error)) {
-      const local = optimisticPackingItem(item, createLocalId('offline-packing'));
+      const local = optimisticPackingItem(normalizedItem, createLocalId('offline-packing'));
       if (store) {
         await enqueueOfflineMutation(store, { scope, entity: 'packing', operation: 'create', resourceId: local.id, payload: { ...item } });
         await updateOfflineCollection<PackingItem>(store, scope, 'packingItems', (items) => [...items, local]);
@@ -94,10 +105,11 @@ export async function deletePackingItem(id: string, options: OfflineApiOptions =
   }
 }
 
-export async function importPackingTemplate(tripId: string, template: PackingTemplate, options: OfflineApiOptions = {}): Promise<void> {
+export async function importPackingTemplate(tripId: string, template: PackingTemplate, options: PackingMutationOptions = {}): Promise<void> {
   const store = options.store ?? offlineStore;
   const scope = await resolveOfflineScope(tripId, options.offlineScope);
-  const sourceItems = templateItems(template);
+  const sourceItems = dedupePackingItems(templateItems(template), await knownPackingItems(store, scope, options));
+  if (!sourceItems.length) return;
   try {
     const { error } = await supabase.from('packing_items').insert(sourceItems.map((item) => ({ ...item, item_name: item.name, is_packed: item.is_checked, trip_id: tripId })));
     if (error) throw error;

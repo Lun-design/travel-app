@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 import { fetchWeatherForecast } from '@/lib/weather-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { createPackingItem, deletePackingItem as deletePackingItemRemote, importPackingTemplate, listPackingItems, updatePackingItem as updatePackingItemRemote, type PackingItem } from '@/lib/packing-api';
-import { generatePackingSuggestions, groupPackingItems, isPackingComplete, packingProgress, type PackingTemplate } from '@/lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, groupPackingItems, isPackingComplete, packingItemKey, packingProgress, type PackingTemplate } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -33,6 +33,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const updatePackingItem = (id: string, patch: Parameters<typeof updatePackingItemRemote>[1], options = { offlineScope, store: offlineStore }) => updatePackingItemRemote(id, patch, options);
   const progress = useMemo(() => packingProgress(items), [items]);
   const groups = useMemo(() => groupPackingItems(items), [items]);
+  const hasExistingItem = (candidate: { name: string; category: string }) => items.some((item) => packingItemKey(item) === packingItemKey(candidate));
   const label = (id: string | null) => id ? members.find((member) => member.user_id === id)?.profile?.display_name || id.slice(0, 8) : '未指派';
 
   async function load() {
@@ -54,15 +55,16 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
 
   async function add() {
     if (!name.trim()) return;
+    if (hasExistingItem({ name, category })) { setName(''); return; }
     setBusy(true);
-    try { const item = await createPackingItem({ trip_id: tripId, category, name: name.trim() }, { offlineScope, store: offlineStore }); setItems((current) => [...current, item]); setName(''); }
+    try { const item = await createPackingItem({ trip_id: tripId, category, name: name.trim() }, { offlineScope, store: offlineStore, existingItems: items }); setItems((current) => current.some((value) => value.id === item.id) ? current : [...current, item]); setName(''); }
     catch (error: any) { Alert.alert('新增項目失敗', error?.message ?? '請稍後再試。'); }
     finally { setBusy(false); }
   }
 
   async function importTemplate(template: PackingTemplate) {
     setBusy(true);
-    try { await importPackingTemplate(tripId, template, { offlineScope, store: offlineStore }); await load(); }
+    try { await importPackingTemplate(tripId, template, { offlineScope, store: offlineStore, existingItems: items }); await load(); }
     catch (error: any) { Alert.alert('匯入範本失敗', error?.message ?? '請稍後再試。'); }
     finally { setBusy(false); }
   }
@@ -72,16 +74,15 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
     try {
       const firstLocated = itineraryItems.find((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined);
       const weather = firstLocated && tripStartDate ? await fetchWeatherForecast(Number(firstLocated.latitude), Number(firstLocated.longitude), tripStartDate) : null;
-      const existingNames = new Set(items.map((item) => item.name.trim().toLocaleLowerCase()));
-      const suggestions = generatePackingSuggestions(destination, weather).filter((item) => !existingNames.has(item.name.toLocaleLowerCase()));
+      const suggestions = dedupePackingItems(generatePackingSuggestions(destination, weather), items);
       if (!suggestions.length) { Alert.alert('清單已很完整', '目前沒有新的建議項目。'); return; }
-      await Promise.all(suggestions.map((item) => createPackingItem({ trip_id: tripId, category: item.category, name: item.name }, { offlineScope, store: offlineStore })));
+      await Promise.all(suggestions.map((item) => createPackingItem({ trip_id: tripId, category: item.category, name: item.name }, { offlineScope, store: offlineStore, existingItems: items })));
       await load();
     } catch (error: any) { Alert.alert('產生建議失敗', error?.message ?? '請稍後再試。'); }
     finally { setBusy(false); }
   }
 
-  return <ScrollView style={[styles.scroll, { backgroundColor: theme.colors.background }]} contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
+  return <View style={[styles.root, { backgroundColor: theme.colors.background }]}><View style={[styles.container, { backgroundColor: theme.colors.background }] }>
     <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
     <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 AI 智慧建議清單</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
@@ -98,11 +99,11 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
         </View>
       </View>
     </Modal>
-  </ScrollView>;
+  </View></View>;
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, width: '100%', maxWidth: '100%', minHeight: 0, overflow: 'hidden' },
+  root: { width: '100%', maxWidth: '100%', minHeight: 0 },
   container: { width: '100%', maxWidth: '100%', minHeight: 0, boxSizing: 'border-box', padding: 4, paddingBottom: 100, gap: 13 },
   progressCard: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 14, gap: 12 },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 },

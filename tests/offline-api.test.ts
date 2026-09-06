@@ -45,6 +45,18 @@ describe('offline-aware itinerary API', () => {
     await expect(store.listMutations(scope)).resolves.toMatchObject([{ entity: 'packing', operation: 'create', resourceId: item.id, status: 'pending' }]);
   });
 
+  it('does not create a duplicate packing item when the name and category already exist', async () => {
+    const existing = { id: 'packing-1', trip_id: 'trip-1', category: 'Electronics', name: 'Power bank', is_checked: false, assigned_to: null, created_at: 'now' };
+
+    const item = await createPackingItem(
+      { trip_id: 'trip-1', category: 'Electronics', name: ' power bank ' },
+      { offlineScope: scope, store: createMemoryOfflineStore(), existingItems: [existing] } as any,
+    );
+
+    expect(item).toEqual(existing);
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
   it('queues a valid expense create without treating UUID validation as offline', async () => {
     const store = createMemoryOfflineStore();
     supabaseMock.from.mockReturnValue({ insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: new TypeError('network error') }) }) }) });

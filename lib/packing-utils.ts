@@ -1,8 +1,23 @@
 export type PackingCategory = '證件' | '電子產品' | '衣物' | '藥品' | '隨身物品' | '未分類';
 export type PackingTemplate = '國內輕旅行' | '國外海島' | '雪國滑雪';
-export type PackingItemLike = { is_checked?: boolean; is_packed?: boolean; category: string };
+export type PackingItemLike = { is_checked?: boolean; is_packed?: boolean; category: string; name?: string; item_name?: string; title?: string };
 export type PackingWeatherHint = { precipitationProbability: number | null; temperatureMinC: number | null; temperatureMaxC: number | null };
 export type PackingSuggestion = { category: PackingCategory; name: string };
+export function packingItemName(item: Pick<PackingItemLike, 'name' | 'item_name' | 'title'>): string {
+  return String(item.name ?? item.item_name ?? item.title ?? '').trim();
+}
+export function packingItemKey(item: Pick<PackingItemLike, 'category' | 'name' | 'item_name' | 'title'>): string {
+  return `${String(item.category ?? '').trim().toLocaleLowerCase()}\u0000${packingItemName(item).toLocaleLowerCase()}`;
+}
+export function dedupePackingItems<T extends PackingItemLike>(incoming: T[], existing: PackingItemLike[] = []): T[] {
+  const seen = new Set(existing.map(packingItemKey));
+  return incoming.filter((item) => {
+    const key = packingItemKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 export function packingProgress(items: PackingItemLike[]) { const total = items.length; const completed = items.filter((item) => item.is_packed ?? item.is_checked ?? false).length; return { total, completed, percentage: total ? Math.round((completed / total) * 100) : 0 }; }
 export function isPackingComplete(items: PackingItemLike[]) { return items.length > 0 && items.every((item) => item.is_packed ?? item.is_checked ?? false); }
 const common = [{ category: '證件', name: '身分證／護照' }, { category: '電子產品', name: '手機與充電器' }, { category: '隨身物品', name: '錢包' }];

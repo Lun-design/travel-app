@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { generatePackingSuggestions, isPackingComplete, packingProgress } from '../lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, isPackingComplete, packingProgress } from '../lib/packing-utils';
 
 describe('packing suggestions', () => {
+  it('deduplicates by normalized item name and category', () => {
+    const existing = [{ id: 'existing', name: 'Power bank', category: 'Electronics' }];
+    const incoming = [
+      { name: ' power bank ', category: 'Electronics' },
+      { name: 'Power bank', category: 'Travel' },
+      { name: 'Charging cable', category: 'Electronics' },
+      { name: 'CHARGING CABLE', category: 'electronics' },
+    ];
+
+    expect(dedupePackingItems(incoming, existing)).toEqual([
+      { name: 'Power bank', category: 'Travel' },
+      { name: 'Charging cable', category: 'Electronics' },
+    ]);
+  });
+
   it('adds destination and weather-aware essentials without duplicates', () => {
     const suggestions = generatePackingSuggestions('北海道滑雪', {
       precipitationProbability: 72,
