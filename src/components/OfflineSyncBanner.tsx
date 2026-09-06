@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { OfflineMutation } from '@/lib/offline-store';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 type Props = {
   isOffline: boolean;
@@ -24,13 +25,13 @@ export function OfflineSyncBanner({ isOffline, pendingCount, conflicts, onResolv
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', gap: 6, borderRadius: 10, backgroundColor: '#fef3c7', paddingHorizontal: 12, paddingVertical: 8 },
-  message: { color: '#92400e', fontSize: 12, fontWeight: '700' },
-  conflict: { gap: 6, borderTopWidth: 1, borderTopColor: '#fcd34d', paddingTop: 6 },
-  conflictText: { color: '#78350f', fontSize: 12, flexShrink: 1 },
+  container: { width: '100%', gap: 6, borderRadius: 10, backgroundColor: EDITORIAL_COLORS.amberSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 12, paddingVertical: 8 },
+  message: { color: EDITORIAL_COLORS.amberText, fontSize: 12, fontWeight: '700' },
+  conflict: { gap: 6, borderTopWidth: 1, borderTopColor: EDITORIAL_COLORS.line, paddingTop: 6 },
+  conflictText: { color: EDITORIAL_COLORS.amberText, fontSize: 12, flexShrink: 1 },
   actions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  keep: { borderRadius: 8, backgroundColor: '#2563eb', paddingHorizontal: 10, paddingVertical: 6 },
-  keepText: { color: 'white', fontSize: 12, fontWeight: '700' },
-  remote: { borderRadius: 8, borderWidth: 1, borderColor: '#92400e', paddingHorizontal: 10, paddingVertical: 6 },
-  remoteText: { color: '#92400e', fontSize: 12, fontWeight: '700' },
+  keep: { borderRadius: 8, minHeight: 44, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 14, paddingVertical: 8 },
+  keepText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '700' },
+  remote: { borderRadius: 8, minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 14, paddingVertical: 8 },
+  remoteText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700' },
 });

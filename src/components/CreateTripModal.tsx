@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { inferTimezoneFromDestination, isValidTimezone, normalizeTimezone } from '@/lib/timezone';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 type CreateTripInput = {
   title: string;
@@ -69,16 +70,16 @@ export function CreateTripModal({ visible, userId, onClose, onCreate }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 'auto', padding: 24, gap: 14, backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-  title: { fontSize: 24, fontWeight: '700' },
-  input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 13 },
+  container: { marginTop: 'auto', padding: 24, gap: 14, backgroundColor: EDITORIAL_COLORS.paper, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+  title: { fontSize: 24, fontWeight: '800', color: EDITORIAL_COLORS.charcoal },
+  input: { minHeight: 48, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 13, backgroundColor: EDITORIAL_COLORS.paper },
   timezoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   timezoneInput: { flex: 1 },
-  detectTimezone: { borderRadius: 10, backgroundColor: '#e0e7ff', paddingHorizontal: 12, paddingVertical: 13 },
-  detectTimezoneText: { color: '#3730a3', fontWeight: '700' },
-  helper: { color: '#64748b', fontSize: 12 },
-  error: { color: '#b91c1c', backgroundColor: '#fef2f2', padding: 10, borderRadius: 8 },
+  detectTimezone: { minHeight: 48, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 12, paddingVertical: 13 },
+  detectTimezoneText: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700' },
+  helper: { color: EDITORIAL_COLORS.taupe, fontSize: 12 },
+  error: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, padding: 10, borderRadius: 8 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 20 },
-  save: { backgroundColor: '#2563eb', borderRadius: 10, padding: 13 },
-  white: { color: 'white', fontWeight: '700' },
+  save: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, padding: 13 },
+  white: { color: EDITORIAL_COLORS.paper, fontWeight: '700' },
 });

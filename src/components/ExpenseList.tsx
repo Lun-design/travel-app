@@ -4,6 +4,7 @@ import type { Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { convertToTwd, type SupportedCurrency } from '@/lib/exchange-rates';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export function ExpenseList({ expenses, members, onEdit, onDelete, themeMode = 'system', rates, rateLabel }: { expenses: Expense[]; members: TripMemberWithProfile[]; onEdit: (expense: Expense) => void; onDelete: (expense: Expense) => void; themeMode?: ThemeMode; rates?: Partial<Record<SupportedCurrency, number>>; rateLabel?: string }) {
   const theme = getThemeForMode(themeMode, useColorScheme());
@@ -22,6 +23,5 @@ export function ExpenseList({ expenses, members, onEdit, onDelete, themeMode = '
 const styles = StyleSheet.create({
   list: { width: '100%', maxWidth: '100%', gap: 10 }, rateLabel: { fontSize: 12, fontWeight: '700' }, card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', borderRadius: 15, padding: 15, borderWidth: 1 },
   top: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }, details: { flex: 1, minWidth: 0 }, title: { fontSize: 16, fontWeight: '800' }, meta: { fontSize: 12, lineHeight: 18, marginTop: 5 }, amountBlock: { maxWidth: '42%', flexShrink: 0, alignItems: 'flex-end' }, amount: { fontSize: 13, fontWeight: '800', textAlign: 'right' }, twdAmount: { fontSize: 11, fontWeight: '700', marginTop: 2 },
-  actions: { flexDirection: 'row', gap: 18, marginTop: 12 }, edit: { color: '#2563eb', fontWeight: '700' }, delete: { color: '#dc2626', fontWeight: '700' }, empty: { width: '100%', maxWidth: '100%', alignItems: 'center', padding: 40, gap: 8, boxSizing: 'border-box' }, icon: { fontSize: 30 }, muted: {},
+  actions: { flexDirection: 'row', gap: 18, marginTop: 12 }, edit: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700', minHeight: 44, paddingVertical: 12 }, delete: { color: EDITORIAL_COLORS.dangerText, fontWeight: '700', minHeight: 44, paddingVertical: 12 }, empty: { width: '100%', maxWidth: '100%', alignItems: 'center', padding: 40, gap: 8, boxSizing: 'border-box' }, icon: { fontSize: 30 }, muted: {},
 });
-// Legacy layout contract: amount: { color: '#0f172a', fontSize: 13, fontWeight: '800', flexShrink: 0

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import type { Settlement } from '@/lib/expenses-api';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 import { PuppyMascot } from './PuppyMascot';
 
 export function SettlementCard({ settlements, labelFor, themeMode = 'system' }: { settlements: Settlement[]; labelFor: (id: string) => string; themeMode?: ThemeMode }) {
@@ -17,6 +18,6 @@ export function SettlementCard({ settlements, labelFor, themeMode = 'system' }: 
 }
 
 const styles = StyleSheet.create({
-  card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: '#eff6ff', borderRadius: 16, padding: 16, gap: 10, marginBottom: 14 }, title: { fontSize: 17, fontWeight: '800' }, row: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }, complete: { alignItems: 'center', gap: 8 }, settlementText: { flex: 1, minWidth: 0 }, amount: { maxWidth: '42%', flexShrink: 0, fontSize: 13, fontWeight: '800', textAlign: 'right' }, empty: { textAlign: 'center' }, hint: { color: '#2563eb', fontSize: 12, fontWeight: '700' }, modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15,23,42,.45)' }, modalCard: { width: '100%', maxWidth: 360, alignItems: 'center', gap: 8, padding: 24, borderRadius: 24 }, modalTitle: { fontSize: 22, fontWeight: '800' }, modalText: { textAlign: 'center' }, closeButton: { marginTop: 8, borderRadius: 12, backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12 }, closeText: { color: 'white', fontWeight: '800' },
+  card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 16, gap: 10, marginBottom: 14 }, title: { fontSize: 17, fontWeight: '800' }, row: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }, complete: { alignItems: 'center', gap: 8 }, settlementText: { flex: 1, minWidth: 0 }, amount: { maxWidth: '42%', flexShrink: 0, fontSize: 13, fontWeight: '800', textAlign: 'right' }, empty: { textAlign: 'center' }, hint: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700' }, modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(31,31,31,.45)' }, modalCard: { width: '100%', maxWidth: 360, alignItems: 'center', gap: 8, padding: 24, borderRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line }, modalTitle: { fontSize: 22, fontWeight: '800' }, modalText: { textAlign: 'center' }, closeButton: { marginTop: 8, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 24, paddingVertical: 10 }, closeText: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
 });
 // Legacy layout contract: settlementText: { flex: 1, minWidth: 0

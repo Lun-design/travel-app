@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { AppTheme } from '@/lib/theme';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export type TripDetailTab = 'timeline' | 'expenses' | 'packing' | 'documents';
 export const TRIP_DETAIL_TABS: { value: TripDetailTab; label: string }[] = [
@@ -23,8 +24,8 @@ const styles = StyleSheet.create({
   tabShell: { width: '100%', minHeight: 44, height: 44, flexShrink: 0, position: 'relative', overflow: 'hidden', marginBottom: 7 },
   tabScroller: { width: '100%', minHeight: 44, height: 44, flexGrow: 0, flexShrink: 0 },
   tabs: { minWidth: '100%', minHeight: 44, height: 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 13, paddingVertical: 4, paddingRight: 4, paddingLeft: 12 },
-  tabScrollHint: { position: 'absolute', top: 0, right: 0, bottom: 0, width: 30, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 5, backgroundColor: 'rgba(226, 232, 240, 0.92)' },
-  hintText: { color: '#64748b', fontSize: 23, fontWeight: '900', lineHeight: 24 },
+  tabScrollHint: { position: 'absolute', top: 0, right: 0, bottom: 0, width: 30, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 5, backgroundColor: 'rgba(241, 238, 230, 0.94)' },
+  hintText: { color: EDITORIAL_COLORS.taupe, fontSize: 23, fontWeight: '900', lineHeight: 24 },
   tab: { height: 36, flexGrow: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10 },
   label: { lineHeight: 20, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false },
   active: {},

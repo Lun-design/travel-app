@@ -17,21 +17,52 @@ export type AppTheme = {
 export type ThemeMode = 'light' | 'dark' | 'system';
 export const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
 
+export const EDITORIAL_COLORS = {
+  oat: '#F8F6F0',
+  paper: '#FFFDF8',
+  sand: '#F1EEE6',
+  charcoal: '#1F1F1F',
+  taupe: '#746F64',
+  line: '#E5E2D9',
+  terracotta: '#9A6A45',
+  terracottaSoft: '#F1E4D8',
+  amberSoft: '#F5EBDD',
+  amberText: '#8A5A32',
+  dangerSoft: '#F4E1DC',
+  dangerText: '#944B3C',
+} as const;
+
 const lightTheme: AppTheme = {
   isDark: false,
   colors: {
-    background: '#f8fafc', surface: '#ffffff', surfaceMuted: '#f1f5f9', card: '#f8fafc',
-    text: '#0f172a', muted: '#64748b', border: '#e2e8f0', primary: '#2563eb', tabTrack: '#e2e8f0',
-    warningSurface: '#fef3c7', warningText: '#92400e',
+    background: EDITORIAL_COLORS.oat,
+    surface: EDITORIAL_COLORS.paper,
+    surfaceMuted: EDITORIAL_COLORS.sand,
+    card: EDITORIAL_COLORS.paper,
+    text: EDITORIAL_COLORS.charcoal,
+    muted: EDITORIAL_COLORS.taupe,
+    border: EDITORIAL_COLORS.line,
+    primary: EDITORIAL_COLORS.terracotta,
+    tabTrack: EDITORIAL_COLORS.sand,
+    warningSurface: EDITORIAL_COLORS.amberSoft,
+    warningText: EDITORIAL_COLORS.amberText,
   },
 };
 
 const darkTheme: AppTheme = {
   isDark: true,
   colors: {
-    background: '#0f172a', surface: '#1e293b', surfaceMuted: '#334155', card: '#1e293b',
-    text: '#f8fafc', muted: '#cbd5e1', border: '#475569', primary: '#93c5fd', tabTrack: '#334155',
-    warningSurface: '#422006', warningText: '#fde68a',
+    background: EDITORIAL_COLORS.charcoal,
+    surface: '#292824',
+    surfaceMuted: '#35322C',
+    card: '#292824',
+    text: EDITORIAL_COLORS.oat,
+    muted: '#C8C1B5',
+    border: '#514C43',
+    primary: '#D5A77A',
+    tabTrack: '#35322C',
+    warningSurface: '#4A382A',
+    warningText: '#E6B98D',
   },
 };
 

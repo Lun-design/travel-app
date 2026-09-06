@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { useRouter } from 'expo-router';
 import { friendlyAuthError } from '@/lib/auth';
 import { authErrorDetails, resendConfirmation, signIn, signUp } from '@/lib/auth-api';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -51,4 +52,4 @@ export default function LoginScreen() {
     {busy ? <ActivityIndicator /> : null}
   </View>;
 }
-const styles = StyleSheet.create({ container: { flex: 1, justifyContent: 'center', padding: 28, gap: 14, backgroundColor: '#f8fafc' }, title: { fontSize: 28, fontWeight: '700', marginBottom: 8 }, input: { backgroundColor: 'white', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 14 }, button: { backgroundColor: '#2563eb', borderRadius: 10, padding: 15, alignItems: 'center' }, buttonText: { color: 'white', fontWeight: '700' }, message: { color: '#166534' }, error: { color: '#b91c1c' }, link: { color: '#2563eb', textAlign: 'center' }, hint: { marginTop: 16, padding: 14, backgroundColor: '#e0f2fe', borderRadius: 10, gap: 3 }, small: { color: '#475569', fontSize: 12 } });
+const styles = StyleSheet.create({ container: { flex: 1, justifyContent: 'center', padding: 28, gap: 14, backgroundColor: EDITORIAL_COLORS.oat }, title: { fontSize: 30, lineHeight: 38, letterSpacing: -0.4, color: EDITORIAL_COLORS.charcoal, fontWeight: '800', marginBottom: 8 }, input: { backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, minHeight: 48, padding: 14, color: EDITORIAL_COLORS.charcoal }, button: { backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, minHeight: 48, padding: 14, alignItems: 'center', justifyContent: 'center' }, buttonText: { color: EDITORIAL_COLORS.paper, fontWeight: '700' }, message: { color: '#55705A' }, error: { color: EDITORIAL_COLORS.dangerText }, link: { color: EDITORIAL_COLORS.terracotta, textAlign: 'center', minHeight: 44, paddingVertical: 12 }, hint: { marginTop: 16, padding: 14, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, gap: 3 }, small: { color: EDITORIAL_COLORS.taupe, fontSize: 12 } });

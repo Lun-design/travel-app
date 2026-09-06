@@ -85,7 +85,7 @@ export default function TripDetailScreen() {
 
   return <View style={[styles.container, { backgroundColor: theme.colors.background, paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
     <TripDetailHeader trip={trip} members={data.members} userId={data.userId} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} />
-    {data.isOffline ? <View style={styles.offlineBar}><Text style={styles.offlineText}>📡 離線模式：已載入快取行程</Text></View> : null}
+     {data.isOffline ? <View style={[styles.offlineBar, { backgroundColor: theme.colors.warningSurface, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.warningText }]}>📡 離線模式：已載入快取行程</Text></View> : null}
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
     <TripDetailTabs value={tab} onChange={setTab} theme={theme} />
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingShell: { flex: 1, width: '100%', gap: 16, padding: 20 },
   panelContainer: { flex: 1, minHeight: 0, width: '100%', overflow: 'hidden' },
-  offlineBar: { width: '100%', minHeight: 32, justifyContent: 'center', borderRadius: 10, backgroundColor: '#fef3c7', paddingHorizontal: 12, paddingVertical: 6, marginBottom: 8, overflow: 'hidden' },
-  offlineText: { color: '#92400e', fontSize: 12, fontWeight: '700' },
-  error: { color: '#b91c1c', marginBottom: 8 },
+  offlineBar: { width: '100%', minHeight: 32, justifyContent: 'center', borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 8, overflow: 'hidden' },
+  offlineText: { fontSize: 12, fontWeight: '700' },
+  error: { color: '#944B3C', marginBottom: 8 },
 });

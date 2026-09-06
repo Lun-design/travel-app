@@ -4,6 +4,7 @@ import { calculateBalances, type Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import type { SupportedCurrency } from '@/lib/exchange-rates';
 import type { ThemeMode } from '@/lib/theme';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 import { ExpenseList } from '@/components/ExpenseList';
 import { SettlementCard } from '@/components/SettlementCard';
 
@@ -28,6 +29,6 @@ export function ExpensesPanel({ expenses, members, rates, rateLabel, themeMode, 
 
 const styles = StyleSheet.create({
   panel: { width: '100%', paddingBottom: 100, paddingTop: 8, boxSizing: 'border-box' },
-  primary: { alignSelf: 'center', backgroundColor: '#2563eb', borderRadius: 13, paddingHorizontal: 20, paddingVertical: 13, marginTop: 18 },
-  buttonText: { color: 'white', fontWeight: '800' },
+  primary: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, marginTop: 18 },
+  buttonText: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
 });

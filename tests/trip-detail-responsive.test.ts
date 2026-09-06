@@ -149,7 +149,7 @@ describe('trip detail responsive layout', () => {
     expect(shared).toContain('actionButton');
     expect(shared).toContain('paddingHorizontal: 10');
     expect(detail).toContain('marginBottom: 12');
-    expect(dayTabs).toContain('marginTop: 4');
+    expect(dayTabs).toContain('marginTop: 6');
   });
 
   it('renders skeletons and animates day/map transitions', () => {
@@ -201,7 +201,7 @@ describe('trip detail responsive layout', () => {
 
     expect(expenseList).toContain("card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box'");
     expect(expenseList).toContain('details: { flex: 1, minWidth: 0 }');
-    expect(expenseList).toContain("amount: { color: '#0f172a', fontSize: 13, fontWeight: '800', flexShrink: 0");
+    expect(expenseList).toContain("amount: { fontSize: 13, fontWeight: '800', textAlign: 'right' }");
     expect(settlement).toContain("card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box'");
     expect(settlement).toContain('settlementText: { flex: 1, minWidth: 0');
   });

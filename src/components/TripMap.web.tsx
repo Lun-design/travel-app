@@ -51,9 +51,9 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
     html, body, #map { width: 100%; height: 100%; margin: 0; }
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .numbered-marker { background: transparent; border: 0; }
-    .numbered-marker span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #2563eb; color: white; border: 3px solid white; box-shadow: 0 3px 10px rgba(15, 23, 42, .3); font-weight: 800; }
+    .numbered-marker span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: #9A6A45; color: #FFFDF8; border: 2px solid #FFFDF8; font-weight: 800; }
     .popup-title { font-size: 14px; font-weight: 800; margin-bottom: 3px; }
-    .popup-description { color: #475569; line-height: 1.4; }
+    .popup-description { color: #746F64; line-height: 1.5; }
     .leaflet-top.leaflet-left { top: 12px; left: 12px; }
     .leaflet-top.leaflet-left .leaflet-control { margin: 0; }
   </style>
@@ -90,7 +90,7 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
       });
     });
     if (coordinates.length > 1) {
-      L.polyline(coordinates, { color: '#2563eb', weight: 4, opacity: .9 }).addTo(map);
+      L.polyline(coordinates, { color: '#9A6A45', weight: 3, opacity: .85 }).addTo(map);
       map.fitBounds(coordinates, {
         paddingTopLeft: [48, 48],
         paddingBottomRight: compactMap ? [170, 78] : [48, 48]
@@ -108,12 +108,12 @@ const iframeStyle: React.CSSProperties = {
   width: '100%',
   height: '100%',
   border: 0,
-  backgroundColor: '#dbeafe',
+  backgroundColor: '#F1EEE6',
 };
 
 const styles = StyleSheet.create({
-  empty: { flex: 1, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 8 },
+  empty: { flex: 1, backgroundColor: '#F1EEE6', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 8 },
   emptyIcon: { fontSize: 30 },
-  title: { color: '#0f172a', fontSize: 17, fontWeight: '800' },
-  hint: { color: '#475569', textAlign: 'center' },
+  title: { color: '#1F1F1F', fontSize: 17, fontWeight: '800' },
+  hint: { color: '#746F64', textAlign: 'center' },
 });

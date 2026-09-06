@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { uploadVoucher } from '@/lib/vouchers-api';
 import type { ItineraryItem } from '@/lib/itinerary';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export function VoucherUploadModal({ visible, tripId, userId, items, onClose, onUploaded }: {
   visible: boolean;
@@ -58,16 +59,16 @@ export function VoucherUploadModal({ visible, tripId, userId, items, onClose, on
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15,23,42,.5)' },
-  card: { backgroundColor: 'white', borderRadius: 20, padding: 22, gap: 14, maxHeight: '90%' },
-  title: { fontSize: 22, fontWeight: '800' },
-  hint: { color: '#64748b' },
-  label: { color: '#334155', fontWeight: '700' },
-  input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 13 },
+  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(31,31,31,.5)' },
+  card: { backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 22, gap: 14, maxHeight: '90%' },
+  title: { fontSize: 22, fontWeight: '800', color: EDITORIAL_COLORS.charcoal },
+  hint: { color: EDITORIAL_COLORS.taupe },
+  label: { color: EDITORIAL_COLORS.charcoal, fontWeight: '700' },
+  input: { minHeight: 48, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 13 },
   chips: { gap: 8 },
-  chip: { backgroundColor: '#e2e8f0', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 },
-  selected: { backgroundColor: '#2563eb' },
-  upload: { backgroundColor: '#2563eb', borderRadius: 12, padding: 14, alignItems: 'center' },
-  white: { color: 'white', fontWeight: '800' },
-  cancel: { color: '#475569', textAlign: 'center', fontWeight: '700' },
+  chip: { minHeight: 44, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.sand, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  selected: { backgroundColor: EDITORIAL_COLORS.terracotta },
+  upload: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, padding: 14, alignItems: 'center' },
+  white: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
+  cancel: { color: EDITORIAL_COLORS.taupe, textAlign: 'center', fontWeight: '700', minHeight: 44, paddingVertical: 12 },
 });

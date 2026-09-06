@@ -5,6 +5,7 @@ import { reorderItineraryItems, type ItineraryItem } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { EmptyTimeline, orderPayload, segmentsForItems, TimelineCard, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(items);
@@ -58,4 +59,4 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
 }
 
 const dropZoneStyle: React.CSSProperties = { width: '100%', minHeight: 1 };
-const webGripStyle: React.CSSProperties = { width: 32, minHeight: 76, display: 'grid', placeItems: 'center', flexShrink: 0, borderRadius: 10, background: '#e2e8f0', color: '#64748b', fontSize: 25, fontWeight: 900, userSelect: 'none', touchAction: 'none' };
+const webGripStyle: React.CSSProperties = { width: 32, minHeight: 76, display: 'grid', placeItems: 'center', flexShrink: 0, borderRadius: 8, background: EDITORIAL_COLORS.sand, color: EDITORIAL_COLORS.taupe, fontSize: 25, fontWeight: 900, userSelect: 'none', touchAction: 'none' };

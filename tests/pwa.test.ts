@@ -13,8 +13,8 @@ describe('PWA deployment configuration', () => {
     expect(manifest.short_name).toBe('大白出遊');
     expect(manifest.start_url).toBe('/');
     expect(manifest.display).toBe('standalone');
-    expect(manifest.background_color).toBe('#ffffff');
-    expect(manifest.theme_color).toBe('#4f46e5');
+    expect(manifest.background_color).toBe('#F8F6F0');
+    expect(manifest.theme_color).toBe('#9A6A45');
     expect(html).toContain('apple-mobile-web-app-capable');
     expect(html).toContain('apple-mobile-web-app-status-bar-style');
     expect(html).toContain('apple-mobile-web-app-title');

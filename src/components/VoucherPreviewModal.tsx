@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getVoucherPreviewUrl } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export function VoucherPreviewModal({ voucher, onClose }: { voucher: Voucher | null; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -33,14 +34,14 @@ export function VoucherPreviewModal({ voucher, onClose }: { voucher: Voucher | n
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(15,23,42,.62)' },
-  card: { backgroundColor: 'white', borderRadius: 20, padding: 18, maxHeight: '90%', gap: 14 },
-  title: { fontSize: 20, fontWeight: '800' },
-  image: { width: '100%', height: 420, backgroundColor: '#f1f5f9', borderRadius: 12 },
-  pdf: { height: 220, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#f8fafc', borderRadius: 12 },
+  backdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(31,31,31,.62)' },
+  card: { backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 18, maxHeight: '90%', gap: 14 },
+  title: { fontSize: 20, fontWeight: '800', color: EDITORIAL_COLORS.charcoal },
+  image: { width: '100%', height: 420, backgroundColor: EDITORIAL_COLORS.sand, borderRadius: 10 },
+  pdf: { height: 220, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: EDITORIAL_COLORS.sand, borderRadius: 10 },
   pdfIcon: { fontSize: 48 },
   actions: { alignItems: 'center', gap: 12 },
-  open: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
-  white: { color: 'white', fontWeight: '800' },
-  close: { color: '#475569', fontWeight: '700' },
+  open: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 18, paddingVertical: 12 },
+  white: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
+  close: { color: EDITORIAL_COLORS.taupe, fontWeight: '700', minHeight: 44, paddingVertical: 12 },
 });

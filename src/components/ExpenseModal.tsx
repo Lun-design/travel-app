@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 import type { Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIES, type ExchangeRateSnapshot, type SplitMode } from '@/lib/exchange-rates';
-import { getThemeForMode, type ThemeMode } from '@/lib/theme';
+import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 
 type Props = {
   visible: boolean;
@@ -93,8 +93,8 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 27, fontWeight: '800' },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 13 }, row: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, flex: { flex: 1 },
-  currencyChoices: { width: 128, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }, currencyChip: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 7, backgroundColor: '#e2e8f0' }, conversion: { fontSize: 12, fontWeight: '700' }, rateRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }, rateHint: { fontSize: 11, flexShrink: 1 }, rateInput: { width: 82, minHeight: 34, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, fontSize: 12 }, lockRateButton: { borderRadius: 8, backgroundColor: '#e0e7ff', paddingHorizontal: 9, paddingVertical: 8 }, lockRateText: { color: '#3730a3', fontSize: 12, fontWeight: '700' },
-  label: { fontWeight: '700', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: '#2563eb' }, white: { color: 'white', fontWeight: '700' },
+  currencyChoices: { width: 128, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }, currencyChip: { minHeight: 36, justifyContent: 'center', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 7, backgroundColor: EDITORIAL_COLORS.sand }, conversion: { fontSize: 12, fontWeight: '700' }, rateRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }, rateHint: { fontSize: 11, flexShrink: 1 }, rateInput: { width: 82, minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, fontSize: 12 }, lockRateButton: { minHeight: 40, justifyContent: 'center', borderRadius: 8, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 9, paddingVertical: 8 }, lockRateText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700' },
+  label: { fontWeight: '700', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { minHeight: 44, justifyContent: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: EDITORIAL_COLORS.terracotta }, white: { color: EDITORIAL_COLORS.paper, fontWeight: '700' },
   memberRows: { gap: 8 }, memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }, splitInput: { width: 92, minHeight: 40, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9 }, previewAmount: { marginLeft: 'auto', fontSize: 12 },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, alignItems: 'center', marginTop: 12 }, save: { backgroundColor: '#2563eb', borderRadius: 12, padding: 13 },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, alignItems: 'center', marginTop: 12 }, save: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, padding: 13 },
 });

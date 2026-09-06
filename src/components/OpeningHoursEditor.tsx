@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { OpeningHours, OpeningPeriod, Weekday } from '@/lib/itinerary';
 import { draftToOpeningHours, toOpeningHoursDraft, WEEKDAYS, type OpeningHoursDraft } from '@/lib/opening-hours';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 type PickerState = { day: Weekday; periodIndex: number; field: 'open' | 'close' } | null;
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => `${String(Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`);
@@ -74,30 +75,30 @@ export function OpeningHoursEditor({ value, onChange }: Props) {
 
 const styles = StyleSheet.create({
   container: { gap: 8 },
-  helper: { color: '#64748b', fontSize: 12, lineHeight: 17 },
-  dayRow: { padding: 10, borderRadius: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', gap: 7 },
+  helper: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 17 },
+  dayRow: { padding: 10, borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, gap: 7 },
   dayHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dayLabel: { color: '#0f172a', fontWeight: '800', fontSize: 15 },
+  dayLabel: { color: EDITORIAL_COLORS.charcoal, fontWeight: '800', fontSize: 15 },
   closedControl: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  closedLabel: { color: '#64748b', fontSize: 12 },
+  closedLabel: { color: EDITORIAL_COLORS.taupe, fontSize: 12 },
   closedText: { color: '#94a3b8', fontSize: 13 },
   unsetText: { color: '#94a3b8', fontSize: 13 },
   periodRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  timeButton: { minWidth: 75, alignItems: 'center', borderRadius: 9, paddingVertical: 9, paddingHorizontal: 11, backgroundColor: 'white', borderWidth: 1, borderColor: '#cbd5e1' },
-  timeText: { color: '#1d4ed8', fontWeight: '800' },
-  dash: { color: '#64748b' },
-  removeButton: { marginLeft: 'auto', paddingVertical: 8, paddingHorizontal: 5 },
-  removeText: { color: '#dc2626', fontSize: 12, fontWeight: '700' },
+  timeButton: { minWidth: 75, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 9, paddingVertical: 9, paddingHorizontal: 11, backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+  timeText: { color: EDITORIAL_COLORS.terracotta, fontWeight: '800' },
+  dash: { color: EDITORIAL_COLORS.taupe },
+  removeButton: { marginLeft: 'auto', minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 5 },
+  removeText: { color: EDITORIAL_COLORS.dangerText, fontSize: 12, fontWeight: '700' },
   addButton: { alignSelf: 'flex-start', paddingVertical: 5 },
-  addText: { color: '#2563eb', fontSize: 12, fontWeight: '800' },
-  pickerBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.4)', padding: 24 },
-  pickerCard: { width: '100%', maxWidth: 360, maxHeight: '80%', padding: 18, borderRadius: 18, backgroundColor: 'white', gap: 10 },
-  pickerTitle: { color: '#0f172a', fontSize: 18, fontWeight: '800' },
+  addText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
+  pickerBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(31, 31, 31, 0.4)', padding: 24 },
+  pickerCard: { width: '100%', maxWidth: 360, maxHeight: '80%', padding: 18, borderRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, backgroundColor: EDITORIAL_COLORS.paper, gap: 10 },
+  pickerTitle: { color: EDITORIAL_COLORS.charcoal, fontSize: 18, fontWeight: '800' },
   options: { maxHeight: 360 },
   optionsContent: { gap: 4 },
   option: { alignItems: 'center', borderRadius: 9, paddingVertical: 9 },
-  optionSelected: { backgroundColor: '#dbeafe' },
-  optionText: { color: '#334155', fontSize: 16 },
-  optionSelectedText: { color: '#1d4ed8', fontWeight: '800', fontSize: 16 },
-  cancel: { alignSelf: 'flex-end', color: '#64748b', fontWeight: '700', padding: 6 },
+  optionSelected: { backgroundColor: EDITORIAL_COLORS.terracottaSoft },
+  optionText: { color: EDITORIAL_COLORS.charcoal, fontSize: 16 },
+  optionSelectedText: { color: EDITORIAL_COLORS.terracotta, fontWeight: '800', fontSize: 16 },
+  cancel: { alignSelf: 'flex-end', color: EDITORIAL_COLORS.taupe, fontWeight: '700', minHeight: 44, padding: 12 },
 });

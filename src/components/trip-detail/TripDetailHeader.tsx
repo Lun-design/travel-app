@@ -4,6 +4,7 @@ import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { Trip, TripMemberWithProfile } from '@/lib/trips';
 import type { AppTheme, ThemeMode } from '@/lib/theme';
 import { PuppyMascot } from '@/components/PuppyMascot';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 type Props = {
   trip: Trip;
@@ -45,7 +46,7 @@ const styles = StyleSheet.create({
   mascot: { flexShrink: 0 },
   metaRow: { width: '100%', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, minWidth: 0 },
   dateBlock: { flex: 1, minWidth: 120 },
-  back: { color: '#2563eb', fontWeight: '700', marginBottom: 9 },
+  back: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700', marginBottom: 9, minHeight: 44, paddingVertical: 12 },
   title: { fontSize: 30, fontWeight: '800' },
   destination: {},
   members: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },

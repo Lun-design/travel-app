@@ -11,6 +11,7 @@ import {
 import { authRedirectTarget, authStatus, friendlyAuthError, isInvalidSessionError, type AuthStatus } from '@/lib/auth';
 import { PuppyMascot } from './PuppyMascot';
 import { clearOfflineCache } from '@/lib/offline-cache';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 type GateStatus = 'loading' | AuthStatus;
 
@@ -98,8 +99,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 const styles = {
-  center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
-  loadingText: { color: '#64748b', marginTop: 10 },
-  notice: { backgroundColor: '#fff7ed', borderBottomWidth: 1, borderBottomColor: '#fed7aa', paddingVertical: 9, paddingHorizontal: 16 },
-  noticeText: { color: '#9a3412', textAlign: 'center' as const, fontWeight: '700' as const },
+  center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: EDITORIAL_COLORS.oat },
+  loadingText: { color: EDITORIAL_COLORS.taupe, marginTop: 10 },
+  notice: { backgroundColor: EDITORIAL_COLORS.amberSoft, borderBottomWidth: 1, borderBottomColor: EDITORIAL_COLORS.line, paddingVertical: 9, paddingHorizontal: 16 },
+  noticeText: { color: EDITORIAL_COLORS.amberText, textAlign: 'center' as const, fontWeight: '700' as const },
 };

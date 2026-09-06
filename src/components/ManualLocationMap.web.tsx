@@ -1,3 +1,3 @@
 import React from 'react'; import { StyleSheet, Text, View } from 'react-native';
 export function ManualLocationMap({ latitude, longitude }: { latitude: number | null; longitude: number | null; onChange: (latitude: number, longitude: number) => void }) { return <View style={styles.map}><Text>Web 版暫不支援拖曳地圖 Marker</Text><Text>{latitude?.toFixed(5) ?? '25.03300'}, {longitude?.toFixed(5) ?? '121.56500'}</Text></View>; }
-const styles = StyleSheet.create({ map: { height: 180, backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', gap: 6 } });
+const styles = StyleSheet.create({ map: { height: 180, backgroundColor: '#F1EEE6', borderWidth: 1, borderColor: '#E5E2D9', alignItems: 'center', justifyContent: 'center', gap: 6 } });

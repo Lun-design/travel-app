@@ -11,6 +11,7 @@ import { ItineraryTimeline } from '@/components/ItineraryTimeline';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import type { ThemeMode } from '@/lib/theme';
 import type { getTripDetailLayout } from '@/lib/trip-detail-layout';
+import { EDITORIAL_COLORS } from '@/lib/theme';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -59,14 +60,14 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
 const styles = StyleSheet.create({
   dayHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
   dayTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
-  calendarButton: { flexShrink: 0, borderRadius: 10, backgroundColor: '#e0e7ff', paddingHorizontal: 10, paddingVertical: 8 },
-  calendarText: { color: '#3730a3', fontSize: 12, fontWeight: '800' },
-  mapToggle: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#e0e7ff', paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, overflow: 'hidden' },
-  mapToggleText: { color: '#3730a3', fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
+  calendarText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
+  mapToggle: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, overflow: 'hidden' },
+  mapToggleText: { color: EDITORIAL_COLORS.terracotta, fontSize: 14, fontWeight: '800', textAlign: 'center' },
   mapPane: { width: '100%', maxWidth: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden', marginBottom: 12 },
   timelinePane: { flex: 1, width: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden' },
   paneContent: { width: '100%', paddingBottom: 100, boxSizing: 'border-box' },
   skeletonStack: { gap: 12 },
-  fab: { position: 'absolute', zIndex: 20, elevation: 8, borderRadius: 24, backgroundColor: '#2563eb' },
+  fab: { position: 'absolute', zIndex: 20, minHeight: 44, justifyContent: 'center', borderRadius: 12, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta },
   buttonText: { color: 'white', fontWeight: '800' },
 });
