@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import type { Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
-import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIES, type SplitMode } from '@/lib/exchange-rates';
+import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIES, type ExchangeRateSnapshot, type SplitMode } from '@/lib/exchange-rates';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 
 type Props = {
@@ -12,13 +12,15 @@ type Props = {
   members: TripMemberWithProfile[];
   userId: string;
   themeMode?: ThemeMode;
+  rateSnapshot?: ExchangeRateSnapshot;
+  onLockRate?: (currency: string, rate: number) => Promise<void>;
   onClose: () => void;
   onSave: (expense: Partial<Expense> & { trip_id: string; payer_id: string }, splits: { user_id: string; amount: number }[]) => Promise<void>;
 };
 
 const EXPENSE_CATEGORIES = ['門票', '餐飲', '交通', '購物', '其他'] as const;
 
-export function ExpenseModal({ visible, tripId, expense, members, userId, themeMode = 'system', onClose, onSave }: Props) {
+export function ExpenseModal({ visible, tripId, expense, members, userId, themeMode = 'system', rateSnapshot, onLockRate, onClose, onSave }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -29,6 +31,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
   const [splitValues, setSplitValues] = useState<Record<string, string>>({});
   const [category, setCategory] = useState<string>('其他');
   const [saving, setSaving] = useState(false);
+  const [manualRate, setManualRate] = useState('');
 
   useEffect(() => {
     if (!visible) return;
@@ -74,7 +77,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
       <Text style={[styles.title, { color: theme.colors.text }]}>{expense ? '編輯旅費' : '新增旅費'}</Text>
       <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="項目名稱，例如：晚餐" placeholderTextColor={theme.colors.muted} value={title} onChangeText={setTitle} />
       <View style={styles.row}><TextInput style={[styles.input, styles.flex, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="金額" placeholderTextColor={theme.colors.muted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><View style={styles.currencyChoices}>{SUPPORTED_CURRENCIES.map((option) => <Pressable key={option} style={[styles.currencyChip, normalizeCurrency(currency) === option && styles.selected]} onPress={() => setCurrency(option)}><Text style={normalizeCurrency(currency) === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View></View>
-      <Text style={[styles.conversion, { color: theme.colors.muted }]}>≈ TWD {Number.isFinite(total) ? convertToTwd(total, currency).toFixed(2) : '—'}</Text>
+      <Text style={[styles.conversion, { color: theme.colors.muted }]}>≈ TWD {Number.isFinite(total) ? convertToTwd(total, currency, rateSnapshot?.rates).toFixed(2) : '—'}</Text><View style={styles.rateRow}><Text style={[styles.rateHint, { color: theme.colors.muted }]}>1 {normalizeCurrency(currency)} ≈ TWD {rateSnapshot?.rates[normalizeCurrency(currency)]?.toFixed(4) ?? '—'} {rateSnapshot?.source === 'manual' && rateSnapshot.lockedCurrencies.includes(normalizeCurrency(currency)) ? '（已鎖定）' : ''}</Text>{onLockRate && normalizeCurrency(currency) !== 'TWD' ? <><TextInput style={[styles.rateInput, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} keyboardType="decimal-pad" placeholder="自訂匯率" placeholderTextColor={theme.colors.muted} value={manualRate} onChangeText={setManualRate} /><Pressable style={styles.lockRateButton} onPress={() => { const value = Number(manualRate); if (Number.isFinite(value) && value > 0) void onLockRate(currency, value).then(() => setManualRate('')); }}><Text style={styles.lockRateText}>鎖定</Text></Pressable></> : null}</View>
       <Text style={[styles.label, { color: theme.colors.text }]}>費用類別</Text>
       <View style={styles.chips}>{EXPENSE_CATEGORIES.map((option) => <Pressable key={option} style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, category === option && styles.selected]} onPress={() => setCategory(option)}><Text style={category === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View>
       <Text style={[styles.label, { color: theme.colors.text }]}>付款人</Text>
@@ -90,7 +93,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 27, fontWeight: '800' },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 13 }, row: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, flex: { flex: 1 },
-  currencyChoices: { width: 128, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }, currencyChip: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 7, backgroundColor: '#e2e8f0' }, conversion: { fontSize: 12, fontWeight: '700' },
+  currencyChoices: { width: 128, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }, currencyChip: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 7, backgroundColor: '#e2e8f0' }, conversion: { fontSize: 12, fontWeight: '700' }, rateRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }, rateHint: { fontSize: 11, flexShrink: 1 }, rateInput: { width: 82, minHeight: 34, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, fontSize: 12 }, lockRateButton: { borderRadius: 8, backgroundColor: '#e0e7ff', paddingHorizontal: 9, paddingVertical: 8 }, lockRateText: { color: '#3730a3', fontSize: 12, fontWeight: '700' },
   label: { fontWeight: '700', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: '#2563eb' }, white: { color: 'white', fontWeight: '700' },
   memberRows: { gap: 8 }, memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }, splitInput: { width: 92, minHeight: 40, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9 }, previewAmount: { marginLeft: 'auto', fontSize: 12 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, alignItems: 'center', marginTop: 12 }, save: { backgroundColor: '#2563eb', borderRadius: 12, padding: 13 },

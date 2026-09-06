@@ -1,4 +1,5 @@
 import { haversineDistanceKm, type OpeningHours, type ItineraryItem, type Weekday } from './itinerary';
+import { addCalendarDays, getWeekdayForIsoDate, normalizeTimezone } from './timezone';
 
 const MINUTES_PER_DAY = 24 * 60;
 const DEFAULT_DURATION_MINUTES = 60;
@@ -12,6 +13,7 @@ export type ScheduleContext = {
   dayNumber: number;
   defaultDepartureTime?: string | null;
   averageSpeedKmh?: number;
+  timezone?: string | null;
 };
 export type ScheduledItem = {
   item: ScheduleItem;
@@ -58,10 +60,9 @@ function parseDate(value: string): number | null {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? timestamp : null;
 }
 
-function weekdayFor(tripStartDate: string, dayNumber: number): Weekday | null {
-  const start = parseDate(tripStartDate);
-  if (start === null || !Number.isFinite(dayNumber)) return null;
-  return weekdays[new Date(start + (Math.max(1, dayNumber) - 1) * MINUTES_PER_DAY * 60 * 1000).getUTCDay()];
+function weekdayFor(tripStartDate: string, dayNumber: number, timezone?: string | null): Weekday | null {
+  const date = dateForDay(tripStartDate, dayNumber);
+  return date ? getWeekdayForIsoDate(date, normalizeTimezone(timezone)) : null;
 }
 
 function dateForDay(tripStartDate: string, dayNumber: number): string | null {
@@ -73,10 +74,7 @@ function dateForDay(tripStartDate: string, dayNumber: number): string | null {
 
 function dateForArrival(tripStartDate: string, dayNumber: number, arrivalMinutes: number): string | null {
   const baseDate = dateForDay(tripStartDate, dayNumber);
-  const base = baseDate ? parseDate(baseDate) : null;
-  if (base === null) return null;
-  const date = new Date(base + Math.floor(arrivalMinutes / MINUTES_PER_DAY) * MINUTES_PER_DAY * 60 * 1000);
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  return baseDate ? addCalendarDays(baseDate, Math.floor(arrivalMinutes / MINUTES_PER_DAY)) : null;
 }
 
 function previousWeekday(day: Weekday): Weekday {
@@ -84,9 +82,9 @@ function previousWeekday(day: Weekday): Weekday {
   return weekdays[(index + weekdays.length - 1) % weekdays.length];
 }
 
-export function isOpenAt(openingHours: OpeningHours | null | undefined, date: string, time: string): boolean {
+export function isOpenAt(openingHours: OpeningHours | null | undefined, date: string, time: string, timezone?: string | null): boolean {
   if (!openingHours) return true;
-  const weekday = weekdayFor(date, 1);
+  const weekday = getWeekdayForIsoDate(date, normalizeTimezone(timezone));
   if (!weekday) return true;
   const minute = parseTime(time);
   if (minute === null) return true;
@@ -145,7 +143,7 @@ export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext
       durationMinutes,
       travelMinutes: travel,
       estimated: explicitStart === null,
-      openingWarning: Boolean(current.opening_hours && arrivalDate && !isOpenAt(current.opening_hours, arrivalDate, formatTime(arrivalMinutes))),
+      openingWarning: Boolean(current.opening_hours && arrivalDate && !isOpenAt(current.opening_hours, arrivalDate, formatTime(arrivalMinutes), context.timezone)),
       overlapWarning: Boolean(previous && explicitStart !== null && explicitStart < earliestArrival),
     };
     previous = entry;

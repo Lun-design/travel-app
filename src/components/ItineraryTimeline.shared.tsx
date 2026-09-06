@@ -22,7 +22,7 @@ export type ItineraryTimelineProps = {
   onPreviewVoucher?: (voucher: Voucher) => void;
 };
 
-export function useWeatherByItem(items: ItineraryItem[], context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber'>) {
+export function useWeatherByItem(items: ItineraryItem[], context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>) {
   const [weatherById, setWeatherById] = useState<Record<string, WeatherSummary>>({});
   const itemKey = items.map((item) => `${item.id}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
   useEffect(() => {
@@ -34,12 +34,12 @@ export function useWeatherByItem(items: ItineraryItem[], context?: Pick<Schedule
       const latitude = item.latitude == null ? null : Number(item.latitude);
       const longitude = item.longitude == null ? null : Number(item.longitude);
       const weather = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
-        ? await fetchWeatherForecast(latitude, longitude, date)
+        ? await fetchWeatherForecast(latitude, longitude, date, context?.timezone)
         : createMockWeatherSummary(date);
       return [item.id, weather] as const;
     })).then((entries) => { if (active) setWeatherById(Object.fromEntries(entries.flatMap(([id, weather]) => weather ? [[id, weather]] : [])) as Record<string, WeatherSummary>); });
     return () => { active = false; };
-  }, [context?.dayNumber, context?.tripStartDate, itemKey]);
+  }, [context?.dayNumber, context?.tripStartDate, context?.timezone, itemKey]);
   return weatherById;
 }
 

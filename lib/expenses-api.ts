@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { convertToTwd } from './exchange-rates';
+import { convertToTwd, type SupportedCurrency } from './exchange-rates';
 
 export type ExpenseSplit = { id?: string; expense_id?: string; user_id: string; amount: number };
 export type Expense = { id: string; trip_id: string; payer_id: string; title: string; amount: number; currency: string; category: string | null; created_at: string; splits: ExpenseSplit[] };
@@ -31,11 +31,11 @@ export async function saveExpense(expense: Partial<Expense> & { trip_id: string;
 
 export async function deleteExpense(expenseId: string): Promise<void> { const { error } = await supabase.from('expenses').delete().eq('id', expenseId); if (error) throw error; }
 
-export function calculateBalances(expenses: Expense[]): Settlement[] {
+export function calculateBalances(expenses: Expense[], rates?: Partial<Record<SupportedCurrency, number>>): Settlement[] {
   const net = new Map<string, number>();
   for (const expense of expenses) {
-    net.set(expense.payer_id, (net.get(expense.payer_id) ?? 0) + convertToTwd(Number(expense.amount), expense.currency));
-    for (const split of expense.splits) net.set(split.user_id, (net.get(split.user_id) ?? 0) - convertToTwd(Number(split.amount), expense.currency));
+    net.set(expense.payer_id, (net.get(expense.payer_id) ?? 0) + convertToTwd(Number(expense.amount), expense.currency, rates));
+    for (const split of expense.splits) net.set(split.user_id, (net.get(split.user_id) ?? 0) - convertToTwd(Number(split.amount), expense.currency, rates));
   }
   const creditors = [...net].filter(([, amount]) => amount > 0.009).map(([userId, amount]) => ({ userId, amount })).sort((a, b) => b.amount - a.amount);
   const debtors = [...net].filter(([, amount]) => amount < -0.009).map(([userId, amount]) => ({ userId, amount: -amount })).sort((a, b) => b.amount - a.amount); const result: Settlement[] = []; let i = 0; let j = 0;

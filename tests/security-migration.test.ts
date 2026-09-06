@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migrationPath = path.resolve(process.cwd(), 'supabase', 'migrations', '20260906000000_harden_trip_data_access.sql');
+const timezoneMigrationPath = path.resolve(process.cwd(), 'supabase', 'migrations', '20260906010000_trip_timezones.sql');
 
 describe('trip data access hardening migration', () => {
   it('exists and defines membership-aware security helpers', () => {
@@ -22,5 +23,13 @@ describe('trip data access hardening migration', () => {
     expect(sql).toContain('packing_items_assigned_to_idx');
     expect(sql).toContain('travel_documents_delete_member');
     expect(sql).toContain("storage.foldername(name))[2] = auth.uid()::text");
+  });
+
+  it('adds a safe IANA timezone default to trips', () => {
+    expect(existsSync(timezoneMigrationPath)).toBe(true);
+    const sql = readFileSync(timezoneMigrationPath, 'utf8');
+    expect(sql).toContain("default 'Asia/Taipei'");
+    expect(sql).toContain('update public.trips');
+    expect(sql).toContain('set not null');
   });
 });

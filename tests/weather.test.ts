@@ -34,7 +34,10 @@ describe('weather helpers', () => {
       weatherCode: 63,
       precipitationWarning: true,
       extremeWarning: false,
+      source: 'live',
+      isSimulated: false,
     });
+    expect(weather?.condition).toContain('即時預報');
   });
 
   it('flags extreme weather even when precipitation probability is low', () => {
@@ -64,11 +67,12 @@ describe('weather helpers', () => {
     const service = createWeatherService(fetchMock);
 
     await Promise.all([
-      service.getForecast(25.03, 121.56, '2026-01-22'),
-      service.getForecast(25.03, 121.56, '2026-01-22'),
+      service.getForecast(25.03, 121.56, '2026-01-22', 'Asia/Tokyo'),
+      service.getForecast(25.03, 121.56, '2026-01-22', 'Asia/Tokyo'),
     ]);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('timezone=Asia%2FTokyo');
   });
 
   it('returns a mock weather summary when the requested date is outside the forecast response', async () => {
@@ -83,6 +87,8 @@ describe('weather helpers', () => {
       precipitationProbability: 10,
       precipitationWarning: false,
       extremeWarning: false,
+      source: 'mock',
+      isSimulated: true,
     });
   });
 
@@ -96,6 +102,8 @@ describe('weather helpers', () => {
       temperatureMinC: 24,
       temperatureMaxC: 24,
       precipitationProbability: 10,
+      source: 'mock',
+      isSimulated: true,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(warning).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
