@@ -72,6 +72,21 @@ describe('PWA deployment configuration', () => {
     expect(serviceWorker).toContain("response.type === 'opaque'");
   });
 
+  it('does not cache private Supabase data and supports runtime-cache cleanup', () => {
+    const serviceWorker = readFileSync(projectFile('public', 'sw.js'), 'utf8');
+    const cacheableFunction = serviceWorker.slice(
+      serviceWorker.indexOf('function isCacheableResource'),
+      serviceWorker.indexOf("self.addEventListener('fetch'"),
+    );
+
+    expect(serviceWorker).toContain('isPrivateDataResource');
+    expect(serviceWorker).toContain('CLEAR_RUNTIME_CACHE');
+    expect(cacheableFunction).toContain('if (isPrivateDataResource(url)) return false;');
+    expect(cacheableFunction).toContain('if (url.origin !== self.location.origin) return false;');
+    expect(cacheableFunction).not.toContain('rest\\/v1');
+    expect(cacheableFunction).not.toContain('storage\\/v1');
+  });
+
   it('defines a verified Vercel build and route fallback', () => {
     const vercel = JSON.parse(readFileSync(projectFile('vercel.json'), 'utf8')) as { buildCommand?: string; outputDirectory?: string; rewrites?: Array<{ destination?: string }> };
     const packageJson = JSON.parse(readFileSync(projectFile('package.json'), 'utf8')) as { scripts?: Record<string, string> };

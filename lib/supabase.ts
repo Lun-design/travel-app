@@ -5,6 +5,7 @@ import { resolveSupabaseConfig } from './supabase-config';
 import { getRealtimeOptions, getSupabaseAuthOptions } from './supabase-runtime';
 import { buildSupabaseHealthcheckUrl } from './supabase-health';
 import { createAuthAwareFetch, JWT_RECOVERY_MESSAGE } from './supabase-auth-recovery';
+import { clearOfflineCache } from './offline-cache';
 
 // Keep dot-notation references explicit so Expo can inline EXPO_PUBLIC values
 // into the browser bundle. Dynamic reads from `process.env` are not inlined.
@@ -41,6 +42,7 @@ function handleRecoveryRequired(error: unknown) {
   if (recoveryTask) return;
   recoveryTask = (async () => {
     console.error('[Supabase] JWT recovery required', error);
+    await clearOfflineCache();
     try {
       await supabaseClient?.auth.signOut({ scope: 'local' });
     } catch (signOutError) {

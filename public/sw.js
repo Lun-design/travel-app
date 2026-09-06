@@ -31,6 +31,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'CLEAR_RUNTIME_CACHE') return;
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(
+      keys
+        .filter((key) => key.startsWith(`${CACHE_PREFIX}runtime-`))
+        .map((key) => caches.delete(key)),
+    )),
+  );
+});
+
 function isSameOrigin(request) {
   return new URL(request.url).origin === self.location.origin;
 }
@@ -40,12 +51,19 @@ function isStaticAsset(url) {
     || /\.(?:js|css|png|jpe?g|gif|svg|webp|woff2?|ttf|json|pdf)$/i.test(url.pathname);
 }
 
+function isPrivateDataResource(url) {
+  return /\/(?:auth\/v1|rest\/v1|storage\/v1)\//i.test(url.pathname)
+    || /(?:documents|vouchers|travel-documents|tickets|receipts)/i.test(url.pathname);
+}
+
 function isCacheableResource(request, url) {
+  // Only cache assets served by this app. This prevents signed/private files
+  // hosted on a third-party CDN from becoming persistent browser cache data.
+  if (url.origin !== self.location.origin) return false;
+  if (isPrivateDataResource(url)) return false;
   return isStaticAsset(url)
     || request.destination === 'image'
-    || request.destination === 'document'
-    || /(?:documents|vouchers|travel-documents|tickets|receipts)/i.test(url.pathname)
-    || /\/(?:rest\/v1|storage\/v1)\//i.test(url.pathname);
+    || request.destination === 'document';
 }
 
 self.addEventListener('fetch', (event) => {

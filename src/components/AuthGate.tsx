@@ -10,6 +10,7 @@ import {
 } from '@/lib/supabase';
 import { authRedirectTarget, authStatus, friendlyAuthError, isInvalidSessionError, type AuthStatus } from '@/lib/auth';
 import { PuppyMascot } from './PuppyMascot';
+import { clearOfflineCache } from '@/lib/offline-cache';
 
 type GateStatus = 'loading' | AuthStatus;
 
@@ -33,6 +34,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     async function clearInvalidLocalSession(error: unknown) {
       console.error('[AuthGate] invalid session cleared', error);
+      await clearOfflineCache();
       try {
         await supabase.auth.signOut({ scope: 'local' });
       } catch (signOutError) {
