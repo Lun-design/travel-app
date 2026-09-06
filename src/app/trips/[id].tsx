@@ -76,6 +76,7 @@ export default function TripDetailScreen() {
     data.setItems((current) => current.some((entry) => entry.id === saved.id) ? current.map((entry) => entry.id === saved.id ? saved : entry) : [...current, saved]);
     setDay(saved.day_number);
     setItemModal(false);
+    await data.reload();
   }
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
@@ -84,8 +85,10 @@ export default function TripDetailScreen() {
   if (data.loading) return <View style={[styles.loadingShell, { backgroundColor: theme.colors.background }]}><SkeletonCard variant="header" /><SkeletonCard /><SkeletonCard /></View>;
   if (!data.trip) return <View style={styles.center}><Text style={styles.error}>{data.error || '找不到此行程。'}</Text></View>;
   const trip = data.trip;
+  const MainScroll = layout.compact && tab === 'timeline' ? ScrollView : View;
 
   return <View style={[styles.container, { backgroundColor: theme.colors.background, paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
+    <MainScroll style={styles.mainScroll} {...(layout.compact && tab === 'timeline' ? { contentContainerStyle: styles.mainContent, keyboardShouldPersistTaps: 'handled' as const } : {})}>
     <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
      {data.isOffline ? <View style={[styles.offlineBar, { backgroundColor: theme.colors.warningSurface, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.warningText }]}>📡 離線模式：已載入快取行程</Text></View> : null}
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
@@ -95,6 +98,7 @@ export default function TripDetailScreen() {
     {tab === 'expenses' && <ExpensesPanel themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} /></ScrollView></View>}
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} /></View>}
+    </MainScroll>
     <ItineraryItemModal visible={itemModal} item={editingItem} day={day} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); await data.reload(); } : undefined} />
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
@@ -105,6 +109,8 @@ export default function TripDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  mainScroll: { flex: 1, minHeight: 0, width: '100%' },
+  mainContent: { width: '100%', paddingBottom: 100 },
   container: { flex: 1, width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', paddingBottom: 22 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingShell: { flex: 1, width: '100%', gap: 16, padding: 20 },

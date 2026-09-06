@@ -53,20 +53,23 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     try { await exportTripCalendar(trip, items); }
     catch (error: any) { Alert.alert('匯出失敗', error?.message ?? '無法建立行事曆檔案。'); }
   }
+  const TimelineScroll = layout.compact ? View : ScrollView;
   return <>
     <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable></View>
     <DayTabs days={days} selected={day} onChange={onDayChange} themeMode={themeMode} />
     <TodayFocusCard schedule={scheduled} items={visibleItems} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} compact={layout.compact} />
     <Pressable style={styles.mapToggle} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
-    <ScrollView ref={timelineScrollRef} style={styles.timelinePane} contentContainerStyle={[styles.paneContent, { paddingHorizontal: layout.panePadding, paddingTop: layout.panePadding }]}>
+    <TimelineScroll {...(!layout.compact ? { ref: timelineScrollRef, contentContainerStyle: [styles.paneContent, { paddingHorizontal: layout.panePadding, paddingTop: layout.panePadding }] } : {})} style={layout.compact ? styles.mobileTimeline : styles.timelinePane}>
       {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onReorder={onReorder} />}
-    </ScrollView>
-    <Pressable style={[styles.fab, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth }]} onPress={onAdd}><Text numberOfLines={1} style={[styles.buttonText, { fontSize: layout.fabFontSize }]}>＋ 新增景點／活動</Text></Pressable>
+    </TimelineScroll>
+    <Pressable style={[styles.fab, layout.compact && styles.mobileFab, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth }]} onPress={onAdd}><Text numberOfLines={1} style={[styles.buttonText, { fontSize: layout.fabFontSize }]}>＋ 新增景點／活動</Text></Pressable>
   </>;
 }
 
 const styles = StyleSheet.create({
+  mobileTimeline: { width: '100%', paddingVertical: 12 },
+  mobileFab: { position: 'relative', alignSelf: 'flex-end', marginTop: 16 },
   dayHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
   dayTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
   calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },

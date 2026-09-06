@@ -27,6 +27,8 @@ type Props = {
 
 export function ItineraryItemModal({ visible, item, day = 1, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onDelete }: Props) {
   const [name, setName] = useState('');
+  const [savedAndClosed, setSavedAndClosed] = useState(false);
+  useEffect(() => { if (visible) setSavedAndClosed(false); }, [visible]);
   const [address, setAddress] = useState('');
   const [time, setTime] = useState('');
   const [category, setCategory] = useState('spot');
@@ -204,8 +206,12 @@ export function ItineraryItemModal({ visible, item, day = 1, tripStartDate, trip
 
     setSaving(true);
     try {
-      await submitItineraryItem(payload, onSave);
-      onClose();
+      const submitted = await submitItineraryItem(payload, onSave);
+      if (!submitted) { setSaveMessage('請輸入景點名稱。'); return; }
+      setSavedAndClosed(true);
+      if (typeof onClose === 'function') {
+        try { onClose(); } catch (closeError) { console.error('[ItineraryItemModal] close failed after save', closeError); }
+      }
     } catch (error) {
       console.error('[ItineraryItemModal] save failed', error);
       setSaveMessage(error instanceof Error && error.message ? error.message : '\u666f\u9ede\u5132\u5b58\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66');
@@ -300,7 +306,7 @@ export function ItineraryItemModal({ visible, item, day = 1, tripStartDate, trip
 
   const attribution = getGeocodingAttribution(results);
 
-  return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+  return <Modal visible={visible && !savedAndClosed} animationType="slide" onRequestClose={typeof onClose === 'function' ? onClose : undefined}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
       <Text style={styles.kicker}>DAY {selectedDay}</Text>
       <Text style={styles.title}>{item ? '編輯景點／活動' : '新增景點／活動'}</Text>

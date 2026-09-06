@@ -21,6 +21,16 @@ describe('voucher helpers', () => {
 });
 
 describe('voucher storage API', () => {
+  it('surfaces storage errors and does not delete the row on failure', async () => {
+    supabaseMock.storage.from.mockReturnValue({ remove: vi.fn().mockResolvedValue({ error: new Error('Storage permission denied') }) });
+    await expect(deleteVoucher({ id: 'v1', file_path: 't/file' })).rejects.toThrow('Storage permission denied');
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+  it('surfaces database errors after storage deletion', async () => {
+    supabaseMock.storage.from.mockReturnValue({ remove: vi.fn().mockResolvedValue({ error: null }) });
+    supabaseMock.from.mockReturnValue({ delete: () => ({ eq: vi.fn().mockResolvedValue({ error: new Error('Database permission denied') }) }) });
+    await expect(deleteVoucher({ id: 'v1', file_path: 't/file' })).rejects.toThrow('Database permission denied');
+  });
   beforeEach(() => vi.clearAllMocks());
 
   it('creates a signed Storage URL for image previews', async () => {

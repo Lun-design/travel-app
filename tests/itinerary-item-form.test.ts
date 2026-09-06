@@ -5,6 +5,12 @@ import { formatFlightTitle, parseFlightText } from '../lib/ai-parser';
 import { canSaveItineraryItem, submitItineraryItem } from '../lib/itinerary';
 
 describe('itinerary item form validation', () => {
+  it.each([undefined, null, 'invalid', {}])('reports an invalid save callback without a TypeError: %s', async (callback) => {
+    await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '手動景點' }, callback as Parameters<typeof submitItineraryItem>[1])).rejects.toThrow('儲存功能尚未就緒');
+  });
+  it('propagates the actual database failure for the UI to display', async () => {
+    await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('permission denied'); })).rejects.toThrow('permission denied');
+  });
   it('enables saving after a user manually enters a non-empty title', () => {
     expect(canSaveItineraryItem('  淺草寺  ')).toBe(true);
   });

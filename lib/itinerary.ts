@@ -32,9 +32,10 @@ export function canSaveItineraryItem(title: unknown): title is string {
  */
 export async function submitItineraryItem(
   payload: ItineraryItemSaveInput,
-  onSave: (data: ItineraryItemSaveInput) => Promise<void>,
+  onSave: ((data: ItineraryItemSaveInput) => Promise<void>) | null | undefined,
 ): Promise<boolean> {
   if (!canSaveItineraryItem(payload.location_name)) return false;
+  if (typeof onSave !== 'function') throw new Error('儲存功能尚未就緒，請重新開啟行程後再試。');
   await onSave(payload);
   return true;
 }

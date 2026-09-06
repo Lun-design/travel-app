@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Modal, Image, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { deleteVoucher, getVoucherPreviewUrl, listVouchers } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
 import type { ItineraryItem } from '@/lib/itinerary';
@@ -15,6 +15,8 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system' }: {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<Voucher | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Voucher | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     try {
@@ -40,6 +42,8 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system' }: {
 
   const itemName = (itemId: string | null) => itemId ? items.find((item) => item.id === itemId)?.location_name ?? '已綁定行程項目' : '未綁定行程項目';
   async function remove(voucher: Voucher) {
+    if (deleting) return;
+    setDeleting(true);
     try {
       await deleteVoucher({ id: voucher.id, file_path: voucher.file_path });
       setVouchers((current) => current.filter((entry) => entry.id !== voucher.id));
@@ -50,22 +54,35 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system' }: {
       });
       if (preview?.id === voucher.id) setPreview(null);
       setToast('票券已刪除。');
-      await load();
+      setPendingDelete(null);
     } catch (error: any) {
       setToast(error?.message ? `刪除票券失敗：${error.message}` : '刪除票券失敗，請稍後再試。');
+    } finally {
+      setDeleting(false);
     }
   }
 
   return <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]} style={{ backgroundColor: theme.colors.background }}>
     {toast ? <Pressable accessibilityRole="alert" style={styles.toast} onPress={() => setToast(null)}><Text style={styles.toastText}>{toast}</Text></Pressable> : null}
     <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.title}>🎫 預約與票券</Text><Text style={styles.subtitle}>集中管理門票、機票 QR Code 與飯店預約單。</Text></View><Pressable style={styles.upload} onPress={() => setUploading(true)}><Text style={styles.white}>＋ 新增</Text></Pressable></View>
-    {vouchers.length ? vouchers.map((voucher) => <View key={voucher.id} style={styles.card}><Pressable style={styles.info} onPress={() => setPreview(voucher)}>{voucher.file_type === 'image' && previewUrls[voucher.id] ? <Image source={{ uri: previewUrls[voucher.id] }} accessibilityLabel={`${voucher.title} 預覽縮圖`} resizeMode="cover" style={styles.thumbnail} /> : <View style={styles.iconBox}><Text style={styles.icon}>{voucher.file_type === 'pdf' ? '📄' : '🖼️'}</Text></View>}<View style={styles.content}><Text numberOfLines={2} style={styles.name}>{voucher.title}</Text><Text numberOfLines={2} style={styles.meta}>{voucher.file_type.toUpperCase()} · {itemName(voucher.item_id)}</Text></View></Pressable><Pressable style={styles.deleteButton} onPress={(event) => { event.stopPropagation(); void Alert.alert('刪除票券', `確定要刪除「${voucher.title}」嗎？`, [{ text: '取消' }, { text: '刪除', style: 'destructive', onPress: () => void remove(voucher) }]); }}><Text style={styles.delete}>刪除</Text></Pressable></View>) : <View style={styles.empty}><PuppyMascot puppy="-6" size={165} accessibilityLabel="目前沒有預約票券" /><Text style={styles.subtitle}>目前還沒有預約或票券</Text></View>}
+    {vouchers.length ? vouchers.map((voucher) => <View key={voucher.id} style={styles.card}><Pressable style={styles.info} onPress={() => setPreview(voucher)}>{voucher.file_type === 'image' && previewUrls[voucher.id] ? <Image source={{ uri: previewUrls[voucher.id] }} accessibilityLabel={`${voucher.title} 預覽縮圖`} resizeMode="cover" style={styles.thumbnail} /> : <View style={styles.iconBox}><Text style={styles.icon}>{voucher.file_type === 'pdf' ? '📄' : '🖼️'}</Text></View>}<View style={styles.content}><Text numberOfLines={2} style={styles.name}>{voucher.title}</Text><Text numberOfLines={2} style={styles.meta}>{voucher.file_type.toUpperCase()} · {itemName(voucher.item_id)}</Text></View></Pressable><Pressable style={styles.deleteButton} onPress={(event) => { event.stopPropagation(); setToast(null); setPendingDelete(voucher); }}><Text style={styles.delete}>刪除</Text></Pressable></View>) : <View style={styles.empty}><PuppyMascot puppy="-6" size={165} accessibilityLabel="目前沒有預約票券" /><Text style={styles.subtitle}>目前還沒有預約或票券</Text></View>}
+    <Modal transparent visible={pendingDelete !== null} animationType="fade" onRequestClose={() => { if (!deleting) setPendingDelete(null); }}>
+      <View style={styles.confirmOverlay}><View style={styles.confirmCard}>
+        <Text style={styles.title}>刪除票券</Text>
+        <Text>確定要刪除「{pendingDelete?.title}」嗎？</Text>
+        {toast ? <Text accessibilityRole="alert" style={styles.toastText}>{toast}</Text> : null}
+        <Pressable accessibilityRole="button" disabled={deleting} style={styles.deleteButton} onPress={() => { if (pendingDelete) void remove(pendingDelete); }}><Text style={styles.delete}>{deleting ? '刪除中…' : '確認刪除'}</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={deleting} style={styles.deleteButton} onPress={() => setPendingDelete(null)}><Text>取消</Text></Pressable>
+      </View></View>
+    </Modal>
     <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} onClose={() => setUploading(false)} onUploaded={load} />
     <VoucherPreviewModal voucher={preview} onClose={() => setPreview(null)} />
   </ScrollView>;
 }
 
 const styles = StyleSheet.create({
+  confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  confirmCard: { width: '100%', maxWidth: 420, padding: 24, gap: 16, backgroundColor: EDITORIAL_COLORS.paper, borderRadius: 14 },
   container: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: 4, paddingBottom: 100, gap: 10 },
   header: { width: '100%', maxWidth: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
   headerCopy: { flex: 1, minWidth: 0 },
