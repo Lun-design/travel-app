@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findActiveOrNextSpot, distanceToFocusSpot } from '../lib/today-mode';
+import { findActiveOrNextSpot, distanceToFocusSpot, shouldUseCompactTodayBanner } from '../lib/today-mode';
 import { haversineDistanceKm } from '../lib/itinerary';
 import { getGoogleMapsDirectionsUrl } from '../lib/map-links';
 
@@ -49,5 +49,17 @@ describe('Today Mode distance and navigation', () => {
 
   it('builds a Google Maps navigation URL for the focus spot', () => {
     expect(getGoogleMapsDirectionsUrl(25.047, 121.517)).toContain('destination=25.047%2C121.517');
+  });
+});
+
+describe('Today Mode mobile presentation', () => {
+  it('uses a compact expandable banner for future or completed dates with spots', () => {
+    expect(shouldUseCompactTodayBanner('countdown', true)).toBe(true);
+    expect(shouldUseCompactTodayBanner('past', true)).toBe(true);
+  });
+
+  it('keeps empty and active dates in the full focus-card flow', () => {
+    expect(shouldUseCompactTodayBanner('active', true)).toBe(false);
+    expect(shouldUseCompactTodayBanner('empty', false)).toBe(false);
   });
 });

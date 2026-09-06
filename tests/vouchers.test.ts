@@ -55,4 +55,12 @@ describe('vouchers panel UI contract', () => {
     expect(source).toContain('setVouchers((current) => current.filter');
     expect(source).toContain('setPreviewUrls');
   });
+
+  it('stops delete taps from bubbling into the voucher preview action', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src/components/VouchersPanel.tsx'), 'utf8');
+
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain('onPress={(event) =>');
+    expect(source).toContain('setToast(error?.message');
+  });
 });

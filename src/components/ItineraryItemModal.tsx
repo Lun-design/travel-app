@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { canSaveItineraryItem, type ItineraryItem, type OpeningHours } from '@/lib/itinerary';
+import { canSaveItineraryItem, submitItineraryItem, type ItineraryItem, type OpeningHours } from '@/lib/itinerary';
 import { canAutocompletePlaces, createDebouncedGeocodingSearch, fetchOverpassOpeningHours, getGeocodingAttribution, searchPlaces, type GeocodingResult } from '@/lib/geocoding';
 import { fetchGooglePlaceDetails, hasGooglePlacesApiKey, searchGooglePlaces } from '@/lib/google-places';
 import { formatFlightTitle, formatTimeHHmm, getFlightDestinationAddress, parseFlightText, parseItineraryNote } from '@/lib/ai-parser';
@@ -15,17 +15,17 @@ type AutoHoursStatus = 'idle' | 'loading' | 'found' | 'missing';
 type Props = {
   visible: boolean;
   item?: ItineraryItem | null;
-  day: number;
+  day?: number;
   tripStartDate?: string;
   tripEndDate?: string;
-  tripId: string;
-  userId: string;
+  tripId?: string;
+  userId?: string;
   onClose: () => void;
   onSave: (data: any) => Promise<void>;
   onDelete?: () => Promise<void>;
 };
 
-export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onDelete }: Props) {
+export function ItineraryItemModal({ visible, item, day = 1, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onDelete }: Props) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [time, setTime] = useState('');
@@ -48,6 +48,8 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
   const [parsedDate, setParsedDate] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState(day);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saveHovered, setSaveHovered] = useState(false);
   const suppressNextSearch = useRef(false);
   const searchController = useRef(createDebouncedGeocodingSearch(searchPlaces, 400));
   const autocompleteEnabled = canAutocompletePlaces();
@@ -76,6 +78,8 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
     setParsedDate(null);
     setSelectedDay(item?.day_number ?? day);
     setSaving(false);
+    setSaveMessage('');
+    setSaveHovered(false);
     searchController.current.cancel();
   }, [visible, item, day]);
 
@@ -173,16 +177,19 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
   }
 
   async function save() {
+    console.debug('[ItineraryItemModal] save click', { titleValid, saving, hasTripId: Boolean(tripId ?? item?.trip_id), selectedDay });
     if (saving) return;
     if (!titleValid) {
+      setSaveMessage('\u8acb\u5148\u8f38\u5165\u666f\u9ede\u540d\u7a31\u518d\u5132\u5b58');
       Alert.alert('欄位未完成', '請輸入景點名稱。');
       return;
     }
+    const safeDay = Number.isFinite(selectedDay) && selectedDay > 0 ? Math.trunc(selectedDay) : 1;
     const payload = {
       ...(item?.id ? { id: item.id } : {}),
-      trip_id: tripId,
-      created_by: item?.created_by ?? userId,
-      day_number: selectedDay,
+      trip_id: tripId ?? item?.trip_id ?? 'unassigned-trip',
+      created_by: item?.created_by ?? userId ?? 'anonymous-user',
+      day_number: safeDay,
       location_name: name.trim(),
       address: address.trim() || null,
       time: formatTimeHHmm(time) ?? (time.trim() || null),
@@ -197,10 +204,11 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
 
     setSaving(true);
     try {
-      await onSave(payload);
+      await submitItineraryItem(payload, onSave);
       onClose();
     } catch (error) {
       console.error('[ItineraryItemModal] save failed', error);
+      setSaveMessage(error instanceof Error && error.message ? error.message : '\u666f\u9ede\u5132\u5b58\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66');
       const message = error instanceof Error && error.message ? error.message : '景點儲存失敗，請稍後再試。';
       Alert.alert('儲存失敗', message);
     } finally {
@@ -345,11 +353,22 @@ export function ItineraryItemModal({ visible, item, day, tripStartDate, tripEndD
         <ManualLocationMap latitude={lat} longitude={lng} onChange={(latitude, longitude) => { setLat(latitude); setLng(longitude); }} />
       </View> : null}
 
-      <View style={styles.actions}>
+      <View pointerEvents="auto" style={styles.actions}>
         <Pressable onPress={onClose}><Text style={styles.cancel}>取消</Text></Pressable>
         {item && onDelete ? <Pressable onPress={() => Alert.alert('刪除景點', '確定要刪除這個景點嗎？', [{ text: '取消' }, { text: '刪除', style: 'destructive', onPress: onDelete }])}><Text style={styles.delete}>刪除</Text></Pressable> : null}
-        <Pressable style={[styles.save, (!titleValid || saving) && styles.saveDisabled]} onPress={() => void save()} disabled={!titleValid || saving}>{saving ? <ActivityIndicator color="white" /> : <Text style={styles.white}>儲存</Text>}</Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="儲存景點"
+          onHoverIn={() => setSaveHovered(true)}
+          onHoverOut={() => setSaveHovered(false)}
+          style={({ pressed }) => [styles.save, saveHovered && styles.saveHover, pressed && styles.savePressed, (!titleValid || saving) && styles.saveDisabled]}
+          onPress={() => void save()}
+          disabled={!titleValid || saving}
+        >
+          {saving ? <ActivityIndicator color="white" /> : <Text style={styles.white}>儲存</Text>}
+        </Pressable>
       </View>
+      {saveMessage ? <View pointerEvents="none" style={styles.saveToast}><Text style={styles.saveToastText}>{saveMessage}</Text></View> : null}
     </ScrollView>
   </Modal>;
 }
@@ -391,10 +410,14 @@ const styles = StyleSheet.create({
   hoursHeading: { gap: 4 },
   hoursLoading: { color: EDITORIAL_COLORS.terracotta, fontSize: 12 },
   hoursHint: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 17 },
-  actions: { position: 'relative', zIndex: 1000, elevation: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 20, marginTop: 12, paddingTop: 8, backgroundColor: EDITORIAL_COLORS.paper },
+  actions: { position: 'relative', zIndex: 9999, elevation: 9999, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 20, marginTop: 12, paddingTop: 8, backgroundColor: EDITORIAL_COLORS.paper, width: '100%', minHeight: 64 },
   cancel: { color: EDITORIAL_COLORS.taupe, fontWeight: '600', minHeight: 44, paddingVertical: 12 },
   delete: { color: EDITORIAL_COLORS.dangerText, fontWeight: '700', minHeight: 44, paddingVertical: 12 },
   save: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 13 },
+  saveHover: { backgroundColor: '#815535' },
+  savePressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
   saveDisabled: { opacity: 0.65 },
+  saveToast: { alignSelf: 'stretch', marginTop: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+  saveToastText: { color: EDITORIAL_COLORS.dangerText, fontSize: 12, fontWeight: '700' },
   white: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
 });

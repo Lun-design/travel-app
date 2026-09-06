@@ -5,7 +5,7 @@ import type { ScheduledItem } from '@/lib/schedule';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
-import { distanceToFocusSpot, findActiveOrNextSpot } from '@/lib/today-mode';
+import { distanceToFocusSpot, findActiveOrNextSpot, shouldUseCompactTodayBanner } from '@/lib/today-mode';
 import type { Voucher } from '@/lib/vouchers';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { OfflineRescueCardModal } from './OfflineRescueCardModal';
@@ -23,9 +23,10 @@ type Props = {
   completedIds?: ReadonlySet<string>;
   onComplete?: (itemId: string) => void;
   onPreviewVoucher?: (voucher: Voucher) => void;
+  compact?: boolean;
 };
 
-export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher }: Props) {
+export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher, compact = false }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [now, setNow] = useState(() => new Date());
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
@@ -33,9 +34,15 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const focus = useMemo(() => findActiveOrNextSpot(schedule, { scheduleDate, timezone, now, completedIds }), [completedIds, now, schedule, scheduleDate, timezone]);
   const focusItem = focus.scheduled ? items.find((item) => item.id === focus.scheduled?.item.id) ?? null : null;
   const focusDate = scheduleDate;
+  const compactMode = compact && shouldUseCompactTodayBanner(focus.mode, items.length > 0);
+  const [compactExpanded, setCompactExpanded] = useState(false);
   const distanceKm = distanceToFocusSpot(focus.scheduled, schedule);
   const navigationUrl = getGoogleMapsDirectionsUrl(focusItem?.latitude, focusItem?.longitude);
   const itemVouchers = focusItem ? vouchers.filter((voucher) => voucher.item_id === focusItem.id) : [];
+
+  useEffect(() => {
+    setCompactExpanded(false);
+  }, [compactMode, scheduleDate]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
@@ -65,6 +72,11 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const isCompleted = Boolean(focusItem && completedIds?.has(focusItem.id));
 
   return <>
+    {compactMode && !compactExpanded ? <Pressable accessibilityRole="button" accessibilityLabel="展開 Today Mode" onPress={() => setCompactExpanded(true)} style={[styles.compactBanner, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+      <Text numberOfLines={1} style={[styles.compactBannerText, { color: theme.colors.text }]}>TODAY MODE · {focusItem?.location_name ?? modeLabel}</Text>
+      <Text style={[styles.compactBannerAction, { color: theme.colors.primary }]}>展開</Text>
+    </Pressable> : null}
+    <View style={compactMode && !compactExpanded ? styles.compactHidden : undefined}>
     <View accessibilityLabel="今日模式焦點卡片" style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
@@ -90,6 +102,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
         </View>
       </> : <Text style={[styles.emptyText, { color: theme.colors.muted }]}>先新增今天的第一個景點，Today Mode 會在這裡提醒你下一站。</Text>}
     </View>
+    </View>
     <OfflineRescueCardModal visible={rescueVisible} item={focusItem} vouchers={itemVouchers} onClose={() => setRescueVisible(false)} onPreviewVoucher={onPreviewVoucher} />
   </>;
 }
@@ -106,6 +119,10 @@ function formatDistance(value: number) { return value < 1 ? `${Math.round(value 
 function formatTemperature(weather: WeatherSummary) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}–${max}°C`; if (max !== null) return `${max}°C`; if (min !== null) return `${min}°C`; return '溫度未知'; }
 
 const styles = StyleSheet.create({
+  compactHidden: { display: 'none' },
+  compactBanner: { minHeight: 48, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10 },
+  compactBannerText: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800' },
+  compactBannerAction: { fontSize: 13, fontWeight: '900' },
   card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 12, gap: 12 },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   headerCopy: { flex: 1, minWidth: 0 },

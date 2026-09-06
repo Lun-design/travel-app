@@ -23,11 +23,12 @@ type Props = {
   onSettings: () => void;
   profile?: Profile | null;
   onProfile: () => void;
+  compact?: boolean;
 };
 
-export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, profile, onProfile }: Props) {
+export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, profile, onProfile, compact = false }: Props) {
   const nextThemeMode = themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
-  return <View style={[styles.header, { paddingTop: insets.top }]}>
+  return <View style={[styles.header, compact && styles.compactHeader, { paddingTop: insets.top }]}>
     <View style={styles.titleRow}>
       <View style={styles.titleCopy}>
         <Pressable onPress={onBack}><Text style={styles.back}>‹ 返回我的行程</Text></Pressable>
@@ -47,6 +48,7 @@ export function TripDetailHeader({ trip, members, userId, theme, themeMode, masc
 
 const styles = StyleSheet.create({
   header: { width: '100%', maxWidth: '100%', gap: 12, marginBottom: 14, flexShrink: 0 },
+  compactHeader: { gap: 6, marginBottom: 8 },
   titleRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0 },
   titleCopy: { flex: 1, minWidth: 0 },
   mascot: { flexShrink: 0 },

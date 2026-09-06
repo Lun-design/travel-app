@@ -25,6 +25,20 @@ export function canSaveItineraryItem(title: unknown): title is string {
   return typeof title === 'string' && title.trim().length > 0;
 }
 
+/**
+ * Submit an item after the title-only validation has passed. Keeping this
+ * boundary pure makes the browser button behaviour easy to verify without
+ * mounting React Native components in unit tests.
+ */
+export async function submitItineraryItem(
+  payload: ItineraryItemSaveInput,
+  onSave: (data: ItineraryItemSaveInput) => Promise<void>,
+): Promise<boolean> {
+  if (!canSaveItineraryItem(payload.location_name)) return false;
+  await onSave(payload);
+  return true;
+}
+
 function normalizeTimeValue(value: unknown): string | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;

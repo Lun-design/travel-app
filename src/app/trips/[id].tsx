@@ -86,7 +86,7 @@ export default function TripDetailScreen() {
   const trip = data.trip;
 
   return <View style={[styles.container, { backgroundColor: theme.colors.background, paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
-    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onProfile={() => setProfileVisible(true)} />
+    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
      {data.isOffline ? <View style={[styles.offlineBar, { backgroundColor: theme.colors.warningSurface, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.warningText }]}>📡 離線模式：已載入快取行程</Text></View> : null}
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
