@@ -68,6 +68,6 @@ const styles = StyleSheet.create({
   timelinePane: { flex: 1, width: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden' },
   paneContent: { width: '100%', paddingBottom: 100, boxSizing: 'border-box' },
   skeletonStack: { gap: 12 },
-  fab: { position: 'absolute', zIndex: 20, minHeight: 44, justifyContent: 'center', borderRadius: 12, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta },
+  fab: { position: 'absolute', zIndex: 1000, minHeight: 44, justifyContent: 'center', borderRadius: 12, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta },
   buttonText: { color: 'white', fontWeight: '800' },
 });

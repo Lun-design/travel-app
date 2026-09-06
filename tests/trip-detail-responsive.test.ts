@@ -23,12 +23,12 @@ describe('trip detail responsive layout', () => {
       screenPaddingTop: 18,
       panePadding: 12,
       mapMinHeight: 240,
-      fabRight: 12,
+      fabRight: 56,
       fabBottom: 12,
       fabPaddingHorizontal: 12,
       fabPaddingVertical: 10,
       fabFontSize: 13,
-      fabMaxWidth: 351,
+      fabMaxWidth: 307,
     });
   });
 
@@ -43,6 +43,15 @@ describe('trip detail responsive layout', () => {
       fabBottom: 24,
       fabFontSize: 14,
     });
+  });
+
+  it('keeps the compact add button clear of browser overlays', async () => {
+    const { getTripDetailLayout } = await import('../lib/trip-detail-layout');
+    const compact = getTripDetailLayout(375);
+
+    expect(compact.fabRight).toBeGreaterThanOrEqual(56);
+    expect(compact.fabMaxWidth).toBe(307);
+    expect(readTripDetailSources()).toContain('zIndex: 1000');
   });
 
   it('defaults the map closed on narrow screens and open on desktop', async () => {
@@ -150,6 +159,13 @@ describe('trip detail responsive layout', () => {
     expect(shared).toContain('paddingHorizontal: 10');
     expect(detail).toContain('marginBottom: 12');
     expect(dayTabs).toContain('marginTop: 6');
+  });
+
+  it('keeps weather alerts compact while preserving contrast', () => {
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+
+    expect(timeline).toContain("weatherWarning: { color: EDITORIAL_COLORS.amberText, backgroundColor: EDITORIAL_COLORS.amberSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3");
+    expect(timeline).toContain("extremeWarning: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3");
   });
 
   it('renders skeletons and animates day/map transitions', () => {
