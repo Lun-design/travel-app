@@ -9,6 +9,7 @@ export type Trip = { id: string; title: string; destination: string; start_date:
 export type TripUpdateInput = Partial<Pick<Trip, 'start_date' | 'end_date' | 'default_departure_time' | 'timezone'>>;
 export type TripMember = { trip_id: string; user_id: string; role: 'owner' | 'editor' | 'viewer'; joined_at: string };
 export type TripMemberWithProfile = TripMember & { profile?: { display_name: string | null; avatar_url: string | null } | null };
+export type TripWithMembers = { trip: Trip; members: TripMemberWithProfile[] };
 
 function normalizeTrip(row: unknown): Trip {
   return { ...(row as Trip), timezone: normalizeTimezone((row as Partial<Trip>)?.timezone) };
@@ -67,6 +68,50 @@ export async function listTrips(options: OfflineApiOptions = {}): Promise<Trip[]
   } catch (error) {
     if (!options.replaying && shouldQueueOffline(error)) return (await store.listSnapshots(scope.userId)).map(({ snapshot }) => snapshot.trip).filter(Boolean).map(normalizeTrip).sort((left, right) => left.start_date.localeCompare(right.start_date));
     console.error('[Supabase] listTrips failed', { message: (error as any)?.message, details: (error as any)?.details, hint: (error as any)?.hint, code: (error as any)?.code });
+    throw error;
+  }
+}
+
+function isUnavailableTripAggregation(error: unknown): boolean {
+  const value = error as { code?: string; message?: string } | null;
+  return value?.code === '42883' || value?.code === 'PGRST202' || /function .*list_trips_with_members.*(does not exist|not found)|schema cache/i.test(value?.message ?? '');
+}
+
+function parseMembers(value: unknown): TripMemberWithProfile[] {
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { return []; }
+  }
+  return Array.isArray(value) ? value as TripMemberWithProfile[] : [];
+}
+
+function mapAggregatedTrip(row: Record<string, unknown>): TripWithMembers {
+  const { members, ...tripRow } = row;
+  return { trip: normalizeTrip(tripRow), members: parseMembers(members) };
+}
+
+export async function listTripsWithMembers(options: OfflineApiOptions = {}): Promise<TripWithMembers[]> {
+  const store = options.store ?? offlineStore;
+  const scope = await resolveOfflineScope('home', options.offlineScope, currentUserId);
+  try {
+    const { data, error } = await supabase.rpc('list_trips_with_members');
+    if (error) throw error;
+    const result = ((data ?? []) as Record<string, unknown>[]).map(mapAggregatedTrip);
+    await Promise.all(result.map(({ trip, members }) => patchOfflineSnapshot(store, { userId: scope.userId, tripId: trip.id }, { trip, members })));
+    return result;
+  } catch (error) {
+    if (isUnavailableTripAggregation(error)) {
+      const trips = await listTrips({ ...options, offlineScope: scope, store });
+      return Promise.all(trips.map(async (trip) => ({
+        trip,
+        members: await listTripMembers(trip.id, { ...options, offlineScope: { userId: scope.userId, tripId: trip.id }, store }),
+      })));
+    }
+    if (!options.replaying && shouldQueueOffline(error)) {
+      return (await store.listSnapshots(scope.userId))
+        .map(({ snapshot }) => snapshot.trip ? { trip: normalizeTrip(snapshot.trip), members: snapshot.members as TripMemberWithProfile[] } : null)
+        .filter((value): value is TripWithMembers => Boolean(value))
+        .sort((left, right) => left.trip.start_date.localeCompare(right.trip.start_date));
+    }
     throw error;
   }
 }

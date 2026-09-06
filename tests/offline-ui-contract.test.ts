@@ -5,11 +5,14 @@ const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('offline UI integration contract', () => {
   it('wires trip detail to scoped cache, reconnect sync, and conflict actions', () => {
-    const source = read('src/app/trips/[id].tsx');
+    const source = [
+      read('src/app/trips/[id].tsx'),
+      read('src/hooks/useTripDetailData.ts'),
+    ].join('\n');
     expect(source).toContain('offlineSyncService.sync');
     expect(source).toContain('offlineStore.listMutations');
     expect(source).toContain('<OfflineSyncBanner');
-    expect(source).toContain('resolveSyncConflict');
+    expect(source).toContain('resolveConflict');
   });
 
   it('passes an offline scope through packing mutations', () => {

@@ -2,7 +2,7 @@ import { Link, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { FlatList, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { createTrip, listTripMembers, listTrips, type Trip, type TripMemberWithProfile } from '@/lib/trips';
+import { createTrip, listTripsWithMembers, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { CreateTripModal } from '@/components/CreateTripModal';
 import { InviteTripModal } from '@/components/InviteTripModal';
 import { PuppyMascot } from '@/components/PuppyMascot';
@@ -11,7 +11,7 @@ import { clearOfflineCache } from '@/lib/offline-cache';
 function daysUntil(date: string) { const diff = Math.ceil((new Date(`${date}T00:00:00`).getTime() - Date.now()) / 86400000); return diff > 0 ? `離出發還有 ${diff} 天` : diff === 0 ? '今天出發' : '旅程進行中'; }
 export default function HomeScreen() {
   const router = useRouter(); const [trips, setTrips] = useState<Trip[]>([]); const [members, setMembers] = useState<Record<string, TripMemberWithProfile[]>>({}); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [createVisible, setCreateVisible] = useState(false); const [joinVisible, setJoinVisible] = useState(false); const [userId, setUserId] = useState('');
-  async function load() { setLoading(true); setError(''); try { const rows = await listTrips(); const auth = await supabase.auth.getSession().then(({ data }) => data.session?.user ?? null).catch(() => null); setUserId(auth?.id ?? ''); setTrips(rows ?? []); const result = await Promise.all((rows ?? []).map(async (trip) => [trip.id, await listTripMembers(trip.id)] as const)); setMembers(Object.fromEntries(result)); } catch (e: any) { console.error('[HomeScreen] list trips failed', e); setError(e?.message ?? '無法載入行程。'); } finally { setLoading(false); } }
+  async function load() { setLoading(true); setError(''); try { const aggregated = await listTripsWithMembers(); const rows = aggregated.map(({ trip }) => trip); const auth = await supabase.auth.getSession().then(({ data }) => data.session?.user ?? null).catch(() => null); setUserId(auth?.id ?? ''); setTrips(rows ?? []); setMembers(Object.fromEntries(aggregated.map(({ trip, members }) => [trip.id, members]))); } catch (e: any) { console.error('[HomeScreen] list trips failed', e); setError(e?.message ?? '無法載入行程。'); } finally { setLoading(false); } }
   async function signOut() { await clearOfflineCache(); await supabase.auth.signOut(); }
   useEffect(() => { load(); }, []);
   if (loading) return <View style={styles.center}><PuppyMascot puppy="-5" size={72} accessibilityLabel="載入中" /><Text style={styles.loadingText}>載入行程中…</Text></View>;

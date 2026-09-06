@@ -3,6 +3,13 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const projectFile = (...parts: string[]) => path.resolve(process.cwd(), ...parts);
+const readTripDetailSources = () => [
+  readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8'),
+  readFileSync(projectFile('src', 'components', 'trip-detail', 'TripDetailHeader.tsx'), 'utf8'),
+  readFileSync(projectFile('src', 'components', 'trip-detail', 'TripDetailTabs.tsx'), 'utf8'),
+  readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8'),
+  readFileSync(projectFile('src', 'hooks', 'useTripDetailData.ts'), 'utf8'),
+].join('\n');
 
 describe('trip detail responsive layout', () => {
   it('uses compact spacing for a 375px viewport', async () => {
@@ -48,29 +55,29 @@ describe('trip detail responsive layout', () => {
   });
 
   it('keeps tabs content-sized and horizontally scrollable', () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
 
     expect(detail).toContain('<ScrollView horizontal showsHorizontalScrollIndicator={false}');
     expect(detail).not.toContain('minWidth: 136');
     expect(detail).not.toContain("tab: { minWidth: 130, flex: 1");
-    expect(detail).toContain('contentContainerStyle={styles.tabs}');
+    expect(detail).toContain('contentContainerStyle={[styles.tabs');
     expect(detail).toContain('paddingLeft: 12');
     expect(detail).toContain("container: { flex: 1, width: '100%', maxWidth: '100%', overflow: 'hidden'");
   });
 
   it('renders the map as a flow card controlled by an explicit toggle', () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
 
     expect(detail).toContain('const [isMapOpen, setIsMapOpen] = useState(() => getDefaultMapOpen(width));');
     expect(detail).toContain('🗺️ 查看地圖路線 (點擊展開)');
     expect(detail).toContain('🗺️ 隱藏地圖');
-    expect(detail).toContain('onPress={() => setIsMapOpen((current) => !current)}');
+    expect(detail).toContain('onToggleMap={toggleMap}');
     expect(detail).toContain('{isMapOpen && <View style={[styles.mapPane');
     expect(detail).toContain("mapPane: { width: '100%', maxWidth: '100%', minWidth: 0");
   });
 
   it('keeps the segmented control from shrinking when child panels change', () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
     const packing = readFileSync(projectFile('src', 'components', 'PackingPanel.tsx'), 'utf8');
 
     expect(detail).toMatch(/tabScroller: \{[^}]*minHeight: 44[^}]*height: 44[^}]*flexShrink: 0/);
@@ -80,7 +87,7 @@ describe('trip detail responsive layout', () => {
   });
 
   it('connects map markers to timeline focus and provides a directions URL', async () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
     const webMap = readFileSync(projectFile('src', 'components', 'TripMap.web.tsx'), 'utf8');
     const nativeMap = readFileSync(projectFile('src', 'components', 'TripMap.native.tsx'), 'utf8');
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
@@ -88,7 +95,7 @@ describe('trip detail responsive layout', () => {
 
     expect(getGoogleMapsDirectionsUrl(25.033, 121.565)).toBe('https://www.google.com/maps/dir/?api=1&destination=25.033%2C121.565&travelmode=driving');
     expect(getGoogleMapsDirectionsUrl(null, 121.565)).toBeNull();
-    expect(detail).toContain('onMarkerPress={handleMapMarkerPress}');
+    expect(detail).toContain('onMapMarkerPress={handleMapMarkerPress}');
     expect(detail).toContain('focusedItemId={focusedItemId}');
     expect(webMap).toContain('trip-map-marker-press');
     expect(nativeMap).toContain('onPress={() => onMarkerPress?.(marker.id)}');
@@ -97,19 +104,19 @@ describe('trip detail responsive layout', () => {
   });
 
   it('lays out the trip header as title and metadata rows with safe-area padding', () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
 
     expect(detail).toContain("import { useSafeAreaInsets } from 'react-native-safe-area-context';");
     expect(detail).toContain('const insets = useSafeAreaInsets();');
-    expect(detail).toContain('styles.headerTitleRow');
-    expect(detail).toContain('styles.headerMetaRow');
+    expect(detail).toContain('styles.titleRow');
+    expect(detail).toContain('styles.metaRow');
     expect(detail).toContain('paddingTop: insets.top');
     expect(detail).toContain('paddingBottom: 22 + insets.bottom');
     expect(detail).toContain('bottom: layout.fabBottom + insets.bottom');
   });
 
   it('shows an offline cache indicator and a tab overflow hint', () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
 
     expect(detail).toContain('navigator.onLine');
     expect(detail).toContain('offlineBar');
@@ -136,7 +143,7 @@ describe('trip detail responsive layout', () => {
 
   it('uses theme-aware time badges and roomy action hit targets', () => {
     const shared = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
     const dayTabs = readFileSync(projectFile('src', 'components', 'DayTabs.tsx'), 'utf8');
     expect(shared).toContain('theme.colors.surfaceMuted');
     expect(shared).toContain('actionButton');
@@ -146,7 +153,7 @@ describe('trip detail responsive layout', () => {
   });
 
   it('renders skeletons and animates day/map transitions', () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
     const skeleton = readFileSync(projectFile('src', 'components', 'SkeletonCard.tsx'), 'utf8');
 
     expect(skeleton).toContain('Animated');
@@ -157,10 +164,10 @@ describe('trip detail responsive layout', () => {
   });
 
   it('connects system dark mode to the trip detail palette', () => {
-    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const detail = readTripDetailSources();
 
     expect(detail).toContain('useColorScheme');
-    expect(detail).toContain('getAppTheme');
+    expect(detail).toContain('getThemeForMode');
     expect(detail).toContain('theme.colors.background');
     expect(detail).toContain('theme.colors.tabTrack');
     expect(detail).toContain('themeMode');
