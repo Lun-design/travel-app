@@ -123,6 +123,16 @@ describe('trip detail responsive layout', () => {
     expect(timeline).toContain('🧭 開啟 Google Maps 導航');
   });
 
+  it('renders cached route estimates with travel mode controls between timeline cards', () => {
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+
+    expect(timeline).toContain('useRouteSegments');
+    expect(timeline).toContain('onRouteModeChange');
+    expect(timeline).toContain('buildGoogleMapsRouteUrl');
+    expect(timeline).toContain('TRANSIT');
+    expect(timeline).toContain('導航路線');
+  });
+
   it('lays out the trip header as title and metadata rows with safe-area padding', () => {
     const detail = readTripDetailSources();
 

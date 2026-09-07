@@ -6,6 +6,7 @@ import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type We
 import type { Voucher } from '@/lib/vouchers';
 import type { ScheduleContext, ScheduledItem } from '@/lib/schedule';
 import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
+import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { PuppyMascot } from './PuppyMascot';
 
@@ -21,6 +22,15 @@ export type ItineraryTimelineProps = {
   vouchers?: Voucher[];
   onPreviewVoucher?: (voucher: Voucher) => void;
 };
+
+export type TimelineRouteSegment = RouteSegment & {
+  mode: TravelMode;
+  durationMinutes: number;
+  navigationUrl: string | null;
+  loading?: boolean;
+};
+
+const routeEstimator = createRouteEstimator();
 
 export function useWeatherByItem(items: ItineraryItem[], context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>) {
   const [weatherById, setWeatherById] = useState<Record<string, WeatherSummary>>({});
@@ -46,9 +56,58 @@ export function useWeatherByItem(items: ItineraryItem[], context?: Pick<Schedule
 export function segmentsForItems(items: ItineraryItem[]) { return items.length ? buildRouteSegments(items, items[0].day_number) : []; }
 export function orderPayload(items: ItineraryItem[]) { return items.map(({ id, position }) => ({ id, position })); }
 
+export function useRouteSegments(items: ItineraryItem[], modes: Record<string, TravelMode>) {
+  const [estimates, setEstimates] = useState<Record<string, RouteEstimate>>({});
+  const itemKey = items.map((item) => `${item.id}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
+  const modeKey = Object.entries(modes).sort(([left], [right]) => left.localeCompare(right)).map(([id, mode]) => `${id}:${mode}`).join('|');
+
+  useEffect(() => {
+    let active = true;
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const baseSegments = segmentsForItems(items);
+    setEstimates({});
+    void Promise.all(baseSegments.map(async (segment) => {
+      const from = byId.get(segment.fromId);
+      const to = byId.get(segment.toId);
+      if (!from || !to) return null;
+      const mode = modes[segment.fromId] ?? 'DRIVING';
+      const estimate = await routeEstimator.getRoute(toRoutePoint(from), toRoutePoint(to), mode);
+      return [segment.fromId, estimate] as const;
+    })).then((results) => {
+      if (active) setEstimates(Object.fromEntries(results.flatMap((entry) => entry ? [entry] : [])) as Record<string, RouteEstimate>);
+    });
+    return () => { active = false; };
+  }, [itemKey, modeKey]);
+
+  return estimates;
+}
+
+export function displayRouteSegments(items: ItineraryItem[], modes: Record<string, TravelMode>, estimates: Record<string, RouteEstimate>): TimelineRouteSegment[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return segmentsForItems(items).map((segment) => {
+    const from = byId.get(segment.fromId);
+    const to = byId.get(segment.toId);
+    const mode = modes[segment.fromId] ?? 'DRIVING';
+    const fallback = calculateFallbackTravelMinutes(segment.distanceKm, mode);
+    const estimate = estimates[segment.fromId];
+    return {
+      ...segment,
+      mode,
+      durationMinutes: estimate?.durationMinutes ?? fallback,
+      estimatedDriveMinutes: estimate?.durationMinutes ?? fallback,
+      navigationUrl: estimate?.navigationUrl ?? (from && to ? buildGoogleMapsRouteUrl(toRoutePoint(from), toRoutePoint(to), mode) : null),
+      loading: !estimate,
+    };
+  });
+}
+
+function toRoutePoint(item: ItineraryItem): RoutePoint {
+  return { latitude: item.latitude ?? undefined, longitude: item.longitude ?? undefined, title: item.location_name, address: item.address };
+}
+
 type TimelineCardProps = {
   item: ItineraryItem;
-  segment?: RouteSegment;
+  segment?: TimelineRouteSegment;
   scheduled?: ScheduledItem;
   weather?: WeatherSummary;
   vouchers?: Voucher[];
@@ -62,9 +121,16 @@ type TimelineCardProps = {
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   themeMode?: ThemeMode;
+  onRouteModeChange?: (fromId: string, mode: TravelMode) => void;
 };
 
-export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, grip, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system' }: TimelineCardProps) {
+const routeModes: Array<{ mode: TravelMode; label: string; icon: string }> = [
+  { mode: 'DRIVING', label: '開車', icon: '🚗' },
+  { mode: 'TRANSIT', label: '電車', icon: '🚆' },
+  { mode: 'WALKING', label: '步行', icon: '🚶' },
+];
+
+export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, grip, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
@@ -105,7 +171,11 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
           </View>
         </View>
       </View>
-      {segment ? <View style={styles.transition}><PuppyMascot puppy="-8" size={46} style={styles.inlineMascot} accessibilityLabel="下一站交通" /><Text style={styles.transitionText}>下一站 · {formatDistance(segment.distanceKm)} · 約 {segment.estimatedDriveMinutes} 分鐘</Text></View> : null}
+      {segment ? <View style={styles.transition}>
+        <View style={styles.transitionMain}><PuppyMascot puppy="-8" size={46} style={styles.inlineMascot} accessibilityLabel="下一站交通" /><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {routeModes.find((option) => option.mode === segment.mode)?.label} · {formatDistance(segment.distanceKm)} · {segment.loading ? '計算中…' : `約 ${segment.durationMinutes} 分鐘`}</Text></View>
+        <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => onRouteModeChange?.(segment.fromId, option.mode)}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View>
+        {segment.navigationUrl ? <Pressable accessibilityRole="link" style={styles.routeLink} onPress={() => { void Linking.openURL(segment.navigationUrl as string).catch(() => undefined); }}><Text style={styles.routeLinkText}>🗺️ 導航路線</Text></Pressable> : null}
+      </View> : null}
     </View>
   );
 }
@@ -116,7 +186,7 @@ export function NativeGripHandle({ label, onLongPress }: { label: string; onLong
 function formatDistance(distanceKm: number) { return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`; }
 
 const styles = StyleSheet.create({
-   empty: { width: '100%', padding: 38, alignItems: 'center', gap: 8, boxSizing: 'border-box' }, emptyText: { color: EDITORIAL_COLORS.taupe }, row: { width: '100%', flexDirection: 'row', minHeight: 130 }, rail: { width: 24, alignItems: 'center' }, line: { position: 'absolute', top: 18, bottom: 0, width: 2, backgroundColor: EDITORIAL_COLORS.line }, dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 3, borderColor: EDITORIAL_COLORS.terracottaSoft, zIndex: 1 }, card: { flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', marginBottom: 12, padding: 12, borderRadius: 14, borderWidth: 1, position: 'relative' }, cardActive: { borderColor: EDITORIAL_COLORS.terracotta }, cardBody: { width: '100%', flexDirection: 'row', alignItems: 'stretch', gap: 10 }, grip: { width: 32, minHeight: 76, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand }, gripText: { color: EDITORIAL_COLORS.taupe, fontSize: 25, fontWeight: '900' }, content: { flex: 1, minWidth: 0, gap: 5 }, cardHeader: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 }, time: { fontWeight: '800', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }, category: { fontSize: 12, flexShrink: 1 }, categoryWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }, inlineMascot: { flexShrink: 0 }, weatherRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }, weatherText: { fontSize: 12, fontWeight: '700' }, rainProbability: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' }, weatherAlerts: { gap: 4 }, weatherWarning: { color: EDITORIAL_COLORS.amberText, backgroundColor: EDITORIAL_COLORS.amberSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, fontSize: 12, fontWeight: '800' }, extremeWarning: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, fontSize: 12, fontWeight: '800' }, name: { fontSize: 18, fontWeight: '800' }, duration: { fontSize: 13 }, warningStack: { position: 'absolute', top: 10, right: 10, zIndex: 2, alignItems: 'flex-end', gap: 4, maxWidth: '72%' }, openingWarning: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' }, overlapWarning: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' }, address: { fontSize: 13 }, notes: { fontSize: 13, fontStyle: 'italic' }, navigation: { alignSelf: 'flex-start', color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', minHeight: 44, paddingVertical: 14 }, actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 5 }, actionButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9 }, reorderText: { fontWeight: '800' }, disabledAction: { color: '#A9A397' }, edit: { fontWeight: '700' }, delete: { color: EDITORIAL_COLORS.dangerText, fontWeight: '700' }, voucher: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700' }, favorite: { minWidth: 48, minHeight: 44, alignItems: 'center', justifyContent: 'center' }, favoriteText: { color: EDITORIAL_COLORS.taupe, fontWeight: '700' }, transition: { alignSelf: 'center', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -5, marginBottom: 10, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line }, transitionText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700', flexShrink: 1 },
-});
+   empty: { width: '100%', padding: 38, alignItems: 'center', gap: 8, boxSizing: 'border-box' }, emptyText: { color: EDITORIAL_COLORS.taupe }, row: { width: '100%', flexDirection: 'row', minHeight: 130 }, rail: { width: 24, alignItems: 'center' }, line: { position: 'absolute', top: 18, bottom: 0, width: 2, backgroundColor: EDITORIAL_COLORS.line }, dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 3, borderColor: EDITORIAL_COLORS.terracottaSoft, zIndex: 1 }, card: { flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', marginBottom: 12, padding: 12, borderRadius: 14, borderWidth: 1, position: 'relative' }, cardActive: { borderColor: EDITORIAL_COLORS.terracotta }, cardBody: { width: '100%', flexDirection: 'row', alignItems: 'stretch', gap: 10 }, grip: { width: 32, minHeight: 76, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand }, gripText: { color: EDITORIAL_COLORS.taupe, fontSize: 25, fontWeight: '900' }, content: { flex: 1, minWidth: 0, gap: 5 }, cardHeader: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 }, time: { fontWeight: '800', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }, category: { fontSize: 12, flexShrink: 1 }, categoryWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }, inlineMascot: { flexShrink: 0 }, weatherRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }, weatherText: { fontSize: 12, fontWeight: '700' }, rainProbability: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' }, weatherAlerts: { gap: 4 }, weatherWarning: { color: EDITORIAL_COLORS.amberText, backgroundColor: EDITORIAL_COLORS.amberSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, fontSize: 12, fontWeight: '800' }, extremeWarning: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, fontSize: 12, fontWeight: '800' }, name: { fontSize: 18, fontWeight: '800' }, duration: { fontSize: 13 }, warningStack: { position: 'absolute', top: 10, right: 10, zIndex: 2, alignItems: 'flex-end', gap: 4, maxWidth: '72%' }, openingWarning: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' }, overlapWarning: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' }, address: { fontSize: 13 }, notes: { fontSize: 13, fontStyle: 'italic' }, navigation: { alignSelf: 'flex-start', color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', minHeight: 44, paddingVertical: 14 }, actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 5 }, actionButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9 }, reorderText: { fontWeight: '800' }, disabledAction: { color: '#A9A397' }, edit: { fontWeight: '700' }, delete: { color: EDITORIAL_COLORS.dangerText, fontWeight: '700' }, voucher: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700' }, favorite: { minWidth: 48, minHeight: 44, alignItems: 'center', justifyContent: 'center' }, favoriteText: { color: EDITORIAL_COLORS.taupe, fontWeight: '700' }, transition: { alignSelf: 'center', width: '100%', gap: 7, marginTop: -5, marginBottom: 10, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line }, transitionMain: { flexDirection: 'row', alignItems: 'center', gap: 7 }, transitionText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700', flexShrink: 1 }, routeModes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 53 }, routeModeButton: { minHeight: 36, justifyContent: 'center', borderRadius: 8, paddingHorizontal: 9, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, backgroundColor: EDITORIAL_COLORS.paper }, routeModeButtonActive: { borderColor: EDITORIAL_COLORS.terracotta, backgroundColor: EDITORIAL_COLORS.terracottaSoft }, routeModeText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700' }, routeLink: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', marginLeft: 53 }, routeLinkText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
+ });
 
 // Compatibility markers retained for previous UI checks: ??銝宏 / ??銝宏 / ?妣 ?? Google Maps 撠
