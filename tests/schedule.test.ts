@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDaySchedule, isOpenAt, type ScheduleItem } from '../lib/schedule';
+import { buildDaySchedule, detectTimeConflicts, isOpenAt, type ScheduleItem } from '../lib/schedule';
 import { parseGoogleOpeningHours } from '../lib/google-places';
 
 const item = (overrides: Partial<ScheduleItem>): ScheduleItem => ({
@@ -53,6 +53,18 @@ describe('buildDaySchedule', () => {
     expect(schedule.map((entry) => entry.arrivalTime)).toEqual(['14:00', '14:15']);
     expect(schedule[0].estimated).toBe(false);
     expect(schedule[1].overlapWarning).toBe(true);
+  });
+  it('sorts 06:30 before 18:00 and does not report a false overlap', () => {
+    const schedule = buildDaySchedule([
+      item({ id: 'late', position: 0, time: '18:00', duration_minutes: 60 }),
+      item({ id: 'early', position: 1, time: '06:30', duration_minutes: 60 }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, defaultDepartureTime: '09:00' });
+    expect(schedule.map((entry) => entry.item.id)).toEqual(['early', 'late']);
+    expect(schedule.map((entry) => entry.overlapWarning)).toEqual([false, false]);
+    expect(detectTimeConflicts([
+      item({ id: 'late', position: 0, time: '18:00', duration_minutes: 60 }),
+      item({ id: 'early', position: 1, time: '06:30', duration_minutes: 60 }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, defaultDepartureTime: '09:00' })).toEqual([]);
   });
 
   it('does not warn for a Day 3 14:00 arrival inside a parsed afternoon interval', () => {

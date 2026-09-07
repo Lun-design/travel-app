@@ -6,6 +6,7 @@ import {
   haversineDistanceKm,
   mapMarkersForDay,
   reorderItineraryItems,
+  sortItineraryItemsByStartTime,
 } from '../lib/itinerary';
 
 const items: any[] = [
@@ -24,6 +25,13 @@ describe('itinerary helpers', () => {
       { latitude: 25.04, longitude: 121.55 },
       { latitude: 25.03, longitude: 121.56 },
     ]);
+  });
+  it('sorts an out-of-order new item before later timed items', () => {
+    const sorted = sortItineraryItemsByStartTime([
+      { ...items[1], id: 'late', time: '18:00', position: 0 },
+      { ...items[1], id: 'early', time: '06:30', position: 1 },
+    ]);
+    expect(sorted.map((entry) => entry.time)).toEqual(['06:30', '18:00']);
   });
 
   it('calculates Haversine distance in kilometres', () => {

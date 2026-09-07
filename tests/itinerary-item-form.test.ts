@@ -59,6 +59,11 @@ describe('itinerary item form validation', () => {
     expect(state).toEqual(['新景點']);
     expect(events).toEqual(['save', 'apply', 'refresh']);
   });
+  it('keeps the parent state sorted when the saved item is inserted', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src/app/trips/[id].tsx'), 'utf8');
+    expect(source).toContain('sortItineraryItemsByStartTime(current.some');
+    expect(source).toContain('refresh: data.reload');
+  });
   it('propagates the actual database failure for the UI to display', async () => {
     await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('permission denied'); })).rejects.toThrow('permission denied');
   });

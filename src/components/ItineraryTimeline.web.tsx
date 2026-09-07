@@ -1,19 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
-import { reorderItineraryItems, type ItineraryItem } from '@/lib/itinerary';
+import { reorderItineraryItems, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { EmptyTimeline, orderPayload, segmentsForItems, TimelineCard, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
-  const [localItems, setLocalItems] = useState(items);
+  const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
   const segments = useMemo(() => segmentsForItems(localItems), [localItems]);
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
   const scheduleById = useMemo(() => new Map(scheduled.map((entry) => [entry.item.id, entry])), [scheduled]);
   const weatherById = useWeatherByItem(localItems, scheduleContext);
-  useEffect(() => setLocalItems(items), [items]);
+  useEffect(() => setLocalItems(sortItineraryItemsByStartTime(items)), [items]);
 
   async function finishDrag(result: DropResult) {
     if (!result.destination) return;

@@ -1,4 +1,4 @@
-import { haversineDistanceKm, type OpeningHours, type ItineraryItem, type Weekday } from './itinerary';
+import { haversineDistanceKm, itineraryStartTime, sortItineraryItemsByStartTime, type OpeningHours, type ItineraryItem, type Weekday } from './itinerary';
 import { addCalendarDays, getWeekdayForIsoDate, normalizeTimezone } from './timezone';
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -7,7 +7,7 @@ const DEFAULT_DEPARTURE_TIME = '09:00';
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const weekdays: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-export type ScheduleItem = Pick<ItineraryItem, 'id' | 'day_number' | 'position' | 'time' | 'duration_minutes' | 'latitude' | 'longitude' | 'opening_hours'>;
+export type ScheduleItem = Pick<ItineraryItem, 'id' | 'day_number' | 'position' | 'time' | 'duration_minutes' | 'latitude' | 'longitude' | 'opening_hours'> & { start_time?: string | null };
 export type ScheduleContext = {
   tripStartDate: string;
   dayNumber: number;
@@ -118,13 +118,33 @@ function travelMinutes(from: ScheduleItem, to: ScheduleItem, averageSpeedKmh: nu
   return Math.max(1, Math.round(distanceKm / averageSpeedKmh * 60));
 }
 
+/** Return IDs whose explicit arrival starts before the previous stop can finish. */
+export function detectTimeConflicts(items: ScheduleItem[], context: ScheduleContext): string[] {
+  const ordered = sortItineraryItemsByStartTime(items);
+  const speed = context.averageSpeedKmh && context.averageSpeedKmh > 0 ? context.averageSpeedKmh : 35;
+  const fallbackStart = parseTime(context.defaultDepartureTime) ?? parseTime(DEFAULT_DEPARTURE_TIME)!;
+  let previous: { item: ScheduleItem; departureMinutes: number } | null = null;
+  const conflicts: string[] = [];
+  for (const current of ordered) {
+    const explicitStart = parseTime(itineraryStartTime(current));
+    const travel = previous ? travelMinutes(previous.item, current, speed) : 0;
+    const earliestArrival: number = previous ? previous.departureMinutes + travel : fallbackStart;
+    const arrival: number = explicitStart ?? earliestArrival;
+    const duration = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0 ? current.duration_minutes as number : DEFAULT_DURATION_MINUTES;
+    if (previous && explicitStart !== null && explicitStart < earliestArrival) conflicts.push(current.id);
+    previous = { item: current, departureMinutes: arrival + duration };
+  }
+  return conflicts;
+}
+
 export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext): ScheduledItem[] {
-  const ordered = [...items].sort((a, b) => a.position - b.position);
+  const ordered = sortItineraryItemsByStartTime(items);
+  const conflictIds = new Set(detectTimeConflicts(ordered, context));
   const speed = context.averageSpeedKmh && context.averageSpeedKmh > 0 ? context.averageSpeedKmh : 35;
   let previous: ScheduledItem | null = null;
 
   return ordered.map((current, index) => {
-    const explicitStart = parseTime(current.time);
+    const explicitStart = parseTime(itineraryStartTime(current));
     const fallbackStart = parseTime(context.defaultDepartureTime) ?? parseTime(DEFAULT_DEPARTURE_TIME)!;
     const travel = index && previous ? travelMinutes(previous.item, current, speed) : 0;
     const earliestArrival = previous ? previous.departureMinutes + travel : fallbackStart;
@@ -144,7 +164,7 @@ export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext
       travelMinutes: travel,
       estimated: explicitStart === null,
       openingWarning: Boolean(current.opening_hours && arrivalDate && !isOpenAt(current.opening_hours, arrivalDate, formatTime(arrivalMinutes), context.timezone)),
-      overlapWarning: Boolean(previous && explicitStart !== null && explicitStart < earliestArrival),
+      overlapWarning: conflictIds.has(current.id),
     };
     previous = entry;
     return entry;

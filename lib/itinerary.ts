@@ -8,6 +8,8 @@ export type ItineraryItem = {
   location_name: string; address: string | null; latitude: number | null; longitude: number | null;
   notes: string | null; category: string; created_by: string; duration_minutes?: number | null; difficulty?: string | null;
   opening_hours?: OpeningHours | null;
+  /** Legacy/API alias used by some clients; `time` remains canonical. */
+  start_time?: string | null;
 };
 
 /**
@@ -115,10 +117,22 @@ export type RouteSegment = {
 };
 
 export function filterAndSortItems(items: ItineraryItem[], day: number) {
-  return items.filter((x) => x.day_number === day).sort((a, b) => {
-    if (Number.isFinite(a.position) && Number.isFinite(b.position)) return a.position - b.position;
-    if (a.time && b.time) return a.time.localeCompare(b.time);
-    return a.time ? -1 : 1;
+  return sortItineraryItemsByStartTime(items.filter((x) => x.day_number === day));
+}
+
+export function itineraryStartTime(item: Pick<ItineraryItem, 'time'> & { start_time?: string | null }): string | null {
+  return item.time?.trim() || item.start_time?.trim() || null;
+}
+
+/** Render and schedule order is time-first; position only breaks ties/unset times. */
+export function sortItineraryItemsByStartTime<T extends Pick<ItineraryItem, 'time' | 'position'> & { start_time?: string | null }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    const aTime = itineraryStartTime(a);
+    const bTime = itineraryStartTime(b);
+    if (aTime && bTime) return aTime.localeCompare(bTime) || a.position - b.position;
+    if (aTime) return -1;
+    if (bTime) return 1;
+    return a.position - b.position;
   });
 }
 export function coordinatesForPolyline(items: ItineraryItem[], day: number) {

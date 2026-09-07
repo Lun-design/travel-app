@@ -6,8 +6,7 @@ import { getDefaultMapOpen, getTripDetailLayout } from '@/lib/trip-detail-layout
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { loadThemeMode, saveThemeMode } from '@/lib/theme-preference';
 import { tripDayNumbers } from '@/lib/trip-dates';
-import type { ItineraryItem } from '@/lib/itinerary';
-import { saveItineraryItemAndRefresh } from '@/lib/itinerary';
+import { saveItineraryItemAndRefresh, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
 import type { Voucher } from '@/lib/vouchers';
 import { DayTabs } from '@/components/DayTabs';
 import { ExpenseModal } from '@/components/ExpenseModal';
@@ -55,7 +54,7 @@ export default function TripDetailScreen() {
   const [profileVisible, setProfileVisible] = useState(false);
   const timelineScrollRef = useRef<ScrollView>(null);
   const days = useMemo(() => data.trip ? tripDayNumbers(data.trip.start_date, data.trip.end_date) : [1], [data.trip]);
-  const visibleItems = useMemo(() => data.items.filter((item) => item.day_number === day).sort((left, right) => left.position - right.position), [data.items, day]);
+  const visibleItems = useMemo(() => sortItineraryItemsByStartTime(data.items.filter((item) => item.day_number === day)), [data.items, day]);
 
   useEffect(() => { void loadThemeMode().then(setThemeMode); }, []);
   useEffect(() => { if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true); }, []);
@@ -76,11 +75,14 @@ export default function TripDetailScreen() {
   async function saveItem(input: Parameters<typeof data.saveItem>[0]) {
     const saved = await saveItineraryItemAndRefresh({
       save: () => data.saveItem(input),
-      apply: (next) => data.setItems((current) => current.some((entry) => entry.id === next.id) ? current.map((entry) => entry.id === next.id ? next : entry) : [...current, next]),
+      apply: (next) => data.setItems((current) => sortItineraryItemsByStartTime(current.some((entry) => entry.id === next.id) ? current.map((entry) => entry.id === next.id ? next : entry) : [...current, next])),
       refresh: data.reload,
     });
     setDay(saved.day_number);
     setItemModal(false);
+    setTimeout(() => {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') document.getElementById(`itinerary-item-${saved.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
   }
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }

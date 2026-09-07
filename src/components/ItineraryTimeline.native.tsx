@@ -1,18 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
-import { reorderItineraryItems, type ItineraryItem } from '@/lib/itinerary';
+import { reorderItineraryItems, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { EmptyTimeline, NativeGripHandle, orderPayload, segmentsForItems, TimelineCard, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
-  const [localItems, setLocalItems] = useState(items);
+  const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
   const segments = useMemo(() => segmentsForItems(localItems), [localItems]);
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
   const scheduleById = useMemo(() => new Map(scheduled.map((entry) => [entry.item.id, entry])), [scheduled]);
   const weatherById = useWeatherByItem(localItems, scheduleContext);
-  useEffect(() => setLocalItems(items), [items]);
+  useEffect(() => setLocalItems(sortItineraryItemsByStartTime(items)), [items]);
 
   async function finishDrag(ordered: ItineraryItem[]) {
     const positioned = ordered.map((item, position) => ({ ...item, position }));

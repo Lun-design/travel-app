@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { getTrip, listTripMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { deleteItineraryItem, listItineraryItems, saveItineraryItem, updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import type { ItineraryItem, ItineraryItemSaveInput } from '@/lib/itinerary';
+import { sortItineraryItemsByStartTime } from '@/lib/itinerary';
 import { calculateBalances, deleteExpense, listExpenses, saveExpense, type Expense, type ExpenseSplit } from '@/lib/expenses-api';
 import { exchangeRateService, getDefaultExchangeRateSnapshot, type ExchangeRateSnapshot } from '@/lib/exchange-rates';
 import { listVouchers } from '@/lib/vouchers-api';
@@ -56,7 +57,7 @@ export function useTripDetailData(tripId: string | undefined) {
       const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
       const resolvedProfile = profileData ?? (memberProfile ? { id: auth?.id ?? '', display_name: memberProfile.display_name, full_name: memberProfile.full_name, email: memberProfile.email, avatar_url: memberProfile.avatar_url, updated_at: new Date().toISOString() } : null);
       const resolvedMembers = resolvedProfile ? memberData.map((member) => member.user_id === resolvedProfile.id ? { ...member, profile: { ...member.profile, display_name: resolvedProfile.display_name, full_name: resolvedProfile.full_name, email: resolvedProfile.email, avatar_url: resolvedProfile.avatar_url } } : member) : memberData;
-      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(itemData); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]);
+      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(itemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]);
       await offlineStore.putSnapshot(scope, {
         trip: tripData,
         members: resolvedMembers,
