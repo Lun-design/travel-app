@@ -4,6 +4,7 @@ import {
   parseGoogleOpeningHours,
   parseGooglePlaceDetails,
   pickPreferredPlaceAddress,
+  resolveTripPlaceAddress,
   searchGooglePlaces,
 } from '../lib/google-places';
 
@@ -65,6 +66,10 @@ describe('parseGoogleOpeningHours', () => {
 });
 
 describe('Google Places API mapping', () => {
+  it('preserves a Chinese autocomplete address when details returns romaji', () => {
+    expect(resolveTripPlaceAddress('清水寺, 日本、大阪府大阪市天王寺區 Reininchō, 3-28', '3-28 Reininchō, Tennoji Ward, Osaka, 543-0061 Japan')).toBe('清水寺, 日本、大阪府大阪市天王寺區 Reininchō, 3-28');
+  });
+
   it('requests Place Details in Traditional Chinese and prefers a localized fallback address', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

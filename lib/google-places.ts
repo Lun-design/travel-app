@@ -276,6 +276,13 @@ export function pickPreferredPlaceAddress(primary?: string | null, fallback?: st
   return candidates.find((value) => /[\u3400-\u9fff]/u.test(value)) ?? candidates[0] ?? null;
 }
 
+/** Keep the address shown by search when it already contains localized text. */
+export function resolveTripPlaceAddress(searchAddress?: string | null, detailsAddress?: string | null): string | null {
+  const searched = searchAddress?.trim();
+  if (searched && /[\u3400-\u9fff]/u.test(searched)) return searched;
+  return pickPreferredPlaceAddress(detailsAddress, searched);
+}
+
 export function parseGooglePlaceDetails(payload: GooglePlaceDetailsPayload): GeocodingResult {
   const placeId = normalizePlaceId(payload.id ?? payload.name ?? '');
   const title = payload.displayName?.text?.trim() || payload.formattedAddress?.split(',')[0]?.trim() || '未命名地點';
