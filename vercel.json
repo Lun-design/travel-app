@@ -5,11 +5,15 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/share/:token",
-      "destination": "/share/[token].html"
+      "source": "/share/:path*",
+      "destination": "/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/trips/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!_expo|assets|favicon.ico|.*\\.js|.*\\.css|.*\\.png|.*\\.jpg|.*\\.json).*)",
       "destination": "/index.html"
     }
   ],
