@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getTrip, listTripMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { deleteItineraryItem, listItineraryItems, saveItineraryItem, updateItineraryItemsOrder } from '@/lib/itinerary-api';
@@ -26,6 +26,7 @@ export function useTripDetailData(tripId: string | undefined) {
   const [isOffline, setIsOffline] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [syncConflicts, setSyncConflicts] = useState<OfflineMutation[]>([]);
+  const reloadRequestRef = useRef(0);
   const offlineScope = useMemo(() => ({ userId: userId || 'anonymous', tripId: tripId || '' }), [tripId, userId]);
 
   const refreshSyncStatus = useCallback(async (scope = offlineScope) => {
@@ -39,6 +40,7 @@ export function useTripDetailData(tripId: string | undefined) {
 
   const reload = useCallback(async () => {
     if (!tripId) return;
+    const requestId = ++reloadRequestRef.current;
     setLoading(true); setError('');
     try {
       const auth = await supabase.auth.getSession().then(({ data }) => data.session?.user ?? null).catch(() => null);
@@ -52,6 +54,10 @@ export function useTripDetailData(tripId: string | undefined) {
         listVouchers(tripId).catch(() => null),
         getCurrentProfile().catch(() => null),
       ]);
+      if (requestId !== reloadRequestRef.current) {
+        console.debug('[TripDetail] ignored stale reload response', { requestId, latestRequestId: reloadRequestRef.current });
+        return;
+      }
       const cached = await offlineStore.getSnapshot(scope);
       const resolvedVouchers = voucherData ?? cached?.vouchers ?? [];
       const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
@@ -67,12 +73,14 @@ export function useTripDetailData(tripId: string | undefined) {
         vouchers: resolvedVouchers,
         savedAt: new Date().toISOString(),
       });
+      if (requestId !== reloadRequestRef.current) return;
       await refreshSyncStatus(scope);
     } catch (cause: any) {
+      if (requestId !== reloadRequestRef.current) return;
       console.error('[TripDetail] load failed', cause);
       setError(cause?.message ?? '無法載入行程資料。');
     } finally {
-      setLoading(false);
+      if (requestId === reloadRequestRef.current) setLoading(false);
     }
   }, [refreshSyncStatus, tripId]);
 

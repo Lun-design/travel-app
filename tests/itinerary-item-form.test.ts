@@ -63,10 +63,21 @@ describe('itinerary item form validation', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src/app/trips/[id].tsx'), 'utf8');
     expect(source).toContain('data.setItems((prevItems) => {');
     expect(source).toContain('const updated = prevItems.some((entry) => entry.id === savedItem.id)');
-    expect(source).toContain('return [...sortItineraryItemsByStartTime(updated)];');
+    expect(source).toContain('const updatedItems = [...sortItineraryItemsByStartTime(updated)];');
     expect(source).toContain('refresh: data.reload');
     expect(source).toContain('const updated = await data.saveTripSettings(changes);');
     expect(source).toContain('await data.reload();');
+  });
+  it('forces a timeline remount and ignores stale reload responses after saves', () => {
+    const screenSource = readFileSync(path.resolve(process.cwd(), 'src/app/trips/[id].tsx'), 'utf8');
+    const hookSource = readFileSync(path.resolve(process.cwd(), 'src/hooks/useTripDetailData.ts'), 'utf8');
+    expect(screenSource).toContain('const [refreshKey, setRefreshKey] = useState(0);');
+    expect(screenSource).toContain('<TimelinePanel key={refreshKey}');
+    expect(screenSource).toContain('setRefreshKey((current) => current + 1);');
+    expect(screenSource).toContain('data.setItems((currentItems) => {');
+    expect(screenSource).toContain('const reconciledItems = [...sortItineraryItemsByStartTime(reconciled)];');
+    expect(hookSource).toContain('const reloadRequestRef = useRef(0);');
+    expect(hookSource).toContain('if (requestId !== reloadRequestRef.current) return;');
   });
   it('propagates the actual database failure for the UI to display', async () => {
     await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('permission denied'); })).rejects.toThrow('permission denied');

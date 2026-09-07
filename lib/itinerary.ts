@@ -26,8 +26,10 @@ export async function saveItineraryItemAndRefresh<T>({ save, apply, refresh }: {
   refresh: () => Promise<void>;
 }): Promise<T> {
   const saved = await save();
+  console.log('[DEBUG] 儲存成功，準備更新 items State');
   apply(saved);
   await refresh();
+  console.log('[DEBUG] items State 與遠端資料重新同步完成');
   return saved;
 }
 
