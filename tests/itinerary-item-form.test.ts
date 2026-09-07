@@ -71,6 +71,7 @@ describe('itinerary item form validation', () => {
   it('forces a timeline remount and ignores stale reload responses after saves', () => {
     const screenSource = readFileSync(path.resolve(process.cwd(), 'src/app/trips/[id].tsx'), 'utf8');
     const hookSource = readFileSync(path.resolve(process.cwd(), 'src/hooks/useTripDetailData.ts'), 'utf8');
+    const modalSource = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryItemModal.tsx'), 'utf8');
     expect(screenSource).toContain('const [refreshKey, setRefreshKey] = useState(0);');
     expect(screenSource).toContain('<TimelinePanel key={refreshKey}');
     expect(screenSource).toContain('setRefreshKey((current) => current + 1);');
@@ -78,6 +79,11 @@ describe('itinerary item form validation', () => {
     expect(screenSource).toContain('const reconciledItems = [...sortItineraryItemsByStartTime(reconciled)];');
     expect(hookSource).toContain('const reloadRequestRef = useRef(0);');
     expect(hookSource).toContain('if (requestId !== reloadRequestRef.current) return;');
+    expect(screenSource).toContain('const pendingSavedItemRef = useRef<ItineraryItem | null>(null);');
+    expect(screenSource).toContain('async function refreshAfterItemSave()');
+    expect(screenSource).toContain('onRefresh={refreshAfterItemSave}');
+    expect(modalSource).toContain('onRefresh?: () => Promise<void>;');
+    expect(modalSource).toContain('await onRefresh?.();');
   });
   it('propagates the actual database failure for the UI to display', async () => {
     await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('permission denied'); })).rejects.toThrow('permission denied');

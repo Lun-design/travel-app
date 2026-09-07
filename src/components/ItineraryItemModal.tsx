@@ -28,10 +28,12 @@ type Props = {
   userId?: string;
   onClose: () => void;
   onSave?: (data: any) => Promise<void>;
+  /** Force a full trip read after the mutation so mobile/web clients see the persisted row. */
+  onRefresh?: () => Promise<void>;
   onDelete?: () => Promise<void>;
 };
 
-export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onDelete }: Props) {
+export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onRefresh, onDelete }: Props) {
   const route = useLocalSearchParams<{ id?: string | string[]; tripId?: string | string[] }>();
   const activeTripId = useActiveTripId();
   const contextInput = { tripId, itemTripId: item?.trip_id, routeId: route.id, routeTripId: route.tripId, activeTripId, day: dayProp, dayIndex };
@@ -225,6 +227,9 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, trip
         await saveItineraryItem({ ...safePayload, created_by: item?.created_by || data.user.id }, { offlineScope: { tripId: safePayload.trip_id, userId: data.user.id } });
       });
       if (!submitted) { setSaveMessage('請輸入景點名稱。'); return; }
+      console.log('[DEBUG] Modal 儲存成功，開始 GET itinerary_items 全頁重載');
+      await onRefresh?.();
+      console.log('[DEBUG] Modal GET itinerary_items 完成');
       setSavedAndClosed(true);
       if (typeof onClose === 'function') {
         try { onClose(); } catch (closeError) { console.error('[ItineraryItemModal] close failed after save', closeError); }
