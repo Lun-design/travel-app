@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { friendlyAuthError } from '@/lib/auth';
 import { authErrorDetails, resendConfirmation, signIn, signUp } from '@/lib/auth-api';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { redirect: rawRedirect } = useLocalSearchParams<{ redirect?: string }>();
+  const redirect = typeof rawRedirect === 'string' && rawRedirect.startsWith('/share/') ? rawRedirect : '/';
   const [register, setRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +21,7 @@ export default function LoginScreen() {
     try {
       const result = register ? await signUp(email.trim(), password) : await signIn(email.trim(), password);
       if (result.error) throw result.error;
-      if (result.data.session) router.replace('/');
+      if (result.data.session) router.replace(redirect as any);
       else setMessage('請至信箱點擊驗證連結，再回來登入。');
     } catch (e) {
       console.error('[LoginScreen] submit failed', authErrorDetails(e));
