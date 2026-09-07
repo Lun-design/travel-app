@@ -17,6 +17,18 @@ export type ItineraryItem = {
  */
 export type ItineraryItemSaveInput = Partial<ItineraryItem> & { trip_id: string; created_by: string };
 
+/** Persist first, update the visible collection, then reconcile with Supabase. */
+export async function saveItineraryItemAndRefresh<T>({ save, apply, refresh }: {
+  save: () => Promise<T>;
+  apply: (saved: T) => void;
+  refresh: () => Promise<void>;
+}): Promise<T> {
+  const saved = await save();
+  apply(saved);
+  await refresh();
+  return saved;
+}
+
 /**
  * A manually entered title is sufficient to save an itinerary item. Address,
  * coordinates and search metadata are optional and can be completed later.

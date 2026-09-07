@@ -7,6 +7,7 @@ import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { loadThemeMode, saveThemeMode } from '@/lib/theme-preference';
 import { tripDayNumbers } from '@/lib/trip-dates';
 import type { ItineraryItem } from '@/lib/itinerary';
+import { saveItineraryItemAndRefresh } from '@/lib/itinerary';
 import type { Voucher } from '@/lib/vouchers';
 import { DayTabs } from '@/components/DayTabs';
 import { ExpenseModal } from '@/components/ExpenseModal';
@@ -73,11 +74,13 @@ export default function TripDetailScreen() {
     timelineScrollRef.current?.scrollTo({ y: index * 160, animated: true });
   }
   async function saveItem(input: Parameters<typeof data.saveItem>[0]) {
-    const saved = await data.saveItem(input);
-    data.setItems((current) => current.some((entry) => entry.id === saved.id) ? current.map((entry) => entry.id === saved.id ? saved : entry) : [...current, saved]);
+    const saved = await saveItineraryItemAndRefresh({
+      save: () => data.saveItem(input),
+      apply: (next) => data.setItems((current) => current.some((entry) => entry.id === next.id) ? current.map((entry) => entry.id === next.id ? next : entry) : [...current, next]),
+      refresh: data.reload,
+    });
     setDay(saved.day_number);
     setItemModal(false);
-    await data.reload();
   }
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
@@ -101,7 +104,7 @@ export default function TripDetailScreen() {
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} /></View>}
     </MainScroll>
     {tab === 'timeline' && <Pressable accessibilityRole="button" style={[styles.addSpot, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth, backgroundColor: theme.colors.primary }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={{ color: '#ffffff', fontWeight: '800', fontSize: layout.fabFontSize }}>＋ 新增景點／活動</Text></Pressable>}
-    <ItineraryItemModal visible={itemModal} item={editingItem} day={day} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); await data.reload(); } : undefined} />
+    <ItineraryItemModal visible={itemModal} item={editingItem} day={day} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); await data.reload(); setItemModal(false); } : undefined} />
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
     <VoucherPreviewModal voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />

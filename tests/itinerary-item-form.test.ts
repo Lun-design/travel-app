@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatFlightTitle, parseFlightText } from '../lib/ai-parser';
-import { canSaveItineraryItem, submitItineraryItem, resolveItineraryContext } from '../lib/itinerary';
+import { canSaveItineraryItem, submitItineraryItem, resolveItineraryContext, saveItineraryItemAndRefresh } from '../lib/itinerary';
 
 describe('itinerary item form validation', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -46,6 +46,18 @@ describe('itinerary item form validation', () => {
     let fallbackCalls = 0;
     await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('denied'); }, async () => { fallbackCalls++; })).rejects.toThrow('denied');
     expect(fallbackCalls).toBe(0);
+  });
+  it('updates the parent list and refetches immediately after a successful save', async () => {
+    const state: string[] = [];
+    const events: string[] = [];
+    const saved = await saveItineraryItemAndRefresh({
+      save: async () => { events.push('save'); return { id: 'item-1', location_name: '新景點' }; },
+      apply: (item) => { events.push('apply'); state.push(item.location_name); },
+      refresh: async () => { events.push('refresh'); },
+    });
+    expect(saved.id).toBe('item-1');
+    expect(state).toEqual(['新景點']);
+    expect(events).toEqual(['save', 'apply', 'refresh']);
   });
   it('propagates the actual database failure for the UI to display', async () => {
     await expect(submitItineraryItem({ trip_id: 't', created_by: 'u', location_name: '景點' }, async () => { throw new Error('permission denied'); })).rejects.toThrow('permission denied');
