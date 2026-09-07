@@ -4,7 +4,7 @@ import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueue
 import { offlineStore } from './offline-store';
 
 export type ExpenseSplit = { id?: string; expense_id?: string; user_id: string; amount: number };
-export type Expense = { id: string; trip_id: string; payer_id: string; title: string; amount: number; currency: string; category: string | null; created_at: string; splits: ExpenseSplit[] };
+export type Expense = { id: string; trip_id: string; payer_id: string; title: string; amount: number; currency: string; category: string | null; created_at: string; updated_at?: string | null; updated_by?: string | null; splits: ExpenseSplit[] };
 export type Balance = { userId: string; amount: number };
 export type Settlement = { from: string; to: string; amount: number; currency: string };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

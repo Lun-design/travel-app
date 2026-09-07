@@ -14,7 +14,7 @@ import { ProfileAvatar } from './ProfileAvatar';
 const categories = ['證件', '電子產品', '衣物', '藥品', '隨身物品', '未分類'];
 const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪'];
 
-export function PackingPanel({ tripId, userId = 'anonymous', members, destination = '', tripStartDate, items: itineraryItems = [], themeMode }: {
+export function PackingPanel({ tripId, userId = 'anonymous', members, destination = '', tripStartDate, items: itineraryItems = [], themeMode, refreshToken = 0 }: {
   tripId: string;
   userId?: string;
   members: TripMemberWithProfile[];
@@ -22,6 +22,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   tripStartDate?: string;
   items?: ItineraryItem[];
   themeMode?: ThemeMode;
+  refreshToken?: number;
 }) {
   const theme = getThemeForMode(themeMode ?? 'system', useColorScheme());
   const [items, setItems] = useState<PackingItem[]>([]);
@@ -43,7 +44,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
     try { setItems(await listPackingItems(tripId, { offlineScope, store: offlineStore })); }
     catch (error: any) { Alert.alert('載入清單失敗', error?.message ?? '請稍後再試。'); }
   }
-  useEffect(() => { void load(); }, [tripId]);
+  useEffect(() => { void load(); }, [tripId, refreshToken]);
 
   async function toggle(item: PackingItem) {
     const next = !item.is_checked;

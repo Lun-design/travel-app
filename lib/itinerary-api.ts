@@ -26,6 +26,8 @@ function optimisticItineraryItem(payload: ItineraryItemSaveInput, existing: Itin
     duration_minutes: payload.duration_minutes ?? existing?.duration_minutes ?? null,
     difficulty: payload.difficulty ?? existing?.difficulty ?? null,
     opening_hours: payload.opening_hours ?? existing?.opening_hours ?? null,
+    updated_at: new Date().toISOString(),
+    updated_by: payload.created_by || existing?.updated_by || null,
   };
 }
 

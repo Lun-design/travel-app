@@ -12,6 +12,7 @@ import { listTripPlaces, type TripPlace } from '@/lib/trip-places-api';
 import { getCurrentProfile, updateCurrentProfile, type Profile } from '@/lib/profiles';
 import { offlineStore, type OfflineMutation } from '@/lib/offline-store';
 import { offlineSyncService } from '@/lib/offline-replay';
+import { applyRealtimeChange, subscribeToTripRealtime, type RealtimeChange, type RealtimeClientLike } from '@/lib/realtime-collaboration';
 
 export function useTripDetailData(tripId: string | undefined) {
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -28,7 +29,11 @@ export function useTripDetailData(tripId: string | undefined) {
   const [isOffline, setIsOffline] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [syncConflicts, setSyncConflicts] = useState<OfflineMutation[]>([]);
+  const [realtimeNotice, setRealtimeNotice] = useState('');
+  const [packingRevision, setPackingRevision] = useState(0);
   const reloadRequestRef = useRef(0);
+  const currentUserIdRef = useRef('');
+  const realtimeNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const offlineScope = useMemo(() => ({ userId: userId || 'anonymous', tripId: tripId || '' }), [tripId, userId]);
 
   const refreshSyncStatus = useCallback(async (scope = offlineScope) => {
@@ -66,6 +71,7 @@ export function useTripDetailData(tripId: string | undefined) {
       const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
       const resolvedProfile = profileData ?? (memberProfile ? { id: auth?.id ?? '', display_name: memberProfile.display_name, full_name: memberProfile.full_name, email: memberProfile.email, avatar_url: memberProfile.avatar_url, updated_at: new Date().toISOString() } : null);
       const resolvedMembers = resolvedProfile ? memberData.map((member) => member.user_id === resolvedProfile.id ? { ...member, profile: { ...member.profile, display_name: resolvedProfile.display_name, full_name: resolvedProfile.full_name, email: resolvedProfile.email, avatar_url: resolvedProfile.avatar_url } } : member) : memberData;
+      currentUserIdRef.current = auth?.id ?? '';
       setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(itemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]); setPlaces(placeData ?? []);
       await offlineStore.putSnapshot(scope, {
         trip: tripData,
@@ -93,6 +99,9 @@ export function useTripDetailData(tripId: string | undefined) {
   }, [tripId]);
 
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => () => {
+    if (realtimeNoticeTimerRef.current) clearTimeout(realtimeNoticeTimerRef.current);
+  }, []);
   useEffect(() => {
     let active = true;
     void exchangeRateService.getSnapshot().then((snapshot) => { if (active) setRateSnapshot(snapshot); });
@@ -105,6 +114,42 @@ export function useTripDetailData(tripId: string | undefined) {
     updateOnlineState(); window.addEventListener('online', handleOnline); window.addEventListener('offline', updateOnlineState);
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', updateOnlineState); };
   }, [offlineScope, refreshSyncStatus, reload]);
+
+  const showRealtimeNotice = useCallback(() => {
+    setRealtimeNotice('行程已由隊友更新');
+    if (realtimeNoticeTimerRef.current) clearTimeout(realtimeNoticeTimerRef.current);
+    realtimeNoticeTimerRef.current = setTimeout(() => setRealtimeNotice(''), 5000);
+  }, []);
+
+  const refreshRealtimeExpenses = useCallback(async () => {
+    if (!tripId) return;
+    try {
+      const refreshed = await listExpenses(tripId, { offlineScope });
+      setExpenses(refreshed);
+    } catch (cause) {
+      console.warn('[TripDetail] realtime expense refresh failed', cause);
+    }
+  }, [offlineScope, tripId]);
+
+  const handleRealtimeChange = useCallback((change: RealtimeChange) => {
+    const actor = change.record.updated_by ?? change.oldRecord.updated_by;
+    if (actor && actor !== currentUserIdRef.current) showRealtimeNotice();
+
+    if (change.table === 'itinerary_items') {
+      setItems((current) => sortItineraryItemsByStartTime(applyRealtimeChange(current, change)));
+    } else if (change.table === 'trip_places') {
+      setPlaces((current) => applyRealtimeChange(current, change));
+    } else if (change.table === 'expenses') {
+      void refreshRealtimeExpenses();
+    } else if (change.table === 'packing_items') {
+      setPackingRevision((current) => current + 1);
+    }
+  }, [refreshRealtimeExpenses, showRealtimeNotice]);
+
+  useEffect(() => {
+    if (!tripId) return;
+    return subscribeToTripRealtime(supabase as unknown as RealtimeClientLike, tripId, handleRealtimeChange);
+  }, [handleRealtimeChange, tripId]);
 
   const saveItem = useCallback((input: ItineraryItemSaveInput) => saveItineraryItem(input, { offlineScope }), [offlineScope]);
   const removeItem = useCallback((id: string) => deleteItineraryItem(id, { offlineScope }), [offlineScope]);
@@ -143,7 +188,7 @@ export function useTripDetailData(tripId: string | undefined) {
 
   return {
     trip, setTrip, members, setMembers, items, setItems, expenses, setExpenses, vouchers, setVouchers, places, setPlaces, profile, setProfile, userId,
-    rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, offlineScope,
+    rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, realtimeNotice, packingRevision, offlineScope,
     reload, reloadPlaces, resolveConflict, saveItem, removeItem, reorderItems, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
   };
 }

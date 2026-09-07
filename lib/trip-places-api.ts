@@ -16,6 +16,8 @@ export type TripPlace = {
   status: TripPlaceStatus;
   created_by: string;
   created_at: string;
+  updated_at?: string | null;
+  updated_by?: string | null;
 };
 
 export type CreateTripPlaceInput = Omit<TripPlace, 'id' | 'status' | 'created_at'> & {
@@ -32,7 +34,7 @@ export type ScheduleTripPlaceOptions = {
 
 export function normalizeTripPlace(row: unknown): TripPlace {
   const value = row as Partial<TripPlace>;
-  return {
+  const normalized: TripPlace = {
     id: String(value.id ?? ''),
     trip_id: String(value.trip_id ?? ''),
     title: String(value.title ?? '').trim(),
@@ -45,6 +47,9 @@ export function normalizeTripPlace(row: unknown): TripPlace {
     created_by: String(value.created_by ?? ''),
     created_at: String(value.created_at ?? ''),
   };
+  if ('updated_at' in value) normalized.updated_at = value.updated_at == null ? null : String(value.updated_at);
+  if ('updated_by' in value) normalized.updated_by = value.updated_by == null ? null : String(value.updated_by);
+  return normalized;
 }
 
 export function buildItineraryItemFromPlace(place: TripPlace, options: ScheduleTripPlaceOptions): ItineraryItemSaveInput {

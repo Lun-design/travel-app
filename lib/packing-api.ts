@@ -4,7 +4,7 @@ import { dedupePackingItems, packingItemKey, templateItems } from './packing-uti
 import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueueOffline, updateOfflineCollection, type OfflineApiOptions } from './offline-data';
 import { offlineStore } from './offline-store';
 
-export type PackingItem = { id: string; trip_id: string; category: string; name: string; item_name?: string; is_checked: boolean; is_packed?: boolean; assigned_to: string | null; created_at: string };
+export type PackingItem = { id: string; trip_id: string; category: string; name: string; item_name?: string; is_checked: boolean; is_packed?: boolean; assigned_to: string | null; created_at: string; updated_at?: string | null; updated_by?: string | null };
 export type PackingMutationOptions = OfflineApiOptions & { existingItems?: PackingItem[] };
 
 export function normalizePackingItem(row: any): PackingItem {
