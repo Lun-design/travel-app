@@ -8,6 +8,7 @@ import { calculateBalances, deleteExpense, listExpenses, saveExpense, type Expen
 import { exchangeRateService, getDefaultExchangeRateSnapshot, type ExchangeRateSnapshot } from '@/lib/exchange-rates';
 import { listVouchers } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
+import { listTripPlaces, type TripPlace } from '@/lib/trip-places-api';
 import { getCurrentProfile, updateCurrentProfile, type Profile } from '@/lib/profiles';
 import { offlineStore, type OfflineMutation } from '@/lib/offline-store';
 import { offlineSyncService } from '@/lib/offline-replay';
@@ -18,6 +19,7 @@ export function useTripDetailData(tripId: string | undefined) {
   const [items, setItems] = useState<ItineraryItem[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [places, setPlaces] = useState<TripPlace[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userId, setUserId] = useState('');
   const [rateSnapshot, setRateSnapshot] = useState<ExchangeRateSnapshot>(() => getDefaultExchangeRateSnapshot());
@@ -46,13 +48,14 @@ export function useTripDetailData(tripId: string | undefined) {
       const auth = await supabase.auth.getSession().then(({ data }) => data.session?.user ?? null).catch(() => null);
       const scope = { userId: auth?.id ?? 'anonymous', tripId };
       const options = { offlineScope: scope };
-      const [tripData, memberData, itemData, expenseData, voucherData, profileData] = await Promise.all([
+      const [tripData, memberData, itemData, expenseData, voucherData, profileData, placeData] = await Promise.all([
         getTrip(tripId, options),
         listTripMembers(tripId, options),
         listItineraryItems(tripId, options),
         listExpenses(tripId, options),
         listVouchers(tripId).catch(() => null),
         getCurrentProfile().catch(() => null),
+        listTripPlaces(tripId).catch(() => null),
       ]);
       if (requestId !== reloadRequestRef.current) {
         console.debug('[TripDetail] ignored stale reload response', { requestId, latestRequestId: reloadRequestRef.current });
@@ -63,7 +66,7 @@ export function useTripDetailData(tripId: string | undefined) {
       const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
       const resolvedProfile = profileData ?? (memberProfile ? { id: auth?.id ?? '', display_name: memberProfile.display_name, full_name: memberProfile.full_name, email: memberProfile.email, avatar_url: memberProfile.avatar_url, updated_at: new Date().toISOString() } : null);
       const resolvedMembers = resolvedProfile ? memberData.map((member) => member.user_id === resolvedProfile.id ? { ...member, profile: { ...member.profile, display_name: resolvedProfile.display_name, full_name: resolvedProfile.full_name, email: resolvedProfile.email, avatar_url: resolvedProfile.avatar_url } } : member) : memberData;
-      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(itemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]);
+      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(itemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]); setPlaces(placeData ?? []);
       await offlineStore.putSnapshot(scope, {
         trip: tripData,
         members: resolvedMembers,
@@ -83,6 +86,11 @@ export function useTripDetailData(tripId: string | undefined) {
       if (requestId === reloadRequestRef.current) setLoading(false);
     }
   }, [refreshSyncStatus, tripId]);
+
+  const reloadPlaces = useCallback(async () => {
+    if (!tripId) return;
+    setPlaces(await listTripPlaces(tripId));
+  }, [tripId]);
 
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
@@ -134,9 +142,9 @@ export function useTripDetailData(tripId: string | undefined) {
   }, [refreshSyncStatus, reload]);
 
   return {
-    trip, setTrip, members, setMembers, items, setItems, expenses, setExpenses, vouchers, setVouchers, profile, setProfile, userId,
+    trip, setTrip, members, setMembers, items, setItems, expenses, setExpenses, vouchers, setVouchers, places, setPlaces, profile, setProfile, userId,
     rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, offlineScope,
-    reload, resolveConflict, saveItem, removeItem, reorderItems, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
+    reload, reloadPlaces, resolveConflict, saveItem, removeItem, reorderItems, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
   };
 }
 

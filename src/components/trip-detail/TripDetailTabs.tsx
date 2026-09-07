@@ -3,12 +3,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { AppTheme } from '@/lib/theme';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 
-export type TripDetailTab = 'timeline' | 'expenses' | 'packing' | 'documents';
+export type TripDetailTab = 'timeline' | 'expenses' | 'packing' | 'documents' | 'places';
 export const TRIP_DETAIL_TABS: { value: TripDetailTab; label: string }[] = [
   { value: 'timeline', label: '行程時間軸' },
   { value: 'expenses', label: '💰 旅費分帳' },
   { value: 'packing', label: '🧳 打包清單' },
   { value: 'documents', label: '🎫 預約與票券' },
+  { value: 'places', label: '💡 靈感收藏庫' },
 ];
 
 export function TripDetailTabs({ value, onChange, theme }: { value: TripDetailTab; onChange: (value: TripDetailTab) => void; theme: AppTheme }) {

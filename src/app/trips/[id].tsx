@@ -21,6 +21,7 @@ import { TripDetailTabs, type TripDetailTab } from '@/components/trip-detail/Tri
 import { ExpensesPanel } from '@/components/trip-detail/ExpensesPanel';
 import { VoucherPreviewModal } from '@/components/VoucherPreviewModal';
 import { VouchersPanel } from '@/components/VouchersPanel';
+import { TripPlacesPanel } from '@/components/TripPlacesPanel';
 import { TripSettingsModal } from '@/components/TripSettingsModal';
 import { UserProfileModal } from '@/components/UserProfileModal';
 import { useTripDetailData } from '@/hooks/useTripDetailData';
@@ -125,6 +126,13 @@ export default function TripDetailScreen() {
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
   async function deleteExpense(expense: any) { await data.removeExpense(expense.id); await data.reload(); }
+  async function refreshPlaces() { await data.reloadPlaces(); }
+  async function handlePlaceScheduled(itemId: string, scheduledDay: number) {
+    await data.reload();
+    setDay(scheduledDay);
+    setTab('timeline');
+    setFocusedItemId(itemId);
+  }
 
   if (data.loading) return <View style={[styles.loadingShell, { backgroundColor: theme.colors.background }]}><SkeletonCard variant="header" /><SkeletonCard /><SkeletonCard /></View>;
   if (!data.trip) return <View style={styles.center}><Text style={styles.error}>{data.error || '找不到此行程。'}</Text></View>;
@@ -142,6 +150,7 @@ export default function TripDetailScreen() {
     {tab === 'expenses' && <ExpensesPanel themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} /></ScrollView></View>}
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} /></View>}
+    {tab === 'places' && <View style={styles.panelContainer}><TripPlacesPanel tripId={tripId!} userId={data.userId} places={data.places} days={days} themeMode={themeMode} onChanged={refreshPlaces} onScheduled={handlePlaceScheduled} /></View>}
     </MainScroll>
     {tab === 'timeline' && <Pressable accessibilityRole="button" style={[styles.addSpot, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth, backgroundColor: theme.colors.primary }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={{ color: '#ffffff', fontWeight: '800', fontSize: layout.fabFontSize }}>＋ 新增景點／活動</Text></Pressable>}
     <ItineraryItemModal visible={itemModal} item={editingItem} day={day} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onRefresh={refreshAfterItemSave} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); await data.reload(); setItemModal(false); } : undefined} />
