@@ -75,7 +75,12 @@ export default function TripDetailScreen() {
   async function saveItem(input: Parameters<typeof data.saveItem>[0]) {
     const saved = await saveItineraryItemAndRefresh({
       save: () => data.saveItem(input),
-      apply: (next) => data.setItems((current) => sortItineraryItemsByStartTime(current.some((entry) => entry.id === next.id) ? current.map((entry) => entry.id === next.id ? next : entry) : [...current, next])),
+      apply: (savedItem) => data.setItems((prevItems) => {
+        const updated = prevItems.some((entry) => entry.id === savedItem.id)
+          ? prevItems.map((entry) => entry.id === savedItem.id ? savedItem : entry)
+          : [...prevItems, savedItem];
+        return [...sortItineraryItemsByStartTime(updated)];
+      }),
       refresh: data.reload,
     });
     setDay(saved.day_number);
@@ -110,7 +115,7 @@ export default function TripDetailScreen() {
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
     <VoucherPreviewModal voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />
-    <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
+    <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); await data.reload(); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
     <UserProfileModal visible={profileVisible} profile={data.profile} themeMode={themeMode} onClose={() => setProfileVisible(false)} onSaved={(updated) => { data.setProfile(updated); data.setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member)); }} />
   </View></ActiveTripContext.Provider>;
 }
