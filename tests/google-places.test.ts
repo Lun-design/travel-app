@@ -119,3 +119,34 @@ describe('Google Places API mapping', () => {
     );
   });
 });
+describe('Google Places search fallback', () => {
+  it('falls back to global Text Search when Autocomplete has no Chinese result', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ suggestions: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          places: [{
+            id: 'places/ChIJusjapan',
+            displayName: { text: 'Universal Studios Japan' },
+            formattedAddress: '大阪府大阪市此花區櫻島 2-1-33',
+            location: { latitude: 34.6654, longitude: 135.4323 },
+          }],
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const results = await searchGooglePlaces('日本大阪環球', 'test-key');
+
+    expect(results).toMatchObject([{
+      id: 'google:ChIJusjapan',
+      googlePlaceId: 'ChIJusjapan',
+      title: 'Universal Studios Japan',
+      displayName: '大阪府大阪市此花區櫻島 2-1-33',
+      latitude: 34.6654,
+      longitude: 135.4323,
+    }]);
+    expect(fetchMock.mock.calls[1][0]).toBe('https://places.googleapis.com/v1/places:searchText');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toMatchObject({ textQuery: '日本大阪環球', languageCode: 'zh-TW' });
+  });
+});

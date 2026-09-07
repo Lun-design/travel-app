@@ -2,6 +2,7 @@ import type { GeocodingResult } from './geocoding';
 import type { OpeningHours, OpeningHoursDay, OpeningPeriod, Weekday } from './itinerary';
 
 const GOOGLE_AUTOCOMPLETE_ENDPOINT = 'https://places.googleapis.com/v1/places:autocomplete';
+const GOOGLE_TEXT_SEARCH_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 const GOOGLE_DETAILS_ENDPOINT = 'https://places.googleapis.com/v1/places';
 const GOOGLE_WEEKDAYS: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -30,6 +31,15 @@ type GoogleAutocompletePayload = {
         secondaryText?: { text?: string };
       };
     };
+  }>;
+};
+
+type GoogleTextSearchPayload = {
+  places?: Array<{
+    id?: string;
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    location?: { latitude?: number; longitude?: number };
   }>;
 };
 
@@ -163,7 +173,7 @@ function normalizePlaceId(value: string) {
   return value.replace(/^places\//, '');
 }
 
-export async function searchGooglePlaces(query: string, apiKey?: string): Promise<GeocodingResult[]> {
+async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {
   const key = getGoogleApiKey(apiKey);
   if (!key) return [];
   const response = await fetch(GOOGLE_AUTOCOMPLETE_ENDPOINT, {
@@ -173,7 +183,7 @@ export async function searchGooglePlaces(query: string, apiKey?: string): Promis
       'X-Goog-Api-Key': key,
       'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text',
     },
-    body: JSON.stringify({ input: query, languageCode: 'zh-TW', includedRegionCodes: ['tw'] }),
+    body: JSON.stringify({ input: query.trim(), languageCode: 'zh-TW' }),
   });
   if (!response.ok) throw new Error(`Google Places 搜尋失敗 (${response.status})`);
   const payload = await response.json() as GoogleAutocompletePayload;
@@ -195,6 +205,55 @@ export async function searchGooglePlaces(query: string, apiKey?: string): Promis
       longitude: Number.NaN,
     }];
   });
+}
+
+function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[] {
+  return (payload.places ?? []).flatMap((place) => {
+    const placeId = place.id ? normalizePlaceId(place.id) : '';
+    const title = place.displayName?.text?.trim() || place.formattedAddress?.split(',')[0]?.trim();
+    if (!placeId || !title) return [];
+    const latitude = Number(place.location?.latitude);
+    const longitude = Number(place.location?.longitude);
+    return [{
+      id: `google:${placeId}`,
+      googlePlaceId: placeId,
+      provider: 'google' as const,
+      title,
+      displayName: place.formattedAddress?.trim() || title,
+      latitude: Number.isFinite(latitude) ? latitude : Number.NaN,
+      longitude: Number.isFinite(longitude) ? longitude : Number.NaN,
+    }];
+  });
+}
+
+export async function searchGooglePlacesText(query: string, apiKey?: string): Promise<GeocodingResult[]> {
+  const key = getGoogleApiKey(apiKey);
+  const normalizedQuery = query.trim();
+  if (!key || !normalizedQuery) return [];
+  const response = await fetch(GOOGLE_TEXT_SEARCH_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': key,
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location',
+    },
+    body: JSON.stringify({ textQuery: normalizedQuery, languageCode: 'zh-TW' }),
+  });
+  if (!response.ok) throw new Error(`Google Places Text Search failed (${response.status})`);
+  return mapTextSearchPlaces(await response.json() as GoogleTextSearchPayload);
+}
+
+export async function searchGooglePlaces(query: string, apiKey?: string): Promise<GeocodingResult[]> {
+  const key = getGoogleApiKey(apiKey);
+  const normalizedQuery = query.trim();
+  if (!key || !normalizedQuery) return [];
+  try {
+    const results = await searchGooglePlacesAutocomplete(normalizedQuery, key);
+    if (results.length) return results;
+  } catch (error) {
+    console.warn('[Google Places] autocomplete failed; trying Text Search', error);
+  }
+  return searchGooglePlacesText(normalizedQuery, key);
 }
 
 export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string): Promise<GeocodingResult> {
