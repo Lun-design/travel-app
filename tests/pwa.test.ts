@@ -93,7 +93,7 @@ describe('PWA deployment configuration', () => {
 
     expect(vercel.buildCommand).toBe('npm run build');
     expect(vercel.outputDirectory).toBe('dist');
-    expect(vercel.rewrites?.some((rewrite) => rewrite.destination === '/index.html')).toBe(true);
+    expect(vercel.rewrites?.some((rewrite) => rewrite.destination === '/')).toBe(true);
     expect(packageJson.scripts?.['type-check']).toBe('tsc --noEmit');
     expect(packageJson.scripts?.build).toContain('npm run type-check');
     expect(packageJson.scripts?.build).toContain('npm run test:ci');

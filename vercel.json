@@ -5,16 +5,8 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/share/:path*",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/trips/:path*",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/((?!_expo|assets|favicon.ico|.*\\.js|.*\\.css|.*\\.png|.*\\.jpg|.*\\.json).*)",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "destination": "/"
     }
   ],
   "headers": [

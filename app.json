@@ -19,7 +19,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "favicon": "./favicon.png",
       "name": "大白小白出遊去",
       "shortName": "大白出遊",
