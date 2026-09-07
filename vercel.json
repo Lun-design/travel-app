@@ -5,6 +5,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/share/:token",
+      "destination": "/share/[token].html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
