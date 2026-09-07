@@ -159,12 +159,12 @@ export function TripPlacesPanel({ tripId, userId, places, days, themeMode, onCha
     </View>
 
     <View style={styles.listHeader}><Text style={[styles.sectionTitle, { color: theme.colors.text }]}>尚未排入行程 ({savedPlaces.length})</Text></View>
-    {savedPlaces.length === 0 ? <View style={[styles.empty, { borderColor: theme.colors.border }]}><Text style={[styles.emptyText, { color: theme.colors.muted }]}>目前還沒有收藏景點，先搜尋一個吧！</Text></View> : <ScrollView contentContainerStyle={styles.list}>
+    {savedPlaces.length === 0 ? <View style={[styles.empty, { borderColor: theme.colors.border }]}><Text style={[styles.emptyText, { color: theme.colors.muted }]}>目前還沒有收藏景點，先搜尋一個吧！</Text></View> : <View style={styles.list}>
       {savedPlaces.map((place) => <View key={place.id} style={[styles.card, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
         <View style={styles.cardCopy}><Text style={[styles.cardTitle, { color: theme.colors.text }]}>{place.title}</Text>{place.address ? <Text numberOfLines={2} style={[styles.cardAddress, { color: theme.colors.muted }]}>{place.address}</Text> : null}{place.notes ? <Text style={[styles.cardNotes, { color: theme.colors.muted }]}>{place.notes}</Text> : null}</View>
         <View style={styles.cardActions}><Pressable onPress={() => { setSelectedDay(days[0] ?? 1); setSelectedPlace(place); }} style={[styles.smallButton, { backgroundColor: theme.colors.primary }]}><Text style={styles.buttonText}>排入行程</Text></Pressable><Pressable onPress={() => void handleDelete(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]}><Text style={[styles.smallButtonText, { color: theme.colors.muted }]}>刪除</Text></Pressable></View>
       </View>)}
-    </ScrollView>}
+    </View>}
 
     <Modal visible={Boolean(selectedPlace)} transparent animationType="slide" onRequestClose={() => setSelectedPlace(null)}>
       <View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -192,7 +192,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, themeMode, onCha
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', flex: 1, minHeight: 0 },
+  container: { width: '100%' },
   header: { width: '100%', borderWidth: 1, borderRadius: 16, padding: 16, gap: 10 },
   title: { fontSize: 22, fontWeight: '800' },
   subtitle: { fontSize: 13 },

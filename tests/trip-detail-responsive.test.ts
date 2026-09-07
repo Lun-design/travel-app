@@ -12,6 +12,17 @@ const readTripDetailSources = () => [
 ].join('\n');
 
 describe('trip detail responsive layout', () => {
+  it('lets the inspiration library use the same outer page scroll as the timeline', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const places = readFileSync(projectFile('src', 'components', 'TripPlacesPanel.tsx'), 'utf8');
+
+    expect(detail).toContain("const MainScroll = tab === 'timeline' || tab === 'places' ? ScrollView : View;");
+    expect(detail).toContain("tab === 'places' && <TripPlacesPanel");
+    expect(places).toContain("container: { width: '100%' }");
+    expect(places).not.toContain("container: { width: '100%', flex: 1, minHeight: 0 }");
+    expect(places).not.toContain('<ScrollView contentContainerStyle={styles.list}>');
+  });
+
   it('uses compact spacing for a 375px viewport', async () => {
     const modulePath = projectFile('lib', 'trip-detail-layout.ts');
     expect(existsSync(modulePath)).toBe(true);
