@@ -24,6 +24,7 @@ import { VouchersPanel } from '@/components/VouchersPanel';
 import { TripPlacesPanel } from '@/components/TripPlacesPanel';
 import { TripSettingsModal } from '@/components/TripSettingsModal';
 import { UserProfileModal } from '@/components/UserProfileModal';
+import { ShareTripModal } from '@/components/ShareTripModal';
 import { useTripDetailData } from '@/hooks/useTripDetailData';
 import { ActiveTripContext } from '@/contexts/ActiveTripContext';
 
@@ -53,6 +54,7 @@ export default function TripDetailScreen() {
   const [inviteVisible, setInviteVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
+  const [shareVisible, setShareVisible] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const timelineScrollRef = useRef<ScrollView>(null);
   const pendingSavedItemRef = useRef<ItineraryItem | null>(null);
@@ -141,7 +143,7 @@ export default function TripDetailScreen() {
 
   return <ActiveTripContext.Provider value={trip.id}><View style={[styles.container, { backgroundColor: theme.colors.background, paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
     <MainScroll style={styles.mainScroll} {...(tab === 'timeline' || tab === 'places' ? { contentContainerStyle: styles.mainContent, keyboardShouldPersistTaps: 'handled' as const } : {})}>
-    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
+    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onShare={() => setShareVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
      {data.isOffline ? <View style={[styles.offlineBar, { backgroundColor: theme.colors.warningSurface, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.warningText }]}>📡 離線模式：已載入快取行程</Text></View> : null}
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
@@ -159,6 +161,7 @@ export default function TripDetailScreen() {
     <VoucherPreviewModal voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />
     <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); await data.reload(); setRefreshKey((current) => current + 1); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
     <UserProfileModal visible={profileVisible} profile={data.profile} themeMode={themeMode} onClose={() => setProfileVisible(false)} onSaved={(updated) => { data.setProfile(updated); data.setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member)); }} />
+    <ShareTripModal visible={shareVisible} tripId={trip.id} userId={data.userId} themeMode={themeMode} onClose={() => setShareVisible(false)} />
   </View></ActiveTripContext.Provider>;
 }
 

@@ -18,12 +18,18 @@ type GateStatus = 'loading' | AuthStatus;
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isPublicShare = pathname.startsWith('/share/');
   const [status, setStatus] = useState<GateStatus>('loading');
   const [recoveryMessage, setRecoveryMessage] = useState('');
-  const redirectTarget = status === 'loading' ? null : authRedirectTarget(status, pathname);
+  const redirectTarget = isPublicShare ? null : status === 'loading' ? null : authRedirectTarget(status, pathname);
 
   useEffect(() => {
     let active = true;
+
+    if (isPublicShare) {
+      setStatus('signedOut');
+      return () => { active = false; };
+    }
 
     if (!isSupabaseConfigured) {
       setRecoveryMessage(SUPABASE_CONFIGURATION_MESSAGE);
@@ -85,7 +91,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       unregisterRecovery();
       subscription.subscription.unsubscribe();
     };
-  }, []);
+  }, [isPublicShare]);
 
   useEffect(() => {
     if (redirectTarget) router.replace(redirectTarget);

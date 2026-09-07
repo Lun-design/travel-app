@@ -21,12 +21,13 @@ type Props = {
   onInvite: () => void;
   onThemeModeChange: (mode: ThemeMode) => void;
   onSettings: () => void;
+  onShare?: () => void;
   profile?: Profile | null;
   onProfile: () => void;
   compact?: boolean;
 };
 
-export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, profile, onProfile, compact = false }: Props) {
+export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, profile, onProfile, compact = false }: Props) {
   const nextThemeMode = themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
   return <View style={[styles.header, compact && styles.compactHeader, { paddingTop: insets.top }]}>
     <View style={styles.titleRow}>
@@ -41,6 +42,7 @@ export function TripDetailHeader({ trip, members, userId, theme, themeMode, masc
       <View style={styles.members}>{members.slice(0, 4).map((member, index) => <View key={member.user_id} style={{ marginLeft: index ? -9 : 0, borderRadius: 18, borderWidth: 2, borderColor: theme.colors.background }}><ProfileAvatar profile={member.profile} userId={member.user_id} size={34} /></View>)}<Text numberOfLines={1} style={[styles.memberNames, { color: theme.colors.muted }]}>{members.slice(0, 2).map((member) => getProfileDisplayName(member.profile, member.user_id.slice(0, 8))).join('、')}</Text><Pressable style={[styles.invite, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onInvite}><Text style={[styles.inviteText, { color: theme.colors.primary }]}>＋ 邀請</Text></Pressable></View>
       <Pressable style={styles.profileButton} onPress={onProfile} accessibilityRole="button" accessibilityLabel="編輯個人檔案"><ProfileAvatar profile={profile} userId={userId} size={36} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`切換主題，目前為${themeMode === 'light' ? '明亮' : themeMode === 'dark' ? '暗黑' : '跟隨系統'}`} style={[styles.themeButton, { backgroundColor: theme.colors.surfaceMuted }]} onPress={() => onThemeModeChange(nextThemeMode)}><Text style={styles.themeIcon}>{themeMode === 'light' ? '☀️' : themeMode === 'dark' ? '🌙' : '📱'}</Text></Pressable>
+      {onShare ? <Pressable style={[styles.settings, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onShare}><Text style={[styles.settingsText, { color: theme.colors.primary }]}>🔗 分享行程</Text></Pressable> : null}
       {trip.created_by === userId ? <Pressable style={[styles.settings, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onSettings}><Text style={[styles.settingsText, { color: theme.colors.primary }]}>⚙️ 行程設定</Text></Pressable> : null}
     </View>
   </View>;

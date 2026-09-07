@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
-import { fetchGooglePlaceDetails, searchGooglePlaces } from '@/lib/google-places';
+import { fetchGooglePlaceDetails, pickPreferredPlaceAddress, searchGooglePlaces } from '@/lib/google-places';
 import type { GeocodingResult } from '@/lib/geocoding';
 import { createTripPlace, deleteTripPlace, scheduleTripPlace, type TripPlace } from '@/lib/trip-places-api';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -83,7 +83,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, themeMode, onCha
       await createTripPlace({
         trip_id: tripId,
         title: details.title,
-        address: details.displayName || null,
+        address: pickPreferredPlaceAddress(details.displayName, result.displayName),
         lat: Number.isFinite(details.latitude) ? details.latitude : null,
         lng: Number.isFinite(details.longitude) ? details.longitude : null,
         category: 'spot',

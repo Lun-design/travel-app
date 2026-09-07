@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchGooglePlaceDetails,
   parseGoogleOpeningHours,
   parseGooglePlaceDetails,
+  pickPreferredPlaceAddress,
   searchGooglePlaces,
 } from '../lib/google-places';
 
@@ -63,6 +65,27 @@ describe('parseGoogleOpeningHours', () => {
 });
 
 describe('Google Places API mapping', () => {
+  it('requests Place Details in Traditional Chinese and prefers a localized fallback address', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'ChIJdetails',
+        displayName: { text: 'Universal Studios Japan' },
+        formattedAddress: '2-1-33 Sakurajima, Konohana Ward, Osaka',
+        location: { latitude: 34.6654, longitude: 135.4323 },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const details = await fetchGooglePlaceDetails('ChIJdetails', 'test-key');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://places.googleapis.com/v1/places/ChIJdetails?languageCode=zh-TW',
+      expect.objectContaining({ headers: expect.objectContaining({ 'X-Goog-Api-Key': 'test-key' }) }),
+    );
+    expect(pickPreferredPlaceAddress(details.displayName, '大阪市此花區櫻島 2-1-33')).toBe('大阪市此花區櫻島 2-1-33');
+  });
+
   it('maps Place Details location and opening hours to a GeocodingResult', () => {
     expect(parseGooglePlaceDetails({
       id: 'ChIJplace',

@@ -260,7 +260,7 @@ export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string):
   const key = getGoogleApiKey(apiKey);
   if (!key) throw new Error('尚未設定 Google Places API Key');
   const normalizedId = normalizePlaceId(placeId);
-  const response = await fetch(`${GOOGLE_DETAILS_ENDPOINT}/${encodeURIComponent(normalizedId)}`, {
+  const response = await fetch(`${GOOGLE_DETAILS_ENDPOINT}/${encodeURIComponent(normalizedId)}?languageCode=zh-TW`, {
     headers: {
       'X-Goog-Api-Key': key,
       'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,regularOpeningHours',
@@ -268,6 +268,12 @@ export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string):
   });
   if (!response.ok) throw new Error(`Google Place 詳細資料取得失敗 (${response.status})`);
   return parseGooglePlaceDetails(await response.json() as GooglePlaceDetailsPayload);
+}
+
+/** Prefer a localized CJK address when the Details response falls back to English. */
+export function pickPreferredPlaceAddress(primary?: string | null, fallback?: string | null): string | null {
+  const candidates = [primary, fallback].map((value) => value?.trim()).filter((value): value is string => Boolean(value));
+  return candidates.find((value) => /[\u3400-\u9fff]/u.test(value)) ?? candidates[0] ?? null;
 }
 
 export function parseGooglePlaceDetails(payload: GooglePlaceDetailsPayload): GeocodingResult {
