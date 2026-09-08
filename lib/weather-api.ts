@@ -18,7 +18,7 @@ export type WeatherSummary = WeatherDaySummary & {
 };
 
 /** Bump when response mapping changes so an old in-memory weather entry is never reused. */
-export const WEATHER_CACHE_VERSION = 'weather_cache_v4';
+export const WEATHER_CACHE_VERSION = 'weather_cache_v5';
 
 /** Stable fallback used when Open-Meteo cannot serve historical/out-of-range dates. */
 export function createMockWeatherSummary(date: string): WeatherSummary {
@@ -46,12 +46,14 @@ type OpenMeteoPayload = {
   current?: {
     temperature_2m?: unknown;
     weather_code?: unknown;
+    precipitation?: unknown;
     time?: unknown;
   };
   hourly?: {
     time?: unknown;
     temperature_2m?: unknown;
     precipitation_probability?: unknown;
+    precipitation?: unknown;
     weather_code?: unknown;
   };
   daily?: {
@@ -59,6 +61,7 @@ type OpenMeteoPayload = {
     temperature_2m_min?: unknown;
     temperature_2m_max?: unknown;
     precipitation_probability_max?: unknown;
+    precipitation_sum?: unknown;
     weather_code?: unknown;
   };
 };
@@ -66,6 +69,8 @@ type OpenMeteoPayload = {
 const EXTREME_CODES = new Set([65, 67, 75, 77, 82, 85, 86, 95, 96, 99]);
 const NON_PRECIPITATION_CODES = new Set([0, 1, 2, 3, 45, 48]);
 const NON_PRECIPITATION_RAIN_CAP = 20;
+const LIGHT_DRIZZLE_CODES = new Set([51, 53, 56, 57]);
+const DRIZZLE_PRECIPITATION_THRESHOLD_MM = 0.1;
 
 function numberAt(value: unknown, index: number): number | null {
   if (!Array.isArray(value)) return null;
@@ -127,6 +132,28 @@ function alignProbabilityWithWeatherPattern(weatherCode: number | null, probabil
     : probability;
 }
 
+function normalizeWeatherCode(weatherCode: number | null, measuredPrecipitationMm: number | null): number | null {
+  if (weatherCode !== null && LIGHT_DRIZZLE_CODES.has(weatherCode)
+    && measuredPrecipitationMm !== null && measuredPrecipitationMm < DRIZZLE_PRECIPITATION_THRESHOLD_MM) {
+    return 2;
+  }
+  return weatherCode;
+}
+
+function measuredDailyPrecipitation(payload: OpenMeteoPayload, date: string, dailyIndex: number): number | null {
+  const dailyTotal = numberAt(payload.daily?.precipitation_sum, dailyIndex);
+  if (dailyTotal !== null) return dailyTotal;
+  const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
+  const hourlyPrecipitation = payload.hourly?.precipitation;
+  const values = times.reduce<number[]>((result, time, index) => {
+    if (!time.startsWith(`${date}T`)) return result;
+    const value = numberAt(hourlyPrecipitation, index);
+    if (value !== null) result.push(value);
+    return result;
+  }, []);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+}
+
 function addDays(date: string, days: number): string {
   const value = new Date(`${date}T00:00:00Z`);
   if (!Number.isFinite(value.getTime())) return date;
@@ -159,9 +186,16 @@ export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, 
   if (index < 0) return null;
 
   const hourlyIndex = findHourlyIndex(payload, date, targetTime);
-  const weatherCode = numberAt(payload.hourly?.weather_code, hourlyIndex) ?? numberAt(daily?.weather_code, index);
+  const rawWeatherCode = numberAt(payload.hourly?.weather_code, hourlyIndex) ?? numberAt(daily?.weather_code, index);
+  const measuredPrecipitation = numberAt(payload.hourly?.precipitation, hourlyIndex)
+    ?? numberValue(payload.current?.precipitation)
+    ?? measuredDailyPrecipitation(payload, date, index);
+  const weatherCode = normalizeWeatherCode(rawWeatherCode, measuredPrecipitation);
   const presentation = weatherCodeToPresentation(weatherCode);
-  const precipitationProbability = numberAt(payload.hourly?.precipitation_probability, hourlyIndex) ?? numberAt(daily?.precipitation_probability_max, index);
+  const precipitationProbability = alignProbabilityWithWeatherPattern(
+    weatherCode,
+    numberAt(payload.hourly?.precipitation_probability, hourlyIndex) ?? numberAt(daily?.precipitation_probability_max, index),
+  );
   // `current.temperature_2m` is the live observation. The hourly value is only
   // a fallback for historical/out-of-range responses where current is absent.
   const currentTemperatureC = numberValue(payload.current?.temperature_2m) ?? numberAt(payload.hourly?.temperature_2m, hourlyIndex);
@@ -187,7 +221,8 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
   const dates = Array.isArray(daily?.time) ? daily.time.map(String) : [];
   if (!daily || dates.length === 0) return [];
   return dates.map((date, index) => {
-    const weatherCode = numberAt(daily.weather_code, index);
+    const rawWeatherCode = numberAt(daily.weather_code, index);
+    const weatherCode = normalizeWeatherCode(rawWeatherCode, measuredDailyPrecipitation(payload, date, index));
     const presentation = weatherCodeToPresentation(weatherCode);
     const precipitationProbability = alignProbabilityWithWeatherPattern(
       weatherCode,
@@ -234,9 +269,9 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
       const params = [
         `latitude=${encodeURIComponent(latitude.toFixed(5))}`,
         `longitude=${encodeURIComponent(longitude.toFixed(5))}`,
-        'current=temperature_2m,weather_code',
-        'hourly=temperature_2m,precipitation_probability,weather_code',
-        'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max',
+        'current=temperature_2m,weather_code,precipitation',
+        'hourly=temperature_2m,precipitation_probability,precipitation,weather_code',
+        'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max,precipitation_sum',
         `timezone=${encodeURIComponent(timezone || 'auto')}`,
         `start_date=${encodeURIComponent(date)}`,
         `end_date=${encodeURIComponent(endDate)}`,

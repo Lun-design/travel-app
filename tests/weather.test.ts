@@ -144,7 +144,7 @@ describe('weather helpers', () => {
     const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string);
     expect(requestUrl.searchParams.get('start_date')).toBe('2026-01-22');
     expect(requestUrl.searchParams.get('end_date')).toBe('2026-01-28');
-    expect(requestUrl.searchParams.get('current')).toBe('temperature_2m,weather_code');
+    expect(requestUrl.searchParams.get('current')).toBe('temperature_2m,weather_code,precipitation');
   });
 
   it('parses the current temperature from Open-Meteo current data', () => {
@@ -229,7 +229,7 @@ describe('weather helpers', () => {
   });
 
   it('uses a versioned cache namespace after weather parsing changes', () => {
-    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v4');
+    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v5');
   });
 
   it('suppresses implausibly high rain probability for a clear daytime WMO pattern', () => {
@@ -249,6 +249,29 @@ describe('weather helpers', () => {
     });
 
     expect(forecast[0]).toMatchObject({ weatherCode: 1, condition: expect.any(String), precipitationProbability: 20, precipitationWarning: false });
+  });
+
+  it('downgrades light drizzle codes when measured precipitation is below 0.1mm', () => {
+    const weather = parseOpenMeteoResponse({
+      current: { temperature_2m: 29, weather_code: 51, precipitation: 0 },
+      hourly: {
+        time: ['2026-01-22T10:00'],
+        precipitation_probability: [87],
+        precipitation: [0],
+        weather_code: [51],
+      },
+      daily: {
+        time: ['2026-01-22'],
+        temperature_2m_min: [24],
+        temperature_2m_max: [31],
+        precipitation_probability_max: [94],
+        precipitation_sum: [0],
+        weather_code: [51],
+      },
+    }, '2026-01-22', 'live', '10:00');
+
+    expect(weather).toMatchObject({ weatherCode: 2, precipitationProbability: 20, precipitationWarning: false });
+    expect(weather?.forecast?.[0]).toMatchObject({ weatherCode: 2, precipitationProbability: 20, precipitationWarning: false });
   });
 
   it('requests hourly precipitation with the explicit Asia/Taipei timezone', async () => {
