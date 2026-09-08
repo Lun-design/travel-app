@@ -33,4 +33,14 @@ describe('trip detail module boundaries', () => {
     expect(card).toContain('OfflineRescueCardModal');
     expect(rescue).toContain('離線備忘／救命卡');
   });
+
+  it('sanitizes persisted weather before rendering forecast cards and logs both sources', () => {
+    const timeline = read('src/components/trip-detail/TimelinePanel.tsx');
+    const card = read('src/components/TodayFocusCard.tsx');
+
+    expect(card).toContain('sanitizePersistedWeather');
+    expect(card).toContain("TodayFocusCard Raw Weather:");
+    expect(card).toContain("TodayFocusCard Sanitized Forecast:");
+    expect(timeline).toContain('persistedWeather');
+  });
 });

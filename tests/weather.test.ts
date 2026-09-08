@@ -8,6 +8,7 @@ import {
   WEATHER_CACHE_VERSION,
   isWeatherSummaryCacheValid,
   sanitizeWeatherForecast,
+  sanitizePersistedWeather,
   weatherCodeToPresentation,
 } from '../lib/weather-api';
 import { blockedNetworkFetch } from './setup';
@@ -269,6 +270,41 @@ describe('weather helpers', () => {
     }]);
 
     expect(day).toMatchObject({ weatherCode: 1, precipitationProbability: 20, precipitationWarning: false });
+  });
+
+  it('sanitizes weather_forecast objects loaded from persisted trip state', () => {
+    const sanitized = sanitizePersistedWeather({
+      date: '2026-01-22',
+      icon: '☀️',
+      condition: '晴朗',
+      extreme: false,
+      temperatureMinC: 24,
+      temperatureMaxC: 31,
+      currentTemperatureC: 29,
+      precipitationProbability: 94,
+      weatherCode: 1,
+      precipitationWarning: true,
+      extremeWarning: false,
+      source: 'cached',
+      isSimulated: false,
+      weather_forecast: [{
+        date: '2026-01-22',
+        icon: '☔',
+        condition: '毛毛雨',
+        extreme: false,
+        temperatureMinC: 24,
+        temperatureMaxC: 31,
+        precipitationProbability: 94,
+        weatherCode: 51,
+        precipitationWarning: true,
+        extremeWarning: false,
+        source: 'cached',
+        isSimulated: false,
+      }],
+    });
+
+    expect(sanitized).toMatchObject({ precipitationProbability: 20, precipitationWarning: false });
+    expect(sanitized?.forecast?.[0]).toMatchObject({ weatherCode: 2, precipitationProbability: 20, precipitationWarning: false });
   });
 
   it('suppresses implausibly high rain probability for a clear daytime WMO pattern', () => {

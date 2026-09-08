@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import type { ItineraryItem } from '@/lib/itinerary';
 import type { ScheduledItem } from '@/lib/schedule';
-import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, sanitizeWeatherForecast, sanitizeWeatherSummary, type WeatherSummary } from '@/lib/weather-api';
+import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, sanitizePersistedWeather, sanitizeWeatherForecast, sanitizeWeatherSummary, type WeatherSummary } from '@/lib/weather-api';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
 import { distanceToFocusSpot, findActiveOrNextSpot, shouldUseCompactTodayBanner } from '@/lib/today-mode';
@@ -25,16 +25,23 @@ type Props = {
   onComplete?: (itemId: string) => void;
   onPreviewVoucher?: (voucher: Voucher) => void;
   onSwitchToBackupPlan?: (primaryItemId: string, backupItemId: string) => void | Promise<void>;
+  /** Optional weather/weather_forecast payload loaded with the trip or item. */
+  persistedWeather?: unknown;
   compact?: boolean;
 };
 
-export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher, onSwitchToBackupPlan, compact = false }: Props) {
+export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher, onSwitchToBackupPlan, persistedWeather, compact = false }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [now, setNow] = useState(() => new Date());
-  const [weather, setWeather] = useState<WeatherSummary | null>(null);
+  const sanitizedPersistedWeather = useMemo(() => sanitizePersistedWeather(persistedWeather), [persistedWeather]);
+  const [weather, setWeather] = useState<WeatherSummary | null>(() => sanitizedPersistedWeather);
   const [rescueVisible, setRescueVisible] = useState(false);
   const focus = useMemo(() => findActiveOrNextSpot(schedule, { scheduleDate, timezone, now, completedIds }), [completedIds, now, schedule, scheduleDate, timezone]);
   const focusItem = focus.scheduled ? items.find((item) => item.id === focus.scheduled?.item.id) ?? null : null;
+  const weatherTarget = useMemo(() => {
+    const candidates = [focusItem, ...schedule.map((entry) => entry.item), ...items];
+    return candidates.find((item) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude))) ?? null;
+  }, [focusItem, items, schedule]);
   const focusDate = scheduleDate;
   const compactMode = compact && shouldUseCompactTodayBanner(focus.mode, items.length > 0);
   const [compactExpanded, setCompactExpanded] = useState(false);
@@ -55,17 +62,22 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   }, []);
 
   useEffect(() => {
+    setWeather(sanitizedPersistedWeather);
+  }, [sanitizedPersistedWeather]);
+
+  useEffect(() => {
     let active = true;
-    setWeather(null);
-    if (!focusItem || !focusDate) return () => { active = false; };
-    const latitude = focusItem.latitude == null ? null : Number(focusItem.latitude);
-    const longitude = focusItem.longitude == null ? null : Number(focusItem.longitude);
+    setWeather(sanitizedPersistedWeather);
+    if (!weatherTarget || !focusDate) return () => { active = false; };
+    const latitude = weatherTarget.latitude == null ? null : Number(weatherTarget.latitude);
+    const longitude = weatherTarget.longitude == null ? null : Number(weatherTarget.longitude);
+    console.debug('[Weather UI] fetching latest forecast', { itemId: weatherTarget.id, date: focusDate, latitude, longitude });
     const request = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
       ? fetchWeatherForecast(latitude, longitude, focusDate, timezone, focus.scheduled?.arrivalTime)
       : Promise.resolve(createMockWeatherSummary(focusDate));
     void request.then((result) => { if (active) setWeather(result ? sanitizeWeatherSummary(result) : result); });
     return () => { active = false; };
-  }, [focus.scheduled?.arrivalTime, focusDate, focusItem?.id, focusItem?.latitude, focusItem?.longitude, timezone]);
+  }, [focus.scheduled?.arrivalTime, focusDate, sanitizedPersistedWeather, timezone, weatherTarget?.id, weatherTarget?.latitude, weatherTarget?.longitude]);
 
   function openNavigation() {
     if (!navigationUrl) return;
@@ -86,9 +98,13 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
 
   useEffect(() => {
     if (!weather) return;
+    const rawWeather = persistedWeather ?? weather;
+    const sanitizedForecast = sanitizeWeatherForecast(weather.forecast);
+    console.log('TodayFocusCard Raw Weather:', rawWeather);
+    console.log('TodayFocusCard Sanitized Forecast:', sanitizedForecast);
     const finalForecast = sanitizeWeatherForecast(weather.forecast);
     console.log('Final Forecast Pop:', finalForecast.map((day) => day.precipitationProbability));
-  }, [weather]);
+  }, [persistedWeather, weather]);
 
   return <>
     {compactMode && !compactExpanded ? <Pressable accessibilityRole="button" accessibilityLabel="展開 Today Mode" onPress={() => setCompactExpanded(true)} style={[styles.compactBanner, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>

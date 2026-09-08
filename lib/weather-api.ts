@@ -180,6 +180,70 @@ export function sanitizeWeatherSummary(weather: WeatherSummary): WeatherSummary 
   return { ...weather, ...sanitized, forecast: sanitizeWeatherForecast(weather.forecast) };
 }
 
+/**
+ * Normalize weather that may have been persisted alongside a trip/itinerary.
+ * Older rows used `weather_forecast` while newer state uses `forecast`; both
+ * are treated as untrusted cached data and passed through the same sanitizer
+ * before a component is allowed to render them.
+ */
+export function sanitizePersistedWeather(raw: unknown): WeatherSummary | null {
+  let parsedRaw = raw;
+  if (typeof parsedRaw === 'string') {
+    try { parsedRaw = JSON.parse(parsedRaw); } catch { return null; }
+  }
+  if (!parsedRaw || typeof parsedRaw !== 'object') return null;
+  const record = parsedRaw as Record<string, unknown>;
+  const nested = record.weather && typeof record.weather === 'object'
+    ? record.weather as Record<string, unknown>
+    : record;
+  const rawForecast = Array.isArray(record.weather_forecast)
+    ? record.weather_forecast
+    : Array.isArray(nested.weather_forecast)
+      ? nested.weather_forecast
+      : Array.isArray(nested.forecast)
+        ? nested.forecast
+        : [];
+  const first = rawForecast.find((value) => value && typeof value === 'object') as Record<string, unknown> | undefined;
+  const summarySource = Object.keys(nested).length ? nested : (first ?? {});
+  const date = typeof summarySource.date === 'string' ? summarySource.date : typeof first?.date === 'string' ? first.date : '';
+  if (!date) return null;
+
+  const toDay = (value: unknown, fallbackDate?: string): WeatherDaySummary | null => {
+    if (!value || typeof value !== 'object') return null;
+    const row = value as Record<string, unknown>;
+    const dayDate = typeof row.date === 'string' ? row.date : fallbackDate;
+    if (!dayDate) return null;
+    const weatherCode = numberValue(row.weatherCode ?? row.weather_code);
+    const presentation = weatherCodeToPresentation(weatherCode);
+    const source = row.source === 'live' || row.source === 'mock' || row.source === 'cached' ? row.source : 'cached';
+    return {
+      date: dayDate,
+      icon: typeof row.icon === 'string' ? row.icon : presentation.icon,
+      condition: typeof row.condition === 'string' ? row.condition : presentation.condition,
+      extreme: Boolean(row.extreme ?? presentation.extreme),
+      temperatureMinC: numberValue(row.temperatureMinC ?? row.temperature_min_c),
+      temperatureMaxC: numberValue(row.temperatureMaxC ?? row.temperature_max_c),
+      precipitationProbability: numberValue(row.precipitationProbability ?? row.precipitation_probability),
+      weatherCode,
+      precipitationWarning: Boolean(row.precipitationWarning),
+      extremeWarning: Boolean(row.extremeWarning ?? row.extreme),
+      source,
+      isSimulated: Boolean(row.isSimulated),
+      measuredPrecipitationMm: numberValue(row.measuredPrecipitationMm ?? row.precipitation),
+    };
+  };
+
+  const summary = toDay(summarySource, date) ?? toDay(first, date);
+  if (!summary) return null;
+  const forecast = rawForecast.map((value) => toDay(value)).filter((day): day is WeatherDaySummary => Boolean(day));
+  const currentTemperatureC = numberValue(summarySource.currentTemperatureC ?? summarySource.temperature_2m);
+  return sanitizeWeatherSummary({
+    ...summary,
+    currentTemperatureC,
+    forecast,
+  });
+}
+
 function measuredDailyPrecipitation(payload: OpenMeteoPayload, date: string, dailyIndex: number): number | null {
   const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
   const hourlyPrecipitation = payload.hourly?.precipitation;
