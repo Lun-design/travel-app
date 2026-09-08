@@ -7,7 +7,7 @@ const BUILD_VERSION = '__BUILD_VERSION__';
 const CACHE_PREFIX = 'travel-planner-';
 const STATIC_CACHE = `${CACHE_PREFIX}static-${BUILD_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${BUILD_VERSION}`;
-const PRECACHE_URLS = ['/', '/manifest.json', '/icon.png', '/favicon.png'];
+const PRECACHE_URLS = ['/', '/manifest.json', '/icon.png', '/favicon.png', '/apple-touch-icon.png'];
 const BUILD_PRECACHED_URLS = [];
 /* __PRECACHE_MANIFEST__ */
 

@@ -19,7 +19,30 @@ describe('PWA deployment configuration', () => {
     expect(html).toContain('apple-mobile-web-app-status-bar-style');
     expect(html).toContain('apple-mobile-web-app-title');
     expect(html).toContain('apple-touch-icon');
+    expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="default" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="大白小白gogogo" />');
     expect(html).toContain("/manifest.json");
+  });
+
+  it('ships a real 180x180 Apple touch icon instead of a text fallback', () => {
+    const iconPath = projectFile('public', 'apple-touch-icon.png');
+    expect(existsSync(iconPath)).toBe(true);
+    const png = readFileSync(iconPath);
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    expect(png.readUInt32BE(16)).toBe(180);
+    expect(png.readUInt32BE(20)).toBe(180);
+  });
+
+  it('keeps the iOS install metadata in the generated static entry document', () => {
+    const distHtmlPath = projectFile('dist', 'index.html');
+    expect(existsSync(distHtmlPath)).toBe(true);
+    const distHtml = readFileSync(distHtmlPath, 'utf8');
+    expect(distHtml).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />');
+    expect(distHtml).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
+    expect(distHtml).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="default" />');
+    expect(distHtml).toContain('<meta name="apple-mobile-web-app-title" content="大白小白gogogo" />');
   });
 
   it('points Expo and PWA branding to the custom puppy PNG icons', () => {
@@ -65,6 +88,7 @@ describe('PWA deployment configuration', () => {
     expect(serviceWorker).toContain('self.clients.claim()');
     expect(serviceWorker).toContain("cache: 'no-store'");
     expect(serviceWorker).toContain('PRECACHE_URLS');
+    expect(serviceWorker).toContain("'/apple-touch-icon.png'");
     expect(serviceWorker).toContain('BUILD_PRECACHED_URLS');
     expect(serviceWorker).toContain('isCacheableResource');
     expect(serviceWorker).toContain("request.destination === 'image'");
