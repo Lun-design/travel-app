@@ -274,6 +274,27 @@ describe('weather helpers', () => {
     expect(weather?.forecast?.[0]).toMatchObject({ weatherCode: 2, precipitationProbability: 20, precipitationWarning: false });
   });
 
+  it('sanitizes daily cards from daytime precipitation even when overnight totals are high', () => {
+    const forecast = parseOpenMeteoForecast({
+      hourly: {
+        time: ['2026-01-22T02:00', '2026-01-22T08:00', '2026-01-22T12:00', '2026-01-22T19:00'],
+        precipitation: [5, 0, 0.05, 0],
+        precipitation_probability: [94, 94, 94, 94],
+        weather_code: [51, 51, 51, 51],
+      },
+      daily: {
+        time: ['2026-01-22'],
+        temperature_2m_min: [24],
+        temperature_2m_max: [31],
+        precipitation_probability_max: [94],
+        precipitation_sum: [5],
+        weather_code: [51],
+      },
+    });
+
+    expect(forecast[0]).toMatchObject({ weatherCode: 2, precipitationProbability: 20, precipitationWarning: false });
+  });
+
   it('requests hourly precipitation with the explicit Asia/Taipei timezone', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       hourly: {

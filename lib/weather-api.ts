@@ -141,17 +141,20 @@ function normalizeWeatherCode(weatherCode: number | null, measuredPrecipitationM
 }
 
 function measuredDailyPrecipitation(payload: OpenMeteoPayload, date: string, dailyIndex: number): number | null {
-  const dailyTotal = numberAt(payload.daily?.precipitation_sum, dailyIndex);
-  if (dailyTotal !== null) return dailyTotal;
   const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
   const hourlyPrecipitation = payload.hourly?.precipitation;
   const values = times.reduce<number[]>((result, time, index) => {
     if (!time.startsWith(`${date}T`)) return result;
+    const hour = Number(/^\d{4}-\d{2}-\d{2}T(\d{2}):/.exec(time)?.[1]);
+    if (!Number.isFinite(hour) || hour < 8 || hour >= 20) return result;
     const value = numberAt(hourlyPrecipitation, index);
     if (value !== null) result.push(value);
     return result;
   }, []);
-  return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  // Use the daytime peak as the measured signal. This prevents an overnight
+  // total from keeping a daytime drizzle code/probability in the UI.
+  if (values.length) return Math.max(...values);
+  return numberAt(payload.daily?.precipitation_sum, dailyIndex);
 }
 
 function addDays(date: string, days: number): string {
