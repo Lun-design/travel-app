@@ -17,6 +17,9 @@ export type WeatherSummary = WeatherDaySummary & {
   currentTemperatureC?: number | null;
 };
 
+/** Bump when response mapping changes so an old in-memory weather entry is never reused. */
+export const WEATHER_CACHE_VERSION = 'weather_cache_v2';
+
 /** Stable fallback used when Open-Meteo cannot serve historical/out-of-range dates. */
 export function createMockWeatherSummary(date: string): WeatherSummary {
   const summary: WeatherSummary = {
@@ -131,7 +134,9 @@ export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, 
   const weatherCode = numberAt(payload.hourly?.weather_code, hourlyIndex) ?? numberAt(daily?.weather_code, index);
   const presentation = weatherCodeToPresentation(weatherCode);
   const precipitationProbability = numberAt(payload.hourly?.precipitation_probability, hourlyIndex) ?? numberAt(daily?.precipitation_probability_max, index);
-  const currentTemperatureC = numberAt(payload.hourly?.temperature_2m, hourlyIndex) ?? numberValue(payload.current?.temperature_2m);
+  // `current.temperature_2m` is the live observation. The hourly value is only
+  // a fallback for historical/out-of-range responses where current is absent.
+  const currentTemperatureC = numberValue(payload.current?.temperature_2m) ?? numberAt(payload.hourly?.temperature_2m, hourlyIndex);
   return {
     date,
     temperatureMinC: numberAt(daily?.temperature_2m_min, index),
@@ -188,7 +193,7 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
     getForecast(latitude, longitude, date, timezone = 'auto', targetTime = null) {
       if (!date) return Promise.resolve(null);
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(createMockWeatherSummary(date));
-      const key = `${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
+      const key = `${WEATHER_CACHE_VERSION}:${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
       const cached = cache.get(key);
       if (cached && cached.expiresAt > now()) return cached.value;
       if (cached) cache.delete(key);

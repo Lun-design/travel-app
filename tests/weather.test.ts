@@ -4,6 +4,7 @@ import {
   fetchWeatherForecast,
   isWeatherAlert,
   parseOpenMeteoResponse,
+  WEATHER_CACHE_VERSION,
   weatherCodeToPresentation,
 } from '../lib/weather-api';
 import { blockedNetworkFetch } from './setup';
@@ -156,7 +157,7 @@ describe('weather helpers', () => {
 
   it('uses the requested Taipei local hour instead of the daily maximum rain probability', () => {
     const weather = parseOpenMeteoResponse({
-      current: { temperature_2m: 22, weather_code: 1, time: '2026-01-22T10:00' },
+      current: { temperature_2m: 29, weather_code: 1, time: '2026-01-22T10:00' },
       hourly: {
         time: ['2026-01-22T09:00', '2026-01-22T10:00', '2026-01-22T14:00'],
         temperature_2m: [20, 21, 24],
@@ -175,9 +176,33 @@ describe('weather helpers', () => {
     expect(weather).toMatchObject({
       precipitationProbability: 10,
       weatherCode: 1,
-      currentTemperatureC: 21,
+      currentTemperatureC: 29,
       precipitationWarning: false,
     });
+  });
+
+  it('keeps the seven-day cards on daily precipitation values, not hourly values', () => {
+    const weather = parseOpenMeteoResponse({
+      hourly: {
+        time: ['2026-01-22T10:00', '2026-01-23T10:00'],
+        temperature_2m: [29, 28],
+        precipitation_probability: [94, 94],
+        weather_code: [1, 63],
+      },
+      daily: {
+        time: ['2026-01-22', '2026-01-23'],
+        temperature_2m_min: [22, 21],
+        temperature_2m_max: [30, 29],
+        precipitation_probability_max: [0, 10],
+        weather_code: [1, 63],
+      },
+    }, '2026-01-22', 'live', '10:00');
+
+    expect(weather?.forecast?.map((day) => day.precipitationProbability)).toEqual([0, 10]);
+  });
+
+  it('uses a versioned cache namespace after weather parsing changes', () => {
+    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v2');
   });
 
   it('requests hourly precipitation with the explicit Asia/Taipei timezone', async () => {
