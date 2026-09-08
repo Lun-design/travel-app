@@ -102,7 +102,7 @@ function findHourlyIndex(payload: OpenMeteoPayload, date: string, targetTime?: s
 /**
  * Daily cards are meant for daytime travel planning. Open-Meteo's
  * precipitation_probability_max can be dominated by a single overnight
- * shower, so average only local 08:00-20:00 hourly values when available.
+ * shower, so take the peak local 08:00-20:00 hourly value when available.
  */
 function daytimePrecipitationProbability(payload: OpenMeteoPayload, date: string, dailyIndex: number): number | null {
   const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
@@ -114,7 +114,7 @@ function daytimePrecipitationProbability(payload: OpenMeteoPayload, date: string
     if (Number.isFinite(hour) && hour >= 8 && hour < 20 && probability !== null) values.push(probability);
     return values;
   }, []);
-  if (daytimeValues.length) return Math.round(daytimeValues.reduce((sum, value) => sum + value, 0) / daytimeValues.length);
+  if (daytimeValues.length) return Math.max(...daytimeValues);
   return numberAt(payload.daily?.precipitation_probability_max, dailyIndex);
 }
 

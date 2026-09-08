@@ -202,7 +202,7 @@ describe('weather helpers', () => {
     expect(weather?.forecast?.map((day) => day.precipitationProbability)).toEqual([0, 10]);
   });
 
-  it('calculates daily-card rain probability from the 08:00-20:00 travel window', () => {
+  it('calculates daily-card rain probability as the daytime peak from 08:00-20:00', () => {
     const forecast = parseOpenMeteoForecast({
       hourly: {
         time: [
@@ -225,7 +225,7 @@ describe('weather helpers', () => {
       },
     });
 
-    expect(forecast[0]?.precipitationProbability).toBe(10);
+    expect(forecast[0]?.precipitationProbability).toBe(20);
   });
 
   it('uses a versioned cache namespace after weather parsing changes', () => {
