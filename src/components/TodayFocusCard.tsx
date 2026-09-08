@@ -31,6 +31,7 @@ type Props = {
 };
 
 export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher, onSwitchToBackupPlan, persistedWeather, compact = false }: Props) {
+  console.log('REAL RENDER COMPONENT WEATHER:', persistedWeather);
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [now, setNow] = useState(() => new Date());
   const sanitizedPersistedWeather = useMemo(() => sanitizePersistedWeather(persistedWeather), [persistedWeather]);

@@ -39,6 +39,7 @@ describe('trip detail module boundaries', () => {
     const card = read('src/components/TodayFocusCard.tsx');
 
     expect(card).toContain('sanitizePersistedWeather');
+    expect(card).toContain("REAL RENDER COMPONENT WEATHER:");
     expect(card).toContain("TodayFocusCard Raw Weather:");
     expect(card).toContain("TodayFocusCard Sanitized Forecast:");
     expect(timeline).toContain('persistedWeather');
