@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, useColorScheme, useWindowDimensions, View } from 'react-native';
+import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, useColorScheme, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDefaultMapOpen, getTripDetailLayout } from '@/lib/trip-detail-layout';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -27,6 +27,7 @@ import { UserProfileModal } from '@/components/UserProfileModal';
 import { ShareTripModal } from '@/components/ShareTripModal';
 import { useTripDetailData } from '@/hooks/useTripDetailData';
 import { ActiveTripContext } from '@/contexts/ActiveTripContext';
+import { createReminderScheduler, getNotificationPermission, loadReminderPreference, registerNotificationServiceWorker, requestNotificationPermission, saveReminderPreference, showReminderNotification, type NotificationPermissionState } from '@/lib/notifications';
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -55,21 +56,56 @@ export default function TripDetailScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>(() => getNotificationPermission());
   const [refreshKey, setRefreshKey] = useState(0);
   const timelineScrollRef = useRef<ScrollView>(null);
   const pendingSavedItemRef = useRef<ItineraryItem | null>(null);
+  const reminderItemsRef = useRef<ItineraryItem[]>(data.items);
   const days = useMemo(() => data.trip ? tripDayNumbers(data.trip.start_date, data.trip.end_date) : [1], [data.trip]);
   const visibleItems = useMemo(() => sortItineraryItemsByStartTime(data.items.filter((item) => item.day_number === day)), [data.items, day]);
 
   useEffect(() => { void loadThemeMode().then(setThemeMode); }, []);
+  useEffect(() => { reminderItemsRef.current = data.items; }, [data.items]);
+  useEffect(() => {
+    if (!tripId) return;
+    setRemindersEnabled(loadReminderPreference(tripId));
+    setNotificationPermission(getNotificationPermission());
+  }, [tripId]);
   useEffect(() => { if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true); }, []);
   useEffect(() => { if (!isDayTransitioning) return; const timer = setTimeout(() => setIsDayTransitioning(false), 180); return () => clearTimeout(timer); }, [isDayTransitioning]);
   useEffect(() => { if (!isMapOpen) { setIsMapLoading(false); return; } const timer = setTimeout(() => setIsMapLoading(false), 220); return () => clearTimeout(timer); }, [isMapOpen]);
+  useEffect(() => {
+    if (!remindersEnabled || !data.trip) return;
+    return createReminderScheduler({
+      items: reminderItemsRef.current,
+      getItems: () => reminderItemsRef.current,
+      tripStartDate: data.trip.start_date,
+      onReminder: (reminder) => { void showReminderNotification(reminder); },
+    });
+  }, [data.trip, remindersEnabled]);
 
   function animateLayout() { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); }
   function handleDayChange(nextDay: number) { if (nextDay === day) return; animateLayout(); setDay(nextDay); setFocusedItemId(null); setIsDayTransitioning(true); }
   function toggleMap() { animateLayout(); setIsMapLoading(true); setIsMapOpen((current) => !current); }
   function changeThemeMode(mode: ThemeMode) { setThemeMode(mode); void saveThemeMode(mode); }
+  async function toggleReminders(enabled: boolean) {
+    if (!tripId) return;
+    if (!enabled) { setRemindersEnabled(false); saveReminderPreference(tripId, false); return; }
+    const permission = await requestNotificationPermission();
+    setNotificationPermission(permission);
+    if (permission !== 'granted') {
+      Alert.alert('通知提醒未開啟', permission === 'unsupported' ? '目前瀏覽器不支援通知。' : '請在瀏覽器設定中允許通知後再試。');
+      return;
+    }
+    const registration = await registerNotificationServiceWorker();
+    if (!registration) {
+      Alert.alert('提醒服務未就緒', '無法啟用 Service Worker，請重新載入頁面後再試。');
+      return;
+    }
+    setRemindersEnabled(true);
+    saveReminderPreference(tripId, true);
+  }
   function handleMapMarkerPress(itemId: string) {
     setFocusedItemId(itemId);
     const index = visibleItems.findIndex((item) => item.id === itemId);
@@ -160,7 +196,7 @@ export default function TripDetailScreen() {
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
     <VoucherPreviewModal voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />
-    <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); await data.reload(); setRefreshKey((current) => current + 1); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
+    <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} remindersEnabled={remindersEnabled} notificationPermission={notificationPermission} onReminderToggle={(enabled) => { void toggleReminders(enabled); }} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); await data.reload(); setRefreshKey((current) => current + 1); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
     <UserProfileModal visible={profileVisible} profile={data.profile} themeMode={themeMode} onClose={() => setProfileVisible(false)} onSaved={(updated) => { data.setProfile(updated); data.setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member)); }} />
     <ShareTripModal visible={shareVisible} tripId={trip.id} userId={data.userId} themeMode={themeMode} onClose={() => setShareVisible(false)} />
   </View></ActiveTripContext.Provider>;

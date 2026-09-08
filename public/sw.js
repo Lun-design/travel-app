@@ -32,6 +32,17 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SHOW_ITINERARY_REMINDER') {
+    const reminder = event.data.reminder || {};
+    event.waitUntil(self.registration.showNotification(reminder.title || '⏰ 出發提醒', {
+      body: reminder.body || '行程即將開始，請準備出發。',
+      tag: reminder.tag || `itinerary-reminder-${reminder.itemId || 'next'}`,
+      icon: '/icon.png',
+      badge: '/icon.png',
+      data: reminder.data || {},
+    }));
+    return;
+  }
   if (event.data?.type !== 'CLEAR_RUNTIME_CACHE') return;
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
@@ -40,6 +51,13 @@ self.addEventListener('message', (event) => {
         .map((key) => caches.delete(key)),
     )),
   );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  const url = event.notification?.data?.url;
+  event.notification.close();
+  if (!url) return;
+  event.waitUntil(self.clients.openWindow(url));
 });
 
 function isSameOrigin(request) {
