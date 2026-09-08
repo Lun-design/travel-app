@@ -35,16 +35,6 @@ describe('PWA deployment configuration', () => {
     expect(png.readUInt32BE(20)).toBe(180);
   });
 
-  it('keeps the iOS install metadata in the generated static entry document', () => {
-    const distHtmlPath = projectFile('dist', 'index.html');
-    expect(existsSync(distHtmlPath)).toBe(true);
-    const distHtml = readFileSync(distHtmlPath, 'utf8');
-    expect(distHtml).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />');
-    expect(distHtml).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
-    expect(distHtml).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="default" />');
-    expect(distHtml).toContain('<meta name="apple-mobile-web-app-title" content="大白小白gogogo" />');
-  });
-
   it('points Expo and PWA branding to the custom puppy PNG icons', () => {
     const appConfig = JSON.parse(readFileSync(projectFile('app.json'), 'utf8')) as {
       expo?: {
@@ -122,5 +112,7 @@ describe('PWA deployment configuration', () => {
     expect(packageJson.scripts?.build).toContain('npm run type-check');
     expect(packageJson.scripts?.build).toContain('npm run test:ci');
     expect(packageJson.scripts?.['build:web']).toContain('generate-service-worker.mjs');
+    expect(packageJson.scripts?.['verify:build']).toBe('node scripts/verify-build-output.mjs');
+    expect(packageJson.scripts?.build).toContain('npm run verify:build');
   });
 });

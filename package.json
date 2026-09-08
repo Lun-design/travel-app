@@ -13,7 +13,8 @@
     "test:ci": "vitest run --config vitest.config.mjs --reporter=default",
     "type-check": "tsc --noEmit",
     "build:web": "expo export --platform web && node scripts/generate-service-worker.mjs",
-    "build": "npm run type-check && npm run test:ci && npm run build:web"
+    "verify:build": "node scripts/verify-build-output.mjs",
+    "build": "npm run type-check && npm run test:ci && npm run build:web && npm run verify:build"
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.12",
