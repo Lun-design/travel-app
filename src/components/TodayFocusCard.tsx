@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import type { ItineraryItem } from '@/lib/itinerary';
 import type { ScheduledItem } from '@/lib/schedule';
-import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
+import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, sanitizeWeatherForecast, sanitizeWeatherSummary, type WeatherSummary } from '@/lib/weather-api';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
 import { distanceToFocusSpot, findActiveOrNextSpot, shouldUseCompactTodayBanner } from '@/lib/today-mode';
@@ -63,7 +63,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
     const request = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
       ? fetchWeatherForecast(latitude, longitude, focusDate, timezone, focus.scheduled?.arrivalTime)
       : Promise.resolve(createMockWeatherSummary(focusDate));
-    void request.then((result) => { if (active) setWeather(result); });
+    void request.then((result) => { if (active) setWeather(result ? sanitizeWeatherSummary(result) : result); });
     return () => { active = false; };
   }, [focus.scheduled?.arrivalTime, focusDate, focusItem?.id, focusItem?.latitude, focusItem?.longitude, timezone]);
 
@@ -82,6 +82,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const modeLabel = focus.mode === 'active' ? '目前進行中' : focus.mode === 'next' ? '下一站' : focus.mode === 'countdown' ? `距離旅程還有 ${focus.daysUntil ?? 0} 天` : focus.mode === 'complete' ? '今日行程已完成' : focus.mode === 'past' ? '此行程日期已結束' : '今日尚無排程';
   const canComplete = Boolean(focusItem && focus.scheduled && (focus.mode === 'active' || focus.mode === 'next'));
   const isCompleted = Boolean(focusItem && completedIds?.has(focusItem.id));
+  const forecast = sanitizeWeatherForecast(weather?.forecast);
 
   return <>
     {compactMode && !compactExpanded ? <Pressable accessibilityRole="button" accessibilityLabel="展開 Today Mode" onPress={() => setCompactExpanded(true)} style={[styles.compactBanner, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -108,8 +109,8 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
         {weather ? <View style={styles.weatherRow}><Text style={[styles.weather, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={[styles.rain, { color: weather.precipitationWarning ? theme.colors.warningText : theme.colors.primary }]}>☔ {Math.round(weather.precipitationProbability)}%{isWeatherAlert(weather) ? ' 預警' : ''}</Text> : null}</View> : <Text style={[styles.muted, { color: theme.colors.muted }]}>正在載入天氣…</Text>}
         <View style={styles.metaRow}><Text style={[styles.meta, { color: theme.colors.muted }]}>🧭 {distanceKm === null ? '距離上一站資料不足' : `距離上一站約 ${formatDistance(distanceKm)}`}</Text>{focusItem.address ? <Text numberOfLines={1} style={[styles.meta, styles.address, { color: theme.colors.muted }]}>{focusItem.address}</Text> : null}</View>
         {weather?.currentTemperatureC != null ? <Text style={[styles.muted, { color: theme.colors.text }]}>目前氣溫 {Math.round(weather.currentTemperatureC)}°C</Text> : null}
-        {weather?.forecast?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.forecastRow}>
-          {weather.forecast.slice(0, 7).map((day) => <View key={day.date} style={styles.forecastCell}><Text style={styles.forecastDate}>{day.date.slice(5)}</Text><Text style={styles.forecastIcon}>{day.icon}</Text><Text style={styles.forecastRain}>{day.precipitationProbability == null ? '—' : `☔${Math.round(day.precipitationProbability)}%`}</Text></View>)}
+        {forecast.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.forecastRow}>
+          {forecast.slice(0, 7).map((day) => <View key={day.date} style={styles.forecastCell}><Text style={styles.forecastDate}>{day.date.slice(5)}</Text><Text style={styles.forecastIcon}>{day.icon}</Text><Text style={styles.forecastRain}>{day.precipitationProbability == null ? '—' : `☔${Math.round(day.precipitationProbability)}%`}</Text></View>)}
         </ScrollView> : null}
         <View style={styles.actions}>
           {backupItem && onSwitchToBackupPlan ? <Pressable accessibilityRole="button" style={[styles.backupButton, { borderColor: shouldOfferBackup ? theme.colors.warningText : theme.colors.border, backgroundColor: shouldOfferBackup ? theme.colors.warningSurface : theme.colors.card }]} disabled={switchingBackup} onPress={() => void switchToBackup()}><Text style={[styles.backupText, { color: shouldOfferBackup ? theme.colors.warningText : theme.colors.primary }]}>{switchingBackup ? '切換中…' : shouldOfferBackup ? '☔ 切換雨天備案' : '查看雨天備案'}</Text></Pressable> : null}

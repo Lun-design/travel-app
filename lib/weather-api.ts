@@ -10,6 +10,7 @@ export type WeatherDaySummary = WeatherPresentation & {
   extremeWarning: boolean;
   source: 'live' | 'cached' | 'mock';
   isSimulated: boolean;
+  measuredPrecipitationMm?: number | null;
 };
 
 export type WeatherSummary = WeatherDaySummary & {
@@ -74,9 +75,15 @@ const DRIZZLE_PRECIPITATION_THRESHOLD_MM = 0.1;
 
 /** Reject persisted/legacy entries that contradict their clear-weather code. */
 export function isWeatherSummaryCacheValid(weather: WeatherSummary): boolean {
+  const sanitized = sanitizeWeatherSummary(weather);
   const days = [weather, ...(weather.forecast ?? [])];
-  return days.every((day) => !NON_PRECIPITATION_CODES.has(day.weatherCode ?? -1)
-    || ((day.precipitationProbability ?? 0) <= NON_PRECIPITATION_RAIN_CAP && !day.precipitationWarning));
+  const sanitizedDays = [sanitized, ...(sanitized.forecast ?? [])];
+  return days.every((day, index) => {
+    const clean = sanitizedDays[index];
+    return day.weatherCode === clean?.weatherCode
+      && day.precipitationProbability === clean?.precipitationProbability
+      && day.precipitationWarning === clean?.precipitationWarning;
+  });
 }
 
 function numberAt(value: unknown, index: number): number | null {
@@ -145,6 +152,32 @@ function normalizeWeatherCode(weatherCode: number | null, measuredPrecipitationM
     return 2;
   }
   return weatherCode;
+}
+
+function sanitizeWeatherDay(day: WeatherDaySummary): WeatherDaySummary {
+  // Legacy cached cards do not carry measured precipitation. Treat that as
+  // no measured rain so stale drizzle/high-POP values are safely corrected.
+  const weatherCode = normalizeWeatherCode(day.weatherCode, day.measuredPrecipitationMm ?? 0);
+  const precipitationProbability = alignProbabilityWithWeatherPattern(weatherCode, day.precipitationProbability);
+  const presentation = weatherCodeToPresentation(weatherCode);
+  return {
+    ...day,
+    ...presentation,
+    weatherCode,
+    precipitationProbability,
+    precipitationWarning: precipitationProbability !== null && precipitationProbability > 60,
+    extremeWarning: presentation.extreme,
+    condition: weatherCode === day.weatherCode ? day.condition : presentation.condition,
+  };
+}
+
+export function sanitizeWeatherForecast(forecast: WeatherDaySummary[] | null | undefined): WeatherDaySummary[] {
+  return (forecast ?? []).map(sanitizeWeatherDay);
+}
+
+export function sanitizeWeatherSummary(weather: WeatherSummary): WeatherSummary {
+  const sanitized = sanitizeWeatherDay(weather);
+  return { ...weather, ...sanitized, forecast: sanitizeWeatherForecast(weather.forecast) };
 }
 
 function measuredDailyPrecipitation(payload: OpenMeteoPayload, date: string, dailyIndex: number): number | null {
@@ -221,6 +254,7 @@ export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, 
     extremeWarning: presentation.extreme,
     source,
     isSimulated: false,
+    measuredPrecipitationMm: measuredPrecipitation,
     forecast: parseOpenMeteoForecast(payload, source),
     currentTemperatureC,
   };
@@ -232,7 +266,8 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
   if (!daily || dates.length === 0) return [];
   return dates.map((date, index) => {
     const rawWeatherCode = numberAt(daily.weather_code, index);
-    const weatherCode = normalizeWeatherCode(rawWeatherCode, measuredDailyPrecipitation(payload, date, index));
+    const measuredPrecipitation = measuredDailyPrecipitation(payload, date, index);
+    const weatherCode = normalizeWeatherCode(rawWeatherCode, measuredPrecipitation);
     const presentation = weatherCodeToPresentation(weatherCode);
     const precipitationProbability = alignProbabilityWithWeatherPattern(
       weatherCode,
@@ -249,6 +284,7 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
       extremeWarning: presentation.extreme,
       source,
       isSimulated: false,
+      measuredPrecipitationMm: measuredPrecipitation,
     };
   });
 }

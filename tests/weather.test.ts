@@ -7,6 +7,7 @@ import {
   parseOpenMeteoResponse,
   WEATHER_CACHE_VERSION,
   isWeatherSummaryCacheValid,
+  sanitizeWeatherForecast,
   weatherCodeToPresentation,
 } from '../lib/weather-api';
 import { blockedNetworkFetch } from './setup';
@@ -249,6 +250,25 @@ describe('weather helpers', () => {
       source: 'cached',
       isSimulated: false,
     })).toBe(false);
+  });
+
+  it('sanitizes legacy forecast data before the UI renders daily cards', () => {
+    const [day] = sanitizeWeatherForecast([{
+      date: '2026-01-22',
+      icon: '☂️',
+      condition: '毛毛雨',
+      extreme: false,
+      temperatureMinC: 24,
+      temperatureMaxC: 31,
+      precipitationProbability: 94,
+      weatherCode: 1,
+      precipitationWarning: true,
+      extremeWarning: false,
+      source: 'cached',
+      isSimulated: false,
+    }]);
+
+    expect(day).toMatchObject({ weatherCode: 1, precipitationProbability: 20, precipitationWarning: false });
   });
 
   it('suppresses implausibly high rain probability for a clear daytime WMO pattern', () => {
