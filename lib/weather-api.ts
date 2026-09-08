@@ -18,7 +18,7 @@ export type WeatherSummary = WeatherDaySummary & {
 };
 
 /** Bump when response mapping changes so an old in-memory weather entry is never reused. */
-export const WEATHER_CACHE_VERSION = 'weather_cache_v2';
+export const WEATHER_CACHE_VERSION = 'weather_cache_v4';
 
 /** Stable fallback used when Open-Meteo cannot serve historical/out-of-range dates. */
 export function createMockWeatherSummary(date: string): WeatherSummary {
@@ -64,6 +64,8 @@ type OpenMeteoPayload = {
 };
 
 const EXTREME_CODES = new Set([65, 67, 75, 77, 82, 85, 86, 95, 96, 99]);
+const NON_PRECIPITATION_CODES = new Set([0, 1, 2, 3, 45, 48]);
+const NON_PRECIPITATION_RAIN_CAP = 20;
 
 function numberAt(value: unknown, index: number): number | null {
   if (!Array.isArray(value)) return null;
@@ -116,6 +118,13 @@ function daytimePrecipitationProbability(payload: OpenMeteoPayload, date: string
   }, []);
   if (daytimeValues.length) return Math.max(...daytimeValues);
   return numberAt(payload.daily?.precipitation_probability_max, dailyIndex);
+}
+
+function alignProbabilityWithWeatherPattern(weatherCode: number | null, probability: number | null): number | null {
+  if (probability === null || weatherCode === null) return probability;
+  return NON_PRECIPITATION_CODES.has(weatherCode)
+    ? Math.min(probability, NON_PRECIPITATION_RAIN_CAP)
+    : probability;
 }
 
 function addDays(date: string, days: number): string {
@@ -180,7 +189,10 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
   return dates.map((date, index) => {
     const weatherCode = numberAt(daily.weather_code, index);
     const presentation = weatherCodeToPresentation(weatherCode);
-    const precipitationProbability = daytimePrecipitationProbability(payload, date, index);
+    const precipitationProbability = alignProbabilityWithWeatherPattern(
+      weatherCode,
+      daytimePrecipitationProbability(payload, date, index),
+    );
     return {
       date,
       temperatureMinC: numberAt(daily.temperature_2m_min, index),

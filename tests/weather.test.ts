@@ -229,7 +229,26 @@ describe('weather helpers', () => {
   });
 
   it('uses a versioned cache namespace after weather parsing changes', () => {
-    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v2');
+    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v4');
+  });
+
+  it('suppresses implausibly high rain probability for a clear daytime WMO pattern', () => {
+    const forecast = parseOpenMeteoForecast({
+      hourly: {
+        time: ['2026-01-22T10:00'],
+        precipitation_probability: [94],
+        weather_code: [1],
+      },
+      daily: {
+        time: ['2026-01-22'],
+        temperature_2m_min: [24],
+        temperature_2m_max: [31],
+        precipitation_probability_max: [94],
+        weather_code: [1],
+      },
+    });
+
+    expect(forecast[0]).toMatchObject({ weatherCode: 1, condition: expect.any(String), precipitationProbability: 20, precipitationWarning: false });
   });
 
   it('requests hourly precipitation with the explicit Asia/Taipei timezone', async () => {
