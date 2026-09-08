@@ -6,6 +6,7 @@ import {
   parseOpenMeteoForecast,
   parseOpenMeteoResponse,
   WEATHER_CACHE_VERSION,
+  isWeatherSummaryCacheValid,
   weatherCodeToPresentation,
 } from '../lib/weather-api';
 import { blockedNetworkFetch } from './setup';
@@ -229,7 +230,25 @@ describe('weather helpers', () => {
   });
 
   it('uses a versioned cache namespace after weather parsing changes', () => {
-    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v5');
+    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v6');
+  });
+
+  it('rejects stale clear-weather cache entries with an implausible rain rate', () => {
+    expect(isWeatherSummaryCacheValid({
+      date: '2026-01-22',
+      icon: '☀️',
+      condition: '晴朗',
+      extreme: false,
+      temperatureMinC: 24,
+      temperatureMaxC: 31,
+      currentTemperatureC: 29,
+      precipitationProbability: 94,
+      weatherCode: 1,
+      precipitationWarning: true,
+      extremeWarning: false,
+      source: 'cached',
+      isSimulated: false,
+    })).toBe(false);
   });
 
   it('suppresses implausibly high rain probability for a clear daytime WMO pattern', () => {

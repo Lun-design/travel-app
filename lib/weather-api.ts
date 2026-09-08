@@ -18,7 +18,7 @@ export type WeatherSummary = WeatherDaySummary & {
 };
 
 /** Bump when response mapping changes so an old in-memory weather entry is never reused. */
-export const WEATHER_CACHE_VERSION = 'weather_cache_v5';
+export const WEATHER_CACHE_VERSION = 'weather_cache_v6';
 
 /** Stable fallback used when Open-Meteo cannot serve historical/out-of-range dates. */
 export function createMockWeatherSummary(date: string): WeatherSummary {
@@ -71,6 +71,13 @@ const NON_PRECIPITATION_CODES = new Set([0, 1, 2, 3, 45, 48]);
 const NON_PRECIPITATION_RAIN_CAP = 20;
 const LIGHT_DRIZZLE_CODES = new Set([51, 53, 56, 57]);
 const DRIZZLE_PRECIPITATION_THRESHOLD_MM = 0.1;
+
+/** Reject persisted/legacy entries that contradict their clear-weather code. */
+export function isWeatherSummaryCacheValid(weather: WeatherSummary): boolean {
+  const days = [weather, ...(weather.forecast ?? [])];
+  return days.every((day) => !NON_PRECIPITATION_CODES.has(day.weatherCode ?? -1)
+    || ((day.precipitationProbability ?? 0) <= NON_PRECIPITATION_RAIN_CAP && !day.precipitationWarning));
+}
 
 function numberAt(value: unknown, index: number): number | null {
   if (!Array.isArray(value)) return null;
@@ -258,43 +265,53 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
   const ttlMs = options.ttlMs ?? 30 * 60 * 1000;
   const now = options.now ?? Date.now;
 
+  function loadForecast(latitude: number, longitude: number, date: string, timezone: string | null = 'auto', targetTime: string | null = null, bypassCache = false): Promise<WeatherSummary | null> {
+    if (!date) return Promise.resolve(null);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(createMockWeatherSummary(date));
+    const key = `${WEATHER_CACHE_VERSION}:${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
+    const cached = cache.get(key);
+    if (!bypassCache && cached && cached.expiresAt > now()) {
+      return cached.value.then((value) => {
+        if (value && !isWeatherSummaryCacheValid(value)) {
+          cache.delete(key);
+          return loadForecast(latitude, longitude, date, timezone, targetTime, true);
+        }
+        return value;
+      });
+    }
+    if (cached) cache.delete(key);
+
+    const endDate = addDays(date, 6);
+
+    const params = [
+      `latitude=${encodeURIComponent(latitude.toFixed(5))}`,
+      `longitude=${encodeURIComponent(longitude.toFixed(5))}`,
+      'current=temperature_2m,weather_code,precipitation',
+      'hourly=temperature_2m,precipitation_probability,precipitation,weather_code',
+      'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max,precipitation_sum',
+      `timezone=${encodeURIComponent(timezone || 'auto')}`,
+      `start_date=${encodeURIComponent(date)}`,
+      `end_date=${encodeURIComponent(endDate)}`,
+    ].join('&');
+    const requestUrl = `https://api.open-meteo.com/v1/forecast?${params}`;
+    console.debug('[Weather] Open-Meteo request', requestUrl);
+    const request = fetcher(requestUrl)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status})`);
+        const payload = await response.json() as OpenMeteoPayload;
+        console.debug('[Weather] Open-Meteo response', payload);
+        return parseOpenMeteoResponse(payload, date, 'live', targetTime) ?? createMockWeatherSummary(date);
+      })
+      .catch((error) => {
+        console.warn('[Weather] forecast lookup skipped', error);
+        return createMockWeatherSummary(date);
+      });
+    cache.set(key, { expiresAt: now() + ttlMs, value: request });
+    return request;
+  }
+
   return {
-    getForecast(latitude, longitude, date, timezone = 'auto', targetTime = null) {
-      if (!date) return Promise.resolve(null);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(createMockWeatherSummary(date));
-      const key = `${WEATHER_CACHE_VERSION}:${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
-      const cached = cache.get(key);
-      if (cached && cached.expiresAt > now()) return cached.value;
-      if (cached) cache.delete(key);
-
-      const endDate = addDays(date, 6);
-
-      const params = [
-        `latitude=${encodeURIComponent(latitude.toFixed(5))}`,
-        `longitude=${encodeURIComponent(longitude.toFixed(5))}`,
-        'current=temperature_2m,weather_code,precipitation',
-        'hourly=temperature_2m,precipitation_probability,precipitation,weather_code',
-        'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max,precipitation_sum',
-        `timezone=${encodeURIComponent(timezone || 'auto')}`,
-        `start_date=${encodeURIComponent(date)}`,
-        `end_date=${encodeURIComponent(endDate)}`,
-      ].join('&');
-      const requestUrl = `https://api.open-meteo.com/v1/forecast?${params}`;
-      console.debug('[Weather] Open-Meteo request', requestUrl);
-      const request = fetcher(requestUrl)
-        .then(async (response) => {
-          if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status})`);
-          const payload = await response.json() as OpenMeteoPayload;
-          console.debug('[Weather] Open-Meteo response', payload);
-          return parseOpenMeteoResponse(payload, date, 'live', targetTime) ?? createMockWeatherSummary(date);
-        })
-        .catch((error) => {
-          console.warn('[Weather] forecast lookup skipped', error);
-          return createMockWeatherSummary(date);
-        });
-      cache.set(key, { expiresAt: now() + ttlMs, value: request });
-      return request;
-    },
+    getForecast: (latitude, longitude, date, timezone = 'auto', targetTime = null) => loadForecast(latitude, longitude, date, timezone, targetTime),
   };
 }
 
