@@ -74,6 +74,7 @@ describe('PWA deployment configuration', () => {
     const serviceWorker = readFileSync(projectFile('public', 'sw.js'), 'utf8');
 
     expect(serviceWorker).toContain('__BUILD_VERSION__');
+    expect(serviceWorker).toContain("const CACHE_PREFIX = 'travel-planner-v7-';");
     expect(serviceWorker).toContain('self.skipWaiting()');
     expect(serviceWorker).toContain('self.clients.claim()');
     expect(serviceWorker).toContain("cache: 'no-store'");
@@ -113,6 +114,8 @@ describe('PWA deployment configuration', () => {
     expect(packageJson.scripts?.build).toContain('npm run type-check');
     expect(packageJson.scripts?.build).toContain('npm run test:ci');
     expect(packageJson.scripts?.['build:web']).toContain('generate-service-worker.mjs');
+    expect(packageJson.scripts?.['build:web']).toContain('clean-build-output.mjs');
+    expect(existsSync(projectFile('scripts', 'clean-build-output.mjs'))).toBe(true);
     expect(packageJson.scripts?.['verify:build']).toBe('node scripts/verify-build-output.mjs');
     expect(packageJson.scripts?.build).toContain('npm run verify:build');
   });

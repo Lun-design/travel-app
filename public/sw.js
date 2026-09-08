@@ -4,7 +4,7 @@
  * new service-worker byte sequence and Safari checks for an update.
  */
 const BUILD_VERSION = '__BUILD_VERSION__';
-const CACHE_PREFIX = 'travel-planner-';
+const CACHE_PREFIX = 'travel-planner-v7-';
 const STATIC_CACHE = `${CACHE_PREFIX}static-${BUILD_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${BUILD_VERSION}`;
 const PRECACHE_URLS = ['/', '/manifest.json', '/icon.png', '/favicon.png', '/apple-touch-icon.png'];
