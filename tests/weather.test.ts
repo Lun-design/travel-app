@@ -154,6 +154,57 @@ describe('weather helpers', () => {
     expect(weather?.currentTemperatureC).toBe(19.5);
   });
 
+  it('uses the requested Taipei local hour instead of the daily maximum rain probability', () => {
+    const weather = parseOpenMeteoResponse({
+      current: { temperature_2m: 22, weather_code: 1, time: '2026-01-22T10:00' },
+      hourly: {
+        time: ['2026-01-22T09:00', '2026-01-22T10:00', '2026-01-22T14:00'],
+        temperature_2m: [20, 21, 24],
+        precipitation_probability: [94, 10, 20],
+        weather_code: [63, 1, 1],
+      },
+      daily: {
+        time: ['2026-01-22'],
+        temperature_2m_min: [14],
+        temperature_2m_max: [25],
+        precipitation_probability_max: [94],
+        weather_code: [63],
+      },
+    }, '2026-01-22', 'live', '10:00');
+
+    expect(weather).toMatchObject({
+      precipitationProbability: 10,
+      weatherCode: 1,
+      currentTemperatureC: 21,
+      precipitationWarning: false,
+    });
+  });
+
+  it('requests hourly precipitation with the explicit Asia/Taipei timezone', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      hourly: {
+        time: ['2026-01-22T10:00'],
+        temperature_2m: [21],
+        precipitation_probability: [10],
+        weather_code: [1],
+      },
+      daily: {
+        time: ['2026-01-22'],
+        temperature_2m_min: [14],
+        temperature_2m_max: [25],
+        precipitation_probability_max: [94],
+        weather_code: [63],
+      },
+    }), { status: 200 }));
+    const service = createWeatherService(fetchMock);
+
+    await service.getForecast(25.014, 121.463, '2026-01-22', 'Asia/Taipei', '10:00');
+
+    const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string);
+    expect(requestUrl.searchParams.get('timezone')).toBe('Asia/Taipei');
+    expect(requestUrl.searchParams.get('hourly')).toContain('precipitation_probability');
+  });
+
   it('revalidates a weather entry after the 30-minute TTL expires', async () => {
     let now = 0;
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({

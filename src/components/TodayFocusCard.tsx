@@ -61,11 +61,11 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
     const latitude = focusItem.latitude == null ? null : Number(focusItem.latitude);
     const longitude = focusItem.longitude == null ? null : Number(focusItem.longitude);
     const request = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
-      ? fetchWeatherForecast(latitude, longitude, focusDate, timezone)
+      ? fetchWeatherForecast(latitude, longitude, focusDate, timezone, focus.scheduled?.arrivalTime)
       : Promise.resolve(createMockWeatherSummary(focusDate));
     void request.then((result) => { if (active) setWeather(result); });
     return () => { active = false; };
-  }, [focusDate, focusItem?.id, focusItem?.latitude, focusItem?.longitude, timezone]);
+  }, [focus.scheduled?.arrivalTime, focusDate, focusItem?.id, focusItem?.latitude, focusItem?.longitude, timezone]);
 
   function openNavigation() {
     if (!navigationUrl) return;

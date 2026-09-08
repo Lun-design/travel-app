@@ -43,6 +43,13 @@ type OpenMeteoPayload = {
   current?: {
     temperature_2m?: unknown;
     weather_code?: unknown;
+    time?: unknown;
+  };
+  hourly?: {
+    time?: unknown;
+    temperature_2m?: unknown;
+    precipitation_probability?: unknown;
+    weather_code?: unknown;
   };
   daily?: {
     time?: unknown;
@@ -64,6 +71,29 @@ function numberAt(value: unknown, index: number): number | null {
 function numberValue(value: unknown): number | null {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function normalizeTargetTime(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const match = String(value).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
+function findHourlyIndex(payload: OpenMeteoPayload, date: string, targetTime?: string | null): number {
+  const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
+  if (!times.length) return -1;
+  const normalizedTime = normalizeTargetTime(targetTime);
+  if (normalizedTime) {
+    const exactIndex = times.findIndex((time) => time.startsWith(`${date}T${normalizedTime}`));
+    if (exactIndex >= 0) return exactIndex;
+  }
+  const currentTime = typeof payload.current?.time === 'string' ? payload.current.time : null;
+  if (currentTime && currentTime.startsWith(`${date}T`)) {
+    const currentIndex = times.findIndex((time) => time === currentTime || time.startsWith(currentTime));
+    if (currentIndex >= 0) return currentIndex;
+  }
+  return times.findIndex((time) => time.startsWith(`${date}T`));
 }
 
 function addDays(date: string, days: number): string {
@@ -91,15 +121,17 @@ export function isWeatherAlert(weather: WeatherSummary): boolean {
   return weather.precipitationWarning || weather.extremeWarning;
 }
 
-export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, source: 'live' | 'cached' = 'live'): WeatherSummary | null {
+export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, source: 'live' | 'cached' = 'live', targetTime?: string | null): WeatherSummary | null {
   const daily = payload.daily;
   const dates = Array.isArray(daily?.time) ? daily.time.map(String) : [];
   const index = dates.indexOf(date);
   if (index < 0) return null;
 
-  const weatherCode = numberAt(daily?.weather_code, index);
+  const hourlyIndex = findHourlyIndex(payload, date, targetTime);
+  const weatherCode = numberAt(payload.hourly?.weather_code, hourlyIndex) ?? numberAt(daily?.weather_code, index);
   const presentation = weatherCodeToPresentation(weatherCode);
-  const precipitationProbability = numberAt(daily?.precipitation_probability_max, index);
+  const precipitationProbability = numberAt(payload.hourly?.precipitation_probability, hourlyIndex) ?? numberAt(daily?.precipitation_probability_max, index);
+  const currentTemperatureC = numberAt(payload.hourly?.temperature_2m, hourlyIndex) ?? numberValue(payload.current?.temperature_2m);
   return {
     date,
     temperatureMinC: numberAt(daily?.temperature_2m_min, index),
@@ -113,7 +145,7 @@ export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, 
     source,
     isSimulated: false,
     forecast: parseOpenMeteoForecast(payload, source),
-    currentTemperatureC: numberValue(payload.current?.temperature_2m),
+    currentTemperatureC,
   };
 }
 
@@ -143,7 +175,7 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
 export type WeatherFetcher = typeof fetch;
 export type WeatherServiceOptions = { ttlMs?: number; now?: () => number };
 export type WeatherService = {
-  getForecast: (latitude: number, longitude: number, date: string, timezone?: string | null) => Promise<WeatherSummary | null>;
+  getForecast: (latitude: number, longitude: number, date: string, timezone?: string | null, targetTime?: string | null) => Promise<WeatherSummary | null>;
 };
 
 /** Create a cached Open-Meteo client; cache entries are shared per service instance. */
@@ -153,10 +185,10 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
   const now = options.now ?? Date.now;
 
   return {
-    getForecast(latitude, longitude, date, timezone = 'auto') {
+    getForecast(latitude, longitude, date, timezone = 'auto', targetTime = null) {
       if (!date) return Promise.resolve(null);
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(createMockWeatherSummary(date));
-      const key = `${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}`;
+      const key = `${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
       const cached = cache.get(key);
       if (cached && cached.expiresAt > now()) return cached.value;
       if (cached) cache.delete(key);
@@ -167,15 +199,20 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
         `latitude=${encodeURIComponent(latitude.toFixed(5))}`,
         `longitude=${encodeURIComponent(longitude.toFixed(5))}`,
         'current=temperature_2m,weather_code',
+        'hourly=temperature_2m,precipitation_probability,weather_code',
         'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max',
         `timezone=${encodeURIComponent(timezone || 'auto')}`,
         `start_date=${encodeURIComponent(date)}`,
         `end_date=${encodeURIComponent(endDate)}`,
       ].join('&');
-      const request = fetcher(`https://api.open-meteo.com/v1/forecast?${params}`)
+      const requestUrl = `https://api.open-meteo.com/v1/forecast?${params}`;
+      console.debug('[Weather] Open-Meteo request', requestUrl);
+      const request = fetcher(requestUrl)
         .then(async (response) => {
           if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status})`);
-          return parseOpenMeteoResponse(await response.json() as OpenMeteoPayload, date) ?? createMockWeatherSummary(date);
+          const payload = await response.json() as OpenMeteoPayload;
+          console.debug('[Weather] Open-Meteo response', payload);
+          return parseOpenMeteoResponse(payload, date, 'live', targetTime) ?? createMockWeatherSummary(date);
         })
         .catch((error) => {
           console.warn('[Weather] forecast lookup skipped', error);
@@ -189,6 +226,6 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
 
 export const weatherService = createWeatherService();
 
-export function fetchWeatherForecast(latitude: number, longitude: number, date: string, timezone?: string | null) {
-  return weatherService.getForecast(latitude, longitude, date, timezone);
+export function fetchWeatherForecast(latitude: number, longitude: number, date: string, timezone?: string | null, targetTime?: string | null) {
+  return weatherService.getForecast(latitude, longitude, date, timezone, targetTime);
 }

@@ -4,7 +4,7 @@ import { buildRouteSegments, type ItineraryItem, type RouteSegment } from '@/lib
 import { tripDateForDay } from '@/lib/trip-dates';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
 import type { Voucher } from '@/lib/vouchers';
-import type { ScheduleContext, ScheduledItem } from '@/lib/schedule';
+import { buildDaySchedule, type ScheduleContext, type ScheduledItem } from '@/lib/schedule';
 import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
 import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -34,17 +34,18 @@ const routeEstimator = createRouteEstimator();
 
 export function useWeatherByItem(items: ItineraryItem[], context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>) {
   const [weatherById, setWeatherById] = useState<Record<string, WeatherSummary>>({});
-  const itemKey = items.map((item) => `${item.id}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
+  const itemKey = items.map((item) => `${item.id}:${item.latitude ?? ''}:${item.longitude ?? ''}:${item.time ?? item.start_time ?? ''}`).join('|');
   useEffect(() => {
     let active = true;
     const date = context ? tripDateForDay(context.tripStartDate, context.dayNumber) : null;
     setWeatherById({});
     if (!date || !items.length) return () => { active = false; };
+    const scheduledById = new Map(buildDaySchedule(items, { ...context, tripStartDate: context!.tripStartDate, dayNumber: context!.dayNumber }).map((entry) => [entry.item.id, entry]));
     void Promise.all(items.map(async (item) => {
       const latitude = item.latitude == null ? null : Number(item.latitude);
       const longitude = item.longitude == null ? null : Number(item.longitude);
       const weather = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
-        ? await fetchWeatherForecast(latitude, longitude, date, context?.timezone)
+        ? await fetchWeatherForecast(latitude, longitude, date, context?.timezone, scheduledById.get(item.id)?.arrivalTime ?? item.time ?? item.start_time)
         : createMockWeatherSummary(date);
       return [item.id, weather] as const;
     })).then((entries) => { if (active) setWeatherById(Object.fromEntries(entries.flatMap(([id, weather]) => weather ? [[id, weather]] : [])) as Record<string, WeatherSummary>); });
