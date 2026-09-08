@@ -121,4 +121,52 @@ describe('weather helpers', () => {
     expect(blockedNetworkFetch).toHaveBeenCalledTimes(1);
     expect(warning).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
   });
+
+  it('returns a seven-day forecast and requests a seven-day date window', async () => {
+    const dates = Array.from({ length: 7 }, (_, index) => `2026-01-${String(22 + index).padStart(2, '0')}`);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      daily: {
+        time: dates,
+        temperature_2m_min: [14, 15, 13, 16, 17, 18, 19],
+        temperature_2m_max: [21, 22, 20, 23, 24, 25, 26],
+        precipitation_probability_max: [20, 55, 10, 80, 30, 0, 15],
+        weather_code: [1, 63, 0, 65, 2, 3, 1],
+      },
+    }), { status: 200 }));
+    const service = createWeatherService(fetchMock);
+
+    const weather = await service.getForecast(25.03, 121.56, '2026-01-22', 'Asia/Taipei');
+
+    expect(weather?.forecast).toHaveLength(7);
+    expect(weather?.forecast?.[1]).toMatchObject({ date: '2026-01-23', precipitationProbability: 55, weatherCode: 63 });
+    const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string);
+    expect(requestUrl.searchParams.get('start_date')).toBe('2026-01-22');
+    expect(requestUrl.searchParams.get('end_date')).toBe('2026-01-28');
+    expect(requestUrl.searchParams.get('current')).toBe('temperature_2m,weather_code');
+  });
+
+  it('parses the current temperature from Open-Meteo current data', () => {
+    const weather = parseOpenMeteoResponse({
+      current: { temperature_2m: 19.5, weather_code: 1 },
+      daily: { time: ['2026-01-22'], temperature_2m_min: [14], temperature_2m_max: [21], precipitation_probability_max: [20], weather_code: [1] },
+    }, '2026-01-22');
+
+    expect(weather?.currentTemperatureC).toBe(19.5);
+  });
+
+  it('revalidates a weather entry after the 30-minute TTL expires', async () => {
+    let now = 0;
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      daily: { time: ['2026-01-22'], temperature_2m_min: [14], temperature_2m_max: [21], precipitation_probability_max: [20], weather_code: [1] },
+    }), { status: 200 })));
+    const service = createWeatherService(fetchMock, { ttlMs: 30 * 60 * 1000, now: () => now });
+
+    await service.getForecast(25.03, 121.56, '2026-01-22');
+    await service.getForecast(25.03, 121.56, '2026-01-22');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    now += 30 * 60 * 1000 + 1;
+    await service.getForecast(25.03, 121.56, '2026-01-22');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

@@ -8,6 +8,8 @@ export type ItineraryItem = {
   location_name: string; address: string | null; latitude: number | null; longitude: number | null;
   notes: string | null; category: string; created_by: string; duration_minutes?: number | null; difficulty?: string | null;
   opening_hours?: OpeningHours | null;
+  is_backup?: boolean;
+  backup_for_id?: string | null;
   updated_at?: string | null; updated_by?: string | null;
   /** Legacy/API alias used by some clients; `time` remains canonical. */
   start_time?: string | null;

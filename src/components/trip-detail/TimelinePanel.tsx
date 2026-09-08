@@ -37,13 +37,14 @@ type Props = {
   onToggleMap: () => void;
   onMapMarkerPress: (itemId: string) => void;
   onFocusedVoucher: (voucher: Voucher) => void;
+  onSwitchToBackupPlan?: (primaryItemId: string, backupItemId: string) => void | Promise<void>;
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => Promise<void>;
   onReorder: (order: { id: string; position: number }[]) => Promise<void>;
   onAdd: () => void;
 };
 
-export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onEdit, onDelete, onReorder, onAdd }: Props) {
+export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onReorder, onAdd }: Props) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const scheduleContext = useMemo<ScheduleContext>(() => ({ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time, timezone: trip.timezone }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const scheduled = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
@@ -58,7 +59,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   return <>
     <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable></View>
     <DayTabs days={days} selected={day} onChange={onDayChange} themeMode={themeMode} />
-    <TodayFocusCard schedule={scheduled} items={visibleItems} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} compact={layout.compact} />
+    <TodayFocusCard schedule={scheduled} items={items} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} onSwitchToBackupPlan={onSwitchToBackupPlan} compact={layout.compact} />
     <Pressable style={styles.mapToggle} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
     <TimelineViewport width={width} height={height}>

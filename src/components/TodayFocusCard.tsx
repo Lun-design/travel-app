@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import type { ItineraryItem } from '@/lib/itinerary';
 import type { ScheduledItem } from '@/lib/schedule';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
@@ -9,6 +9,7 @@ import { distanceToFocusSpot, findActiveOrNextSpot, shouldUseCompactTodayBanner 
 import type { Voucher } from '@/lib/vouchers';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { OfflineRescueCardModal } from './OfflineRescueCardModal';
+import { findBackupPlan, shouldOfferAlternatePlan } from '@/lib/alternate-plans';
 
 const categoryLabels: Record<string, string> = { spot: '景點', food: '美食', hotel: '住宿', flight: '航班', trail: '步道', outdoor: '戶外' };
 const categoryIcons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
@@ -23,10 +24,11 @@ type Props = {
   completedIds?: ReadonlySet<string>;
   onComplete?: (itemId: string) => void;
   onPreviewVoucher?: (voucher: Voucher) => void;
+  onSwitchToBackupPlan?: (primaryItemId: string, backupItemId: string) => void | Promise<void>;
   compact?: boolean;
 };
 
-export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher, compact = false }: Props) {
+export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher, onSwitchToBackupPlan, compact = false }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [now, setNow] = useState(() => new Date());
   const [weather, setWeather] = useState<WeatherSummary | null>(null);
@@ -39,6 +41,9 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const distanceKm = distanceToFocusSpot(focus.scheduled, schedule);
   const navigationUrl = getGoogleMapsDirectionsUrl(focusItem?.latitude, focusItem?.longitude);
   const itemVouchers = focusItem ? vouchers.filter((voucher) => voucher.item_id === focusItem.id) : [];
+  const backupItem = focusItem ? findBackupPlan(items, focusItem.id) : null;
+  const shouldOfferBackup = shouldOfferAlternatePlan(weather);
+  const [switchingBackup, setSwitchingBackup] = useState(false);
 
   useEffect(() => {
     setCompactExpanded(false);
@@ -65,6 +70,13 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   function openNavigation() {
     if (!navigationUrl) return;
     void Linking.openURL(navigationUrl).catch(() => undefined);
+  }
+
+  async function switchToBackup() {
+    if (!focusItem || !backupItem || !onSwitchToBackupPlan || switchingBackup) return;
+    setSwitchingBackup(true);
+    try { await onSwitchToBackupPlan(focusItem.id, backupItem.id); }
+    finally { setSwitchingBackup(false); }
   }
 
   const modeLabel = focus.mode === 'active' ? '目前進行中' : focus.mode === 'next' ? '下一站' : focus.mode === 'countdown' ? `距離旅程還有 ${focus.daysUntil ?? 0} 天` : focus.mode === 'complete' ? '今日行程已完成' : focus.mode === 'past' ? '此行程日期已結束' : '今日尚無排程';
@@ -95,7 +107,12 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
         </View>
         {weather ? <View style={styles.weatherRow}><Text style={[styles.weather, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={[styles.rain, { color: weather.precipitationWarning ? theme.colors.warningText : theme.colors.primary }]}>☔ {Math.round(weather.precipitationProbability)}%{isWeatherAlert(weather) ? ' 預警' : ''}</Text> : null}</View> : <Text style={[styles.muted, { color: theme.colors.muted }]}>正在載入天氣…</Text>}
         <View style={styles.metaRow}><Text style={[styles.meta, { color: theme.colors.muted }]}>🧭 {distanceKm === null ? '距離上一站資料不足' : `距離上一站約 ${formatDistance(distanceKm)}`}</Text>{focusItem.address ? <Text numberOfLines={1} style={[styles.meta, styles.address, { color: theme.colors.muted }]}>{focusItem.address}</Text> : null}</View>
+        {weather?.currentTemperatureC != null ? <Text style={[styles.muted, { color: theme.colors.text }]}>目前氣溫 {Math.round(weather.currentTemperatureC)}°C</Text> : null}
+        {weather?.forecast?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.forecastRow}>
+          {weather.forecast.slice(0, 7).map((day) => <View key={day.date} style={styles.forecastCell}><Text style={styles.forecastDate}>{day.date.slice(5)}</Text><Text style={styles.forecastIcon}>{day.icon}</Text><Text style={styles.forecastRain}>{day.precipitationProbability == null ? '—' : `☔${Math.round(day.precipitationProbability)}%`}</Text></View>)}
+        </ScrollView> : null}
         <View style={styles.actions}>
+          {backupItem && onSwitchToBackupPlan ? <Pressable accessibilityRole="button" style={[styles.backupButton, { borderColor: shouldOfferBackup ? theme.colors.warningText : theme.colors.border, backgroundColor: shouldOfferBackup ? theme.colors.warningSurface : theme.colors.card }]} disabled={switchingBackup} onPress={() => void switchToBackup()}><Text style={[styles.backupText, { color: shouldOfferBackup ? theme.colors.warningText : theme.colors.primary }]}>{switchingBackup ? '切換中…' : shouldOfferBackup ? '☔ 切換雨天備案' : '查看雨天備案'}</Text></Pressable> : null}
           {navigationUrl ? <Pressable accessibilityRole="link" style={[styles.primaryButton, { backgroundColor: theme.colors.primary }]} onPress={openNavigation}><Text style={styles.primaryButtonText}>🧭 開啟地圖導航</Text></Pressable> : null}
           <Pressable accessibilityRole="button" style={[styles.secondaryButton, { borderColor: theme.colors.border }]} onPress={() => setRescueVisible(true)}><Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>🆘 離線備忘／救命卡</Text></Pressable>
           {canComplete ? <Pressable accessibilityRole="button" style={[styles.completeButton, { borderColor: theme.colors.border }]} onPress={() => focusItem && onComplete?.(focusItem.id)}><Text style={[styles.completeText, { color: theme.colors.primary }]}>{isCompleted ? '✓ 已完成' : '完成此站'}</Text></Pressable> : null}
@@ -135,6 +152,11 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 12, fontWeight: '700' },
   timeValue: { fontSize: 23, lineHeight: 29, fontWeight: '900', marginTop: 3 },
   weatherRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  forecastRow: { flexDirection: 'row', gap: 6, paddingVertical: 2 },
+  forecastCell: { minWidth: 58, alignItems: 'center', borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand, paddingHorizontal: 6, paddingVertical: 5 },
+  forecastDate: { color: EDITORIAL_COLORS.taupe, fontSize: 10, fontWeight: '800' },
+  forecastIcon: { fontSize: 17, marginVertical: 2 },
+  forecastRain: { color: EDITORIAL_COLORS.terracotta, fontSize: 10, fontWeight: '800' },
   weather: { fontSize: 15, fontWeight: '800', flexShrink: 1 },
   rain: { fontSize: 14, fontWeight: '900' },
   muted: { fontSize: 14, fontWeight: '700' },
@@ -147,6 +169,8 @@ const styles = StyleSheet.create({
   secondaryButton: { minHeight: 48, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 },
   secondaryButtonText: { fontSize: 14, fontWeight: '900' },
   completeButton: { minHeight: 48, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  backupButton: { minHeight: 48, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  backupText: { fontSize: 14, fontWeight: '900' },
   completeText: { fontSize: 14, fontWeight: '900' },
   emptyText: { fontSize: 17, lineHeight: 25, fontWeight: '700' },
 });

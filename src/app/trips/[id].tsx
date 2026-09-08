@@ -7,6 +7,7 @@ import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { loadThemeMode, saveThemeMode } from '@/lib/theme-preference';
 import { tripDayNumbers } from '@/lib/trip-dates';
 import { saveItineraryItemAndRefresh, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
+import { switchToBackupPlan } from '@/lib/alternate-plans';
 import type { Voucher } from '@/lib/vouchers';
 import { DayTabs } from '@/components/DayTabs';
 import { ExpenseModal } from '@/components/ExpenseModal';
@@ -64,7 +65,7 @@ export default function TripDetailScreen() {
   const pendingSavedItemRef = useRef<ItineraryItem | null>(null);
   const reminderItemsRef = useRef<ItineraryItem[]>(data.items);
   const days = useMemo(() => data.trip ? tripDayNumbers(data.trip.start_date, data.trip.end_date) : [1], [data.trip]);
-  const visibleItems = useMemo(() => sortItineraryItemsByStartTime(data.items.filter((item) => item.day_number === day)), [data.items, day]);
+  const visibleItems = useMemo(() => sortItineraryItemsByStartTime(data.items.filter((item) => item.day_number === day && !item.is_backup)), [data.items, day]);
 
   useEffect(() => { void loadThemeMode().then(setThemeMode); }, []);
   useEffect(() => { reminderItemsRef.current = data.items; }, [data.items]);
@@ -172,6 +173,24 @@ export default function TripDetailScreen() {
     setTab('timeline');
     setFocusedItemId(itemId);
   }
+  async function handleSwitchToBackupPlan(primaryId: string, backupId: string) {
+    const result = switchToBackupPlan(data.items, primaryId);
+    const primary = result.items.find((item) => item.id === primaryId);
+    const backup = result.items.find((item) => item.id === backupId);
+    if (!result.activeItem || !primary || !backup) return;
+    data.setItems(sortItineraryItemsByStartTime(result.items));
+    try {
+      await data.saveItem({ ...primary, trip_id: trip.id, created_by: primary.created_by || data.userId, is_backup: true });
+      await data.saveItem({ ...backup, trip_id: trip.id, created_by: backup.created_by || data.userId, day_number: primary.day_number, time: primary.time, position: primary.position, is_backup: false, backup_for_id: primary.id });
+      await data.reload();
+      setDay(backup.day_number);
+      setFocusedItemId(backup.id);
+      setRefreshKey((current) => current + 1);
+    } catch (error: any) {
+      await data.reload();
+      Alert.alert('備案切換失敗', error?.message ?? '請稍後再試。');
+    }
+  }
 
   if (data.loading) return <View style={[styles.loadingShell, { backgroundColor: theme.colors.background }]}><SkeletonCard variant="header" /><SkeletonCard /><SkeletonCard /></View>;
   if (!data.trip) return <View style={styles.center}><Text style={styles.error}>{data.error || '找不到此行程。'}</Text></View>;
@@ -187,7 +206,7 @@ export default function TripDetailScreen() {
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
     <TripDetailTabs value={tab} onChange={setTab} theme={theme} />
-    {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onEdit={(item) => { setEditingItem(item); setItemModal(true); }} onDelete={deleteItem} onReorder={data.reorderItems} onAdd={() => { setEditingItem(null); setItemModal(true); }} />}
+    {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setItemModal(true); }} onDelete={deleteItem} onReorder={data.reorderItems} onAdd={() => { setEditingItem(null); setItemModal(true); }} />}
     {tab === 'expenses' && <ExpensesPanel tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} refreshToken={data.packingRevision} /></ScrollView></View>}
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} /></View>}

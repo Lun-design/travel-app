@@ -1,6 +1,6 @@
 export type WeatherPresentation = { icon: string; condition: string; extreme: boolean };
 
-export type WeatherSummary = WeatherPresentation & {
+export type WeatherDaySummary = WeatherPresentation & {
   date: string;
   temperatureMinC: number | null;
   temperatureMaxC: number | null;
@@ -12,6 +12,11 @@ export type WeatherSummary = WeatherPresentation & {
   isSimulated: boolean;
 };
 
+export type WeatherSummary = WeatherDaySummary & {
+  forecast?: WeatherDaySummary[];
+  currentTemperatureC?: number | null;
+};
+
 /** Stable fallback used when Open-Meteo cannot serve historical/out-of-range dates. */
 export function createMockWeatherSummary(date: string): WeatherSummary {
   const summary: WeatherSummary = {
@@ -21,6 +26,7 @@ export function createMockWeatherSummary(date: string): WeatherSummary {
     extreme: false,
     temperatureMinC: 24,
     temperatureMaxC: 24,
+    currentTemperatureC: 24,
     precipitationProbability: 10,
     weatherCode: 0,
     precipitationWarning: false,
@@ -29,10 +35,15 @@ export function createMockWeatherSummary(date: string): WeatherSummary {
     isSimulated: true,
   };
   summary.condition = `${summary.condition} · 模擬預報`;
+  summary.forecast = Array.from({ length: 7 }, (_, index) => ({ ...summary, date: addDays(date, index) }));
   return summary;
 }
 
 type OpenMeteoPayload = {
+  current?: {
+    temperature_2m?: unknown;
+    weather_code?: unknown;
+  };
   daily?: {
     time?: unknown;
     temperature_2m_min?: unknown;
@@ -48,6 +59,18 @@ function numberAt(value: unknown, index: number): number | null {
   if (!Array.isArray(value)) return null;
   const number = Number(value[index]);
   return Number.isFinite(number) ? number : null;
+}
+
+function numberValue(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  if (!Number.isFinite(value.getTime())) return date;
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
 }
 
 export function weatherCodeToPresentation(code: number | null | undefined): WeatherPresentation {
@@ -89,17 +112,45 @@ export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, 
     extremeWarning: presentation.extreme,
     source,
     isSimulated: false,
+    forecast: parseOpenMeteoForecast(payload, source),
+    currentTemperatureC: numberValue(payload.current?.temperature_2m),
   };
 }
 
+export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live' | 'cached' = 'live'): WeatherDaySummary[] {
+  const daily = payload.daily;
+  const dates = Array.isArray(daily?.time) ? daily.time.map(String) : [];
+  if (!daily || dates.length === 0) return [];
+  return dates.map((date, index) => {
+    const weatherCode = numberAt(daily.weather_code, index);
+    const presentation = weatherCodeToPresentation(weatherCode);
+    const precipitationProbability = numberAt(daily.precipitation_probability_max, index);
+    return {
+      date,
+      temperatureMinC: numberAt(daily.temperature_2m_min, index),
+      temperatureMaxC: numberAt(daily.temperature_2m_max, index),
+      precipitationProbability,
+      weatherCode,
+      ...presentation,
+      precipitationWarning: precipitationProbability !== null && precipitationProbability > 60,
+      extremeWarning: presentation.extreme,
+      source,
+      isSimulated: false,
+    };
+  });
+}
+
 export type WeatherFetcher = typeof fetch;
+export type WeatherServiceOptions = { ttlMs?: number; now?: () => number };
 export type WeatherService = {
   getForecast: (latitude: number, longitude: number, date: string, timezone?: string | null) => Promise<WeatherSummary | null>;
 };
 
 /** Create a cached Open-Meteo client; cache entries are shared per service instance. */
-export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(globalThis)): WeatherService {
-  const cache = new Map<string, Promise<WeatherSummary | null>>();
+export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(globalThis), options: WeatherServiceOptions = {}): WeatherService {
+  const cache = new Map<string, { expiresAt: number; value: Promise<WeatherSummary | null> }>();
+  const ttlMs = options.ttlMs ?? 30 * 60 * 1000;
+  const now = options.now ?? Date.now;
 
   return {
     getForecast(latitude, longitude, date, timezone = 'auto') {
@@ -107,15 +158,19 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(createMockWeatherSummary(date));
       const key = `${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}`;
       const cached = cache.get(key);
-      if (cached) return cached;
+      if (cached && cached.expiresAt > now()) return cached.value;
+      if (cached) cache.delete(key);
+
+      const endDate = addDays(date, 6);
 
       const params = [
         `latitude=${encodeURIComponent(latitude.toFixed(5))}`,
         `longitude=${encodeURIComponent(longitude.toFixed(5))}`,
+        'current=temperature_2m,weather_code',
         'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max',
         `timezone=${encodeURIComponent(timezone || 'auto')}`,
         `start_date=${encodeURIComponent(date)}`,
-        `end_date=${encodeURIComponent(date)}`,
+        `end_date=${encodeURIComponent(endDate)}`,
       ].join('&');
       const request = fetcher(`https://api.open-meteo.com/v1/forecast?${params}`)
         .then(async (response) => {
@@ -126,7 +181,7 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
           console.warn('[Weather] forecast lookup skipped', error);
           return createMockWeatherSummary(date);
         });
-      cache.set(key, request);
+      cache.set(key, { expiresAt: now() + ttlMs, value: request });
       return request;
     },
   };
