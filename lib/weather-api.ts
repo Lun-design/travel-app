@@ -99,6 +99,25 @@ function findHourlyIndex(payload: OpenMeteoPayload, date: string, targetTime?: s
   return times.findIndex((time) => time.startsWith(`${date}T`));
 }
 
+/**
+ * Daily cards are meant for daytime travel planning. Open-Meteo's
+ * precipitation_probability_max can be dominated by a single overnight
+ * shower, so average only local 08:00-20:00 hourly values when available.
+ */
+function daytimePrecipitationProbability(payload: OpenMeteoPayload, date: string, dailyIndex: number): number | null {
+  const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
+  const probabilities = payload.hourly?.precipitation_probability;
+  const daytimeValues = times.reduce<number[]>((values, time, index) => {
+    if (!time.startsWith(`${date}T`)) return values;
+    const hour = Number(/^\d{4}-\d{2}-\d{2}T(\d{2}):/.exec(time)?.[1]);
+    const probability = numberAt(probabilities, index);
+    if (Number.isFinite(hour) && hour >= 8 && hour < 20 && probability !== null) values.push(probability);
+    return values;
+  }, []);
+  if (daytimeValues.length) return Math.round(daytimeValues.reduce((sum, value) => sum + value, 0) / daytimeValues.length);
+  return numberAt(payload.daily?.precipitation_probability_max, dailyIndex);
+}
+
 function addDays(date: string, days: number): string {
   const value = new Date(`${date}T00:00:00Z`);
   if (!Number.isFinite(value.getTime())) return date;
@@ -161,7 +180,7 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
   return dates.map((date, index) => {
     const weatherCode = numberAt(daily.weather_code, index);
     const presentation = weatherCodeToPresentation(weatherCode);
-    const precipitationProbability = numberAt(daily.precipitation_probability_max, index);
+    const precipitationProbability = daytimePrecipitationProbability(payload, date, index);
     return {
       date,
       temperatureMinC: numberAt(daily.temperature_2m_min, index),

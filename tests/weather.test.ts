@@ -3,6 +3,7 @@ import {
   createWeatherService,
   fetchWeatherForecast,
   isWeatherAlert,
+  parseOpenMeteoForecast,
   parseOpenMeteoResponse,
   WEATHER_CACHE_VERSION,
   weatherCodeToPresentation,
@@ -181,13 +182,13 @@ describe('weather helpers', () => {
     });
   });
 
-  it('keeps the seven-day cards on daily precipitation values, not hourly values', () => {
+  it('uses daytime hourly values for each daily forecast instead of overnight maxima', () => {
     const weather = parseOpenMeteoResponse({
       hourly: {
-        time: ['2026-01-22T10:00', '2026-01-23T10:00'],
-        temperature_2m: [29, 28],
-        precipitation_probability: [94, 94],
-        weather_code: [1, 63],
+        time: ['2026-01-22T02:00', '2026-01-22T10:00', '2026-01-23T02:00', '2026-01-23T10:00'],
+        temperature_2m: [24, 29, 23, 28],
+        precipitation_probability: [94, 0, 94, 10],
+        weather_code: [63, 1, 63, 63],
       },
       daily: {
         time: ['2026-01-22', '2026-01-23'],
@@ -199,6 +200,32 @@ describe('weather helpers', () => {
     }, '2026-01-22', 'live', '10:00');
 
     expect(weather?.forecast?.map((day) => day.precipitationProbability)).toEqual([0, 10]);
+  });
+
+  it('calculates daily-card rain probability from the 08:00-20:00 travel window', () => {
+    const forecast = parseOpenMeteoForecast({
+      hourly: {
+        time: [
+          '2026-01-22T02:00',
+          '2026-01-22T08:00',
+          '2026-01-22T10:00',
+          '2026-01-22T12:00',
+          '2026-01-22T19:00',
+          '2026-01-22T20:00',
+        ],
+        precipitation_probability: [94, 10, 0, 20, 10, 94],
+        weather_code: [63, 1, 1, 1, 1, 63],
+      },
+      daily: {
+        time: ['2026-01-22'],
+        temperature_2m_min: [22],
+        temperature_2m_max: [30],
+        precipitation_probability_max: [94],
+        weather_code: [1],
+      },
+    });
+
+    expect(forecast[0]?.precipitationProbability).toBe(10);
   });
 
   it('uses a versioned cache namespace after weather parsing changes', () => {
