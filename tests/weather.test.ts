@@ -359,6 +359,19 @@ describe('weather helpers', () => {
     expect(requestUrl.searchParams.get('hourly')).toContain('precipitation_probability');
   });
 
+  it('bypasses browser and service-worker HTTP caches for weather requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      daily: { time: ['2026-01-22'], precipitation_probability_max: [0], weather_code: [1] },
+    }), { status: 200 }));
+    const service = createWeatherService(fetchMock);
+
+    await service.getForecast(25.03, 121.56, '2026-01-22', 'Asia/Taipei');
+
+    const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string);
+    expect(requestUrl.searchParams.get('_t')).toBeTruthy();
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ cache: 'no-store' });
+  });
+
   it('revalidates a weather entry after the 30-minute TTL expires', async () => {
     let now = 0;
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({

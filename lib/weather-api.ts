@@ -328,10 +328,11 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
       `timezone=${encodeURIComponent(timezone || 'auto')}`,
       `start_date=${encodeURIComponent(date)}`,
       `end_date=${encodeURIComponent(endDate)}`,
+      `_t=${encodeURIComponent(String(now()))}`,
     ].join('&');
     const requestUrl = `https://api.open-meteo.com/v1/forecast?${params}`;
     console.debug('[Weather] Open-Meteo request', requestUrl);
-    const request = fetcher(requestUrl)
+    const request = fetcher(requestUrl, { cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status})`);
         const payload = await response.json() as OpenMeteoPayload;

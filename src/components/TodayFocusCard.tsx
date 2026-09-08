@@ -84,6 +84,12 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const isCompleted = Boolean(focusItem && completedIds?.has(focusItem.id));
   const forecast = sanitizeWeatherForecast(weather?.forecast);
 
+  useEffect(() => {
+    if (!weather) return;
+    const finalForecast = sanitizeWeatherForecast(weather.forecast);
+    console.log('Final Forecast Pop:', finalForecast.map((day) => day.precipitationProbability));
+  }, [weather]);
+
   return <>
     {compactMode && !compactExpanded ? <Pressable accessibilityRole="button" accessibilityLabel="展開 Today Mode" onPress={() => setCompactExpanded(true)} style={[styles.compactBanner, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       <Text numberOfLines={1} style={[styles.compactBannerText, { color: theme.colors.text }]}>TODAY MODE · {focusItem?.location_name ?? modeLabel}</Text>
