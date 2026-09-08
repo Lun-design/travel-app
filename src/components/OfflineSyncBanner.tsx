@@ -11,7 +11,7 @@ type Props = {
 };
 
 export function OfflineSyncBanner({ isOffline, pendingCount, conflicts, onResolve }: Props) {
-  if (!isOffline && pendingCount === 0 && conflicts.length === 0) return null;
+  if (pendingCount === 0 && conflicts.length === 0) return null;
   return <View style={styles.container} accessibilityRole="alert">
     <Text style={styles.message}>{isOffline ? '📡 離線模式：已載入快取行程' : `⏳ ${pendingCount} 項變更等待同步`}</Text>
     {conflicts.map((conflict) => <View key={conflict.id} style={styles.conflict}>

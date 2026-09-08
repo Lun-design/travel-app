@@ -13,6 +13,7 @@ import { ExpenseModal } from '@/components/ExpenseModal';
 import { InviteTripModal } from '@/components/InviteTripModal';
 import { ItineraryItemModal } from '@/components/ItineraryItemModal';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { PackingPanel } from '@/components/PackingPanel';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { TimelinePanel } from '@/components/trip-detail/TimelinePanel';
@@ -180,7 +181,8 @@ export default function TripDetailScreen() {
   return <ActiveTripContext.Provider value={trip.id}><View style={[styles.container, { backgroundColor: theme.colors.background, paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
     <MainScroll style={styles.mainScroll} {...(tab === 'timeline' || tab === 'places' ? { contentContainerStyle: styles.mainContent, keyboardShouldPersistTaps: 'handled' as const } : {})}>
     <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onShare={() => setShareVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
-     {data.isOffline ? <View style={[styles.offlineBar, { backgroundColor: theme.colors.warningSurface, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.warningText }]}>📡 離線模式：已載入快取行程</Text></View> : null}
+     {/* Offline state replaces the legacy offlineBar: 📡 離線模式：已載入快取行程 */}
+     <OfflineBanner isOffline={data.isOffline} />
     {data.realtimeNotice ? <View style={[styles.realtimeBar, { backgroundColor: theme.colors.surfaceMuted, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.muted }]}>↻ {data.realtimeNotice}</Text></View> : null}
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}

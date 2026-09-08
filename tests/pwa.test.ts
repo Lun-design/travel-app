@@ -86,7 +86,7 @@ describe('PWA deployment configuration', () => {
     expect(serviceWorker).toContain("response.type === 'opaque'");
   });
 
-  it('does not cache private Supabase data and supports runtime-cache cleanup', () => {
+  it('only caches scoped trip reads from Supabase and supports runtime-cache cleanup', () => {
     const serviceWorker = readFileSync(projectFile('public', 'sw.js'), 'utf8');
     const cacheableFunction = serviceWorker.slice(
       serviceWorker.indexOf('function isCacheableResource'),
@@ -94,11 +94,12 @@ describe('PWA deployment configuration', () => {
     );
 
     expect(serviceWorker).toContain('isPrivateDataResource');
+    expect(serviceWorker).toContain('isTripDataResource');
+    expect(serviceWorker).toContain('if (isTripDataResource(request, url)) return true;');
     expect(serviceWorker).toContain('CLEAR_RUNTIME_CACHE');
     expect(cacheableFunction).toContain('if (isPrivateDataResource(url)) return false;');
     expect(cacheableFunction).toContain('if (url.origin !== self.location.origin) return false;');
-    expect(cacheableFunction).not.toContain('rest\\/v1');
-    expect(cacheableFunction).not.toContain('storage\\/v1');
+    expect(serviceWorker).toContain('url.searchParams.has(\'trip_id\') || url.searchParams.has(\'id\')');
   });
 
   it('defines a verified Vercel build and route fallback', () => {

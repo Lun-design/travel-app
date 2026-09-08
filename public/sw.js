@@ -74,7 +74,32 @@ function isPrivateDataResource(url) {
     || /(?:documents|vouchers|travel-documents|tickets|receipts)/i.test(url.pathname);
 }
 
+// Trip-scoped read endpoints are safe to keep in the runtime cache so the
+// last loaded itinerary can be opened offline. Mutations and auth endpoints
+// never enter this path; logout also clears the runtime cache.
+function isTripDataResource(request, url) {
+  if (request.method !== 'GET') return false;
+  if (!/\/rest\/v1\/(?:itinerary_items|trip_places|trips|trip_members|expenses|packing_items)(?:[/?]|$)/i.test(url.pathname)) return false;
+  return url.searchParams.has('trip_id') || url.searchParams.has('id');
+}
+
+async function networkFirst(request) {
+  const cache = await caches.open(RUNTIME_CACHE);
+  try {
+    const response = await fetch(request, { cache: 'no-store' });
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    return cached || new Response(JSON.stringify({ data: [], offline: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+  }
+}
+
 function isCacheableResource(request, url) {
+  if (isTripDataResource(request, url)) return true;
   // Only cache assets served by this app. This prevents signed/private files
   // hosted on a third-party CDN from becoming persistent browser cache data.
   if (url.origin !== self.location.origin) return false;
@@ -89,6 +114,10 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const sameOrigin = isSameOrigin(request);
   const url = new URL(request.url);
+  if (isTripDataResource(request, url)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
   if (!sameOrigin && !isCacheableResource(request, url)) return;
 
   if (request.mode === 'navigate') {

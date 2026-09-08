@@ -6,6 +6,7 @@ export type OfflineSnapshot = {
   packingItems: unknown[];
   expenses: unknown[];
   vouchers: unknown[];
+  tripPlaces?: unknown[];
   savedAt: string;
 };
 export type OfflineMutationStatus = 'pending' | 'conflict';

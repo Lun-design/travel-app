@@ -68,11 +68,12 @@ export function useTripDetailData(tripId: string | undefined) {
       }
       const cached = await offlineStore.getSnapshot(scope);
       const resolvedVouchers = voucherData ?? cached?.vouchers ?? [];
+      const resolvedPlaces = placeData ?? (cached?.tripPlaces as TripPlace[] | undefined) ?? [];
       const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
       const resolvedProfile = profileData ?? (memberProfile ? { id: auth?.id ?? '', display_name: memberProfile.display_name, full_name: memberProfile.full_name, email: memberProfile.email, avatar_url: memberProfile.avatar_url, updated_at: new Date().toISOString() } : null);
       const resolvedMembers = resolvedProfile ? memberData.map((member) => member.user_id === resolvedProfile.id ? { ...member, profile: { ...member.profile, display_name: resolvedProfile.display_name, full_name: resolvedProfile.full_name, email: resolvedProfile.email, avatar_url: resolvedProfile.avatar_url } } : member) : memberData;
       currentUserIdRef.current = auth?.id ?? '';
-      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(itemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]); setPlaces(placeData ?? []);
+      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(itemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]); setPlaces(resolvedPlaces);
       await offlineStore.putSnapshot(scope, {
         trip: tripData,
         members: resolvedMembers,
@@ -80,6 +81,7 @@ export function useTripDetailData(tripId: string | undefined) {
         expenses: expenseData,
         packingItems: cached?.packingItems ?? [],
         vouchers: resolvedVouchers,
+        tripPlaces: resolvedPlaces,
         savedAt: new Date().toISOString(),
       });
       if (requestId !== reloadRequestRef.current) return;
@@ -95,8 +97,20 @@ export function useTripDetailData(tripId: string | undefined) {
 
   const reloadPlaces = useCallback(async () => {
     if (!tripId) return;
-    setPlaces(await listTripPlaces(tripId));
-  }, [tripId]);
+    const loaded = await listTripPlaces(tripId);
+    setPlaces(loaded);
+    const snapshot = await offlineStore.getSnapshot(offlineScope);
+    await offlineStore.putSnapshot(offlineScope, {
+      trip: snapshot?.trip ?? null,
+      members: snapshot?.members ?? [],
+      itineraryItems: snapshot?.itineraryItems ?? [],
+      packingItems: snapshot?.packingItems ?? [],
+      expenses: snapshot?.expenses ?? [],
+      vouchers: snapshot?.vouchers ?? [],
+      tripPlaces: loaded,
+      savedAt: new Date().toISOString(),
+    });
+  }, [offlineScope, tripId]);
 
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => () => {
