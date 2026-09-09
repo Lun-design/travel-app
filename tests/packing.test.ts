@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupePackingItems, generatePackingSuggestions, isPackingComplete, packingProgress } from '../lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, hasRainyForecast, isPackingComplete, packingProgress, RAIN_GEAR_NAME } from '../lib/packing-utils';
 
 describe('packing suggestions', () => {
   it('deduplicates by normalized item name and category', () => {
@@ -28,8 +28,32 @@ describe('packing suggestions', () => {
     expect(names).toContain('護照／身分證');
     expect(names).toContain('保暖外套');
     expect(names).toContain('滑雪手套');
-    expect(names).toContain('雨具');
+    expect(names).toContain(RAIN_GEAR_NAME);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('detects rain gear from any forecast day at the configured threshold', () => {
+    expect(hasRainyForecast([
+      { precipitationProbability: 12 },
+      { precipitationProbability: 50 },
+    ])).toBe(true);
+    expect(hasRainyForecast([
+      { precipitationProbability: 49 },
+      { precipitationProbability: null },
+    ])).toBe(false);
+  });
+
+  it('adds rain gear when a later forecast day reaches 50 percent', () => {
+    const suggestions = generatePackingSuggestions('東京', {
+      precipitationProbability: 0,
+      temperatureMinC: 20,
+      temperatureMaxC: 25,
+      forecast: [
+        { precipitationProbability: 10 },
+        { precipitationProbability: 50 },
+      ],
+    });
+    expect(suggestions.map((item) => item.name)).toContain(RAIN_GEAR_NAME);
   });
 
   it('adds beach and hot-weather items for a sunny island trip', () => {

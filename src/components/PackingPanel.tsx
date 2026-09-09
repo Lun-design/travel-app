@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import { fetchWeatherForecast } from '@/lib/weather-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { createPackingItem, deletePackingItem as deletePackingItemRemote, importPackingTemplate, listPackingItems, updatePackingItem as updatePackingItemRemote, type PackingItem } from '@/lib/packing-api';
-import { dedupePackingItems, generatePackingSuggestions, groupPackingItems, isPackingComplete, packingItemKey, packingProgress, type PackingTemplate } from '@/lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, groupPackingItems, hasRainyForecast, isPackingComplete, packingItemKey, packingProgress, RAIN_GEAR_NAME, type PackingTemplate } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -31,6 +31,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const [category, setCategory] = useState('未分類');
   const [busy, setBusy] = useState(false);
   const [celebrateVisible, setCelebrateVisible] = useState(false);
+  const autoRainGearKey = useRef<string | null>(null);
   const offlineScope = { userId, tripId };
   const deletePackingItem = (id: string) => deletePackingItemRemote(id, { offlineScope, store: offlineStore });
   const updatePackingItem = (id: string, patch: Parameters<typeof updatePackingItemRemote>[1], options = { offlineScope, store: offlineStore }) => updatePackingItemRemote(id, patch, options);
@@ -40,11 +41,27 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const memberFor = (id: string | null) => id ? members.find((member) => member.user_id === id) : undefined;
   const label = (id: string | null) => id ? getProfileDisplayName(memberFor(id)?.profile, id.slice(0, 8)) : '未指派';
 
+  async function ensureRainGear(loaded: PackingItem[]): Promise<PackingItem[]> {
+    if (!tripStartDate) return loaded;
+    const firstLocated = itineraryItems.find((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined);
+    if (!firstLocated) return loaded;
+    const weatherKey = `${tripId}:${refreshToken}:${tripStartDate}:${firstLocated.id}:${firstLocated.latitude}:${firstLocated.longitude}`;
+    if (autoRainGearKey.current === weatherKey) return loaded;
+    autoRainGearKey.current = weatherKey;
+    const weather = await fetchWeatherForecast(Number(firstLocated.latitude), Number(firstLocated.longitude), tripStartDate);
+    const rainy = Boolean(weather && ((weather.precipitationProbability ?? 0) >= 50 || hasRainyForecast(weather.forecast)));
+    if (!rainy) return loaded;
+    const rainSuggestion = generatePackingSuggestions(destination, weather).find((suggestion) => suggestion.name === RAIN_GEAR_NAME);
+    if (!rainSuggestion || loaded.some((item) => packingItemKey(item) === packingItemKey(rainSuggestion))) return loaded;
+    const item = await createPackingItem({ trip_id: tripId, category: rainSuggestion.category, name: rainSuggestion.name }, { offlineScope, store: offlineStore, existingItems: loaded });
+    return [...loaded, item];
+  }
+
   async function load() {
-    try { setItems(await listPackingItems(tripId, { offlineScope, store: offlineStore })); }
+    try { const loaded = await listPackingItems(tripId, { offlineScope, store: offlineStore }); setItems([...(await ensureRainGear(loaded))]); }
     catch (error: any) { Alert.alert('載入清單失敗', error?.message ?? '請稍後再試。'); }
   }
-  useEffect(() => { void load(); }, [tripId, refreshToken]);
+  useEffect(() => { void load(); }, [tripId, refreshToken, tripStartDate, itineraryItems]);
 
   async function toggle(item: PackingItem) {
     const next = !item.is_checked;

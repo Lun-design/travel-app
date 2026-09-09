@@ -1,8 +1,14 @@
 export type PackingCategory = '證件' | '電子產品' | '衣物' | '藥品' | '隨身物品' | '未分類';
 export type PackingTemplate = '國內輕旅行' | '國外海島' | '雪國滑雪';
 export type PackingItemLike = { is_checked?: boolean; is_packed?: boolean; category: string; name?: string; item_name?: string; title?: string };
-export type PackingWeatherHint = { precipitationProbability: number | null; temperatureMinC: number | null; temperatureMaxC: number | null };
+export type PackingForecastHint = { precipitationProbability: number | null };
+export type PackingWeatherHint = { precipitationProbability: number | null; temperatureMinC: number | null; temperatureMaxC: number | null; forecast?: PackingForecastHint[] | null };
 export type PackingSuggestion = { category: PackingCategory; name: string };
+export const RAIN_GEAR_NAME = '折疊傘 / 雨具';
+
+export function hasRainyForecast(forecast: readonly PackingForecastHint[] | null | undefined, threshold = 50): boolean {
+  return (forecast ?? []).some((day) => day.precipitationProbability != null && day.precipitationProbability >= threshold);
+}
 export function packingItemName(item: Pick<PackingItemLike, 'name' | 'item_name' | 'title'>): string {
   return String(item.name ?? item.item_name ?? item.title ?? '').trim();
 }
@@ -41,8 +47,9 @@ export function generatePackingSuggestions(destination: string, weather?: Packin
   if (/(雪|滑雪|北海道|冬|ski)/i.test(text)) {
     suggestions.push({ category: '衣物', name: '保暖外套' }, { category: '衣物', name: '滑雪手套' });
   }
-  if (weather?.precipitationProbability !== null && weather?.precipitationProbability !== undefined && weather.precipitationProbability > 40) {
-    suggestions.push({ category: '隨身物品', name: '雨具' });
+  if ((weather?.precipitationProbability !== null && weather?.precipitationProbability !== undefined && weather.precipitationProbability >= 50)
+    || hasRainyForecast(weather?.forecast)) {
+    suggestions.push({ category: '隨身物品', name: RAIN_GEAR_NAME });
   }
   if (weather?.temperatureMinC !== null && weather?.temperatureMinC !== undefined && weather.temperatureMinC <= 15) {
     suggestions.push({ category: '衣物', name: '保暖衣物' });

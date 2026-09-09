@@ -11,10 +11,17 @@ import {
   sanitizeWeatherSummary,
   sanitizePersistedWeather,
   weatherCodeToPresentation,
+  getTemperatureRangeC,
+  getWearTip,
 } from '../lib/weather-api';
 import { blockedNetworkFetch } from './setup';
 
 describe('weather helpers', () => {
+  it('returns the daily temperature range and wear tip for a large swing', () => {
+    expect(getTemperatureRangeC({ temperatureMinC: 18, temperatureMaxC: 27 })).toBe(9);
+    expect(getWearTip({ temperatureMinC: 18, temperatureMaxC: 27 })).toBe('日夜溫差大，建議攜帶薄外套');
+    expect(getWearTip({ temperatureMinC: 22, temperatureMaxC: 29 })).toBeNull();
+  });
   it('maps Open-Meteo weather codes to UI presentation', () => {
     expect(weatherCodeToPresentation(0)).toEqual({ icon: '☀️', condition: '晴朗', extreme: false });
     expect(weatherCodeToPresentation(63)).toEqual({ icon: '🌧️', condition: '降雨', extreme: false });

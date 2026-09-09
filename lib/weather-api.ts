@@ -18,6 +18,24 @@ export type WeatherSummary = WeatherDaySummary & {
   currentTemperatureC?: number | null;
 };
 
+export type TemperatureRangeInput = Pick<WeatherDaySummary, 'temperatureMinC' | 'temperatureMaxC'>;
+export const LARGE_TEMPERATURE_RANGE_C = 8;
+
+/** Return the day's high/low spread, or null when either value is unavailable. */
+export function getTemperatureRangeC(weather: TemperatureRangeInput | null | undefined): number | null {
+  if (weather?.temperatureMinC == null || weather.temperatureMaxC == null) return null;
+  const range = Number(weather.temperatureMaxC) - Number(weather.temperatureMinC);
+  return Number.isFinite(range) ? Math.max(0, range) : null;
+}
+
+/** User-facing packing/clothing hint shared by Today Mode and forecast cards. */
+export function getWearTip(weather: TemperatureRangeInput | null | undefined): string | null {
+  const range = getTemperatureRangeC(weather);
+  return range !== null && range >= LARGE_TEMPERATURE_RANGE_C
+    ? '日夜溫差大，建議攜帶薄外套'
+    : null;
+}
+
 /** Bump when response mapping changes so an old in-memory weather entry is never reused. */
 export const WEATHER_CACHE_VERSION = 'weather_cache_v6';
 
