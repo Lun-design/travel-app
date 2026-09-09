@@ -123,7 +123,7 @@ function findHourlyIndex(payload: OpenMeteoPayload, date: string, targetTime?: s
 /**
  * Daily cards are meant for daytime travel planning. Open-Meteo's
  * precipitation_probability_max can be dominated by a single overnight
- * shower, so take the peak local 08:00-20:00 hourly value when available.
+ * shower, so average local 08:00-20:00 hourly values when available.
  */
 function daytimePrecipitationProbability(payload: OpenMeteoPayload, date: string, dailyIndex: number): number | null {
   const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
@@ -135,7 +135,7 @@ function daytimePrecipitationProbability(payload: OpenMeteoPayload, date: string
     if (Number.isFinite(hour) && hour >= 8 && hour < 20 && probability !== null) values.push(probability);
     return values;
   }, []);
-  if (daytimeValues.length) return Math.max(...daytimeValues);
+  if (daytimeValues.length) return Math.round(daytimeValues.reduce((sum, value) => sum + value, 0) / daytimeValues.length);
   return numberAt(payload.daily?.precipitation_probability_max, dailyIndex);
 }
 
@@ -171,13 +171,27 @@ function sanitizeWeatherDay(day: WeatherDaySummary): WeatherDaySummary {
   };
 }
 
-export function sanitizeWeatherForecast(forecast: WeatherDaySummary[] | null | undefined): WeatherDaySummary[] {
-  return (forecast ?? []).map(sanitizeWeatherDay);
+export function sanitizeWeatherForecast(forecast: WeatherDaySummary[] | null | undefined, currentPrecipitationProbability: number | null = null): WeatherDaySummary[] {
+  return (forecast ?? []).map((entry) => {
+    const day = sanitizeWeatherDay(entry);
+    // A near-zero current observation is stronger evidence than a stale/high
+    // daily PoP for light-rain WMO patterns. Keep the card useful without
+    // suppressing genuine sustained rain codes (63+).
+    if (currentPrecipitationProbability !== null
+      && currentPrecipitationProbability <= 10
+      && day.precipitationProbability !== null
+      && day.precipitationProbability > 50
+      && day.weatherCode !== null
+      && day.weatherCode <= 61) {
+      return { ...day, precipitationProbability: NON_PRECIPITATION_RAIN_CAP, precipitationWarning: false };
+    }
+    return day;
+  });
 }
 
 export function sanitizeWeatherSummary(weather: WeatherSummary): WeatherSummary {
   const sanitized = sanitizeWeatherDay(weather);
-  return { ...weather, ...sanitized, forecast: sanitizeWeatherForecast(weather.forecast) };
+  return { ...weather, ...sanitized, forecast: sanitizeWeatherForecast(weather.forecast, weather.precipitationProbability) };
 }
 
 /**

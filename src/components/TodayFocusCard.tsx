@@ -95,15 +95,15 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const modeLabel = focus.mode === 'active' ? '目前進行中' : focus.mode === 'next' ? '下一站' : focus.mode === 'countdown' ? `距離旅程還有 ${focus.daysUntil ?? 0} 天` : focus.mode === 'complete' ? '今日行程已完成' : focus.mode === 'past' ? '此行程日期已結束' : '今日尚無排程';
   const canComplete = Boolean(focusItem && focus.scheduled && (focus.mode === 'active' || focus.mode === 'next'));
   const isCompleted = Boolean(focusItem && completedIds?.has(focusItem.id));
-  const forecast = sanitizeWeatherForecast(weather?.forecast);
+  const forecast = sanitizeWeatherForecast(weather?.forecast, weather?.precipitationProbability ?? null);
 
   useEffect(() => {
     if (!weather) return;
     const rawWeather = persistedWeather ?? weather;
-    const sanitizedForecast = sanitizeWeatherForecast(weather.forecast);
+    const sanitizedForecast = sanitizeWeatherForecast(weather.forecast, weather.precipitationProbability);
     console.log('TodayFocusCard Raw Weather:', rawWeather);
     console.log('TodayFocusCard Sanitized Forecast:', sanitizedForecast);
-    const finalForecast = sanitizeWeatherForecast(weather.forecast);
+    const finalForecast = sanitizeWeatherForecast(weather.forecast, weather.precipitationProbability);
     console.log('Final Forecast Pop:', finalForecast.map((day) => day.precipitationProbability));
   }, [persistedWeather, weather]);
 

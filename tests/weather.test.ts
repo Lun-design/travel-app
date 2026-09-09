@@ -8,6 +8,7 @@ import {
   WEATHER_CACHE_VERSION,
   isWeatherSummaryCacheValid,
   sanitizeWeatherForecast,
+  sanitizeWeatherSummary,
   sanitizePersistedWeather,
   weatherCodeToPresentation,
 } from '../lib/weather-api';
@@ -205,7 +206,7 @@ describe('weather helpers', () => {
     expect(weather?.forecast?.map((day) => day.precipitationProbability)).toEqual([0, 10]);
   });
 
-  it('calculates daily-card rain probability as the daytime peak from 08:00-20:00', () => {
+  it('calculates daily-card rain probability as the daytime average from 08:00-20:00', () => {
     const forecast = parseOpenMeteoForecast({
       hourly: {
         time: [
@@ -224,11 +225,35 @@ describe('weather helpers', () => {
         temperature_2m_min: [22],
         temperature_2m_max: [30],
         precipitation_probability_max: [94],
-        weather_code: [1],
+        weather_code: [63],
       },
     });
 
-    expect(forecast[0]?.precipitationProbability).toBe(20);
+    expect(forecast[0]?.precipitationProbability).toBe(10);
+  });
+
+  it('smooths a high daily probability when current rain is near zero', () => {
+    const weather = parseOpenMeteoResponse({
+      current: { temperature_2m: 29, weather_code: 0, precipitation: 0 },
+      hourly: {
+        time: ['2026-09-09T10:00'],
+        precipitation_probability: [0],
+        precipitation: [0],
+        weather_code: [0],
+      },
+      daily: {
+        time: ['2026-09-09', '2026-09-10'],
+        temperature_2m_min: [26, 26],
+        temperature_2m_max: [32, 32],
+        precipitation_probability_max: [0, 69],
+        weather_code: [0, 51],
+      },
+    }, '2026-09-09', 'live', '10:00');
+
+    expect(weather?.precipitationProbability).toBe(0);
+    expect(weather?.forecast?.[1]?.precipitationProbability).toBe(69);
+    const sanitized = sanitizeWeatherSummary(weather!);
+    expect(sanitized.forecast?.[1]).toMatchObject({ precipitationProbability: 20, precipitationWarning: false });
   });
 
   it('uses a versioned cache namespace after weather parsing changes', () => {
