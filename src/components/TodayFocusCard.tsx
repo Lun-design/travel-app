@@ -9,7 +9,7 @@ import { distanceToFocusSpot, findActiveOrNextSpot, shouldUseCompactTodayBanner 
 import type { Voucher } from '@/lib/vouchers';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { OfflineRescueCardModal } from './OfflineRescueCardModal';
-import { findBackupPlan, shouldOfferAlternatePlan } from '@/lib/alternate-plans';
+import { findBackupPlan, getOutdoorRainAlert, shouldOfferAlternatePlan } from '@/lib/alternate-plans';
 
 const categoryLabels: Record<string, string> = { spot: '景點', food: '美食', hotel: '住宿', flight: '航班', trail: '步道', outdoor: '戶外' };
 const categoryIcons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
@@ -47,6 +47,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const compactMode = compact && shouldUseCompactTodayBanner(focus.mode, items.length > 0);
   const [compactExpanded, setCompactExpanded] = useState(false);
   const [expandedHourlyDate, setExpandedHourlyDate] = useState<string | null>(null);
+  const [outdoorNoticeExpanded, setOutdoorNoticeExpanded] = useState(false);
   const distanceKm = distanceToFocusSpot(focus.scheduled, schedule);
   const navigationUrl = getGoogleMapsDirectionsUrl(focusItem?.latitude, focusItem?.longitude);
   const itemVouchers = focusItem ? vouchers.filter((voucher) => voucher.item_id === focusItem.id) : [];
@@ -57,6 +58,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   useEffect(() => {
     setCompactExpanded(false);
     setExpandedHourlyDate(null);
+    setOutdoorNoticeExpanded(false);
   }, [compactMode, scheduleDate]);
 
   useEffect(() => {
@@ -99,6 +101,8 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const isCompleted = Boolean(focusItem && completedIds?.has(focusItem.id));
   const forecast = sanitizeWeatherForecast(weather?.forecast, weather?.precipitationProbability ?? null);
   const wearTip = getWearTip(weather);
+  const daytimeWeather = weather?.forecast?.find((day) => day.date === focusDate) ?? weather;
+  const outdoorRainAlert = getOutdoorRainAlert(daytimeWeather, items);
 
   useEffect(() => {
     if (!weather) return;
@@ -111,6 +115,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   }, [persistedWeather, weather]);
 
   return <>
+    {outdoorRainAlert ? <View accessibilityLabel="雨天戶外行程提示" style={[styles.outdoorAlertBar, { backgroundColor: theme.colors.warningSurface, borderColor: theme.colors.warningText }]}><Text style={[styles.outdoorAlertText, { color: theme.colors.warningText }]}>{outdoorRainAlert.message}</Text><Pressable accessibilityRole="button" onPress={() => { if (backupItem && onSwitchToBackupPlan) void switchToBackup(); else setOutdoorNoticeExpanded((current) => !current); }} style={[styles.outdoorAlertButton, { borderColor: theme.colors.warningText }]}><Text style={[styles.outdoorAlertAction, { color: theme.colors.warningText }]}>{backupItem && onSwitchToBackupPlan ? '切換備案' : '查看室內備案'}</Text></Pressable>{outdoorNoticeExpanded && !(backupItem && onSwitchToBackupPlan) ? <Text style={[styles.outdoorAlertDetails, { color: theme.colors.warningText }]}>尚未綁定室內備案景點，可在行程中新增一個備案並連結至此景點。</Text> : null}</View> : null}
     {compactMode && !compactExpanded ? <Pressable accessibilityRole="button" accessibilityLabel="展開 Today Mode" onPress={() => setCompactExpanded(true)} style={[styles.compactBanner, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       <Text numberOfLines={1} style={[styles.compactBannerText, { color: theme.colors.text }]}>TODAY MODE · {focusItem?.location_name ?? modeLabel}</Text>
       <Text style={[styles.compactBannerAction, { color: theme.colors.primary }]}>展開</Text>
@@ -191,6 +196,11 @@ const styles = StyleSheet.create({
   forecastRain: { color: EDITORIAL_COLORS.terracotta, fontSize: 10, fontWeight: '800' },
   forecastToggle: { color: EDITORIAL_COLORS.taupe, fontSize: 8, fontWeight: '700' },
   cachedLabel: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, fontSize: 11, fontWeight: '700' },
+  outdoorAlertBar: { width: '100%', borderWidth: 1, borderRadius: 12, padding: 11, gap: 8, marginBottom: 10 },
+  outdoorAlertText: { fontSize: 13, lineHeight: 19, fontWeight: '800' },
+  outdoorAlertButton: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', borderWidth: 1, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7 },
+  outdoorAlertAction: { fontSize: 13, fontWeight: '900' },
+  outdoorAlertDetails: { fontSize: 12, lineHeight: 18, fontWeight: '700' },
   hourlyTimeline: { width: 180, marginTop: 5, gap: 2 },
   hourlyPoint: { color: EDITORIAL_COLORS.taupe, fontSize: 8, fontWeight: '700' },
   wearTip: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, fontSize: 12, fontWeight: '800' },

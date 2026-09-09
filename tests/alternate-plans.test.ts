@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findBackupPlan, shouldOfferAlternatePlan, switchToBackupPlan } from '../lib/alternate-plans';
+import { findBackupPlan, getOutdoorRainAlert, isOutdoorItineraryItem, shouldOfferAlternatePlan, switchToBackupPlan } from '../lib/alternate-plans';
 import type { ItineraryItem } from '../lib/itinerary';
 
 const primary: ItineraryItem = {
@@ -11,6 +11,20 @@ const backup: ItineraryItem = {
 };
 
 describe('alternate rainy-day plans', () => {
+  it('recognizes outdoor categories and location keywords', () => {
+    expect(isOutdoorItineraryItem({ ...primary, category: 'outdoor' })).toBe(true);
+    expect(isOutdoorItineraryItem({ ...primary, category: 'spot', location_name: '大安森林公園' })).toBe(true);
+    expect(isOutdoorItineraryItem({ ...primary, category: 'spot', tags: ['outdoor'] })).toBe(true);
+    expect(isOutdoorItineraryItem({ ...primary, category: 'food', location_name: '室內咖啡館' })).toBe(false);
+  });
+
+  it('raises an outdoor rain alert at 70 percent daytime probability', () => {
+    const outdoor = { ...primary, category: 'spot', location_name: '海邊沙灘' };
+    expect(getOutdoorRainAlert({ precipitationProbability: 70, extremeWarning: false }, [outdoor])).toMatchObject({ precipitationProbability: 70 });
+    expect(getOutdoorRainAlert({ precipitationProbability: 69, extremeWarning: false }, [outdoor])).toBeNull();
+    expect(getOutdoorRainAlert({ precipitationProbability: 90, extremeWarning: false }, [primary])).toBeNull();
+  });
+
   it('offers a backup above 50% rain probability or for extreme weather', () => {
     expect(shouldOfferAlternatePlan({ precipitationProbability: 50, extremeWarning: false })).toBe(false);
     expect(shouldOfferAlternatePlan({ precipitationProbability: 51, extremeWarning: false })).toBe(true);

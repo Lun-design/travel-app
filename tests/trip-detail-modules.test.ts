@@ -52,4 +52,11 @@ describe('trip detail module boundaries', () => {
     expect(card).toContain('目前為離線氣象資料');
     expect(card).toContain('day.hourly');
   });
+
+  it('renders the outdoor rain alert with an indoor-plan action', () => {
+    const card = read('src/components/TodayFocusCard.tsx');
+    expect(card).toContain('getOutdoorRainAlert');
+    expect(card).toContain('查看室內備案');
+    expect(card).toContain('onPress');
+  });
 });
