@@ -41,6 +41,12 @@ type GoogleTextSearchPayload = {
     formattedAddress?: string;
     location?: { latitude?: number; longitude?: number };
   }>;
+  nextPageToken?: string;
+};
+
+export type GooglePlaceSearchPage = {
+  results: GeocodingResult[];
+  nextPageToken: string | null;
 };
 
 function emptyWeeklyHours(): Record<Weekday, OpeningHoursDay> {
@@ -226,21 +232,33 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[
   });
 }
 
-export async function searchGooglePlacesText(query: string, apiKey?: string): Promise<GeocodingResult[]> {
+export async function searchGooglePlacesTextPage(query: string, apiKey?: string, pageToken?: string): Promise<GooglePlaceSearchPage> {
   const key = getGoogleApiKey(apiKey);
   const normalizedQuery = query.trim();
-  if (!key || !normalizedQuery) return [];
+  if (!key || !normalizedQuery) return { results: [], nextPageToken: null };
   const response = await fetch(GOOGLE_TEXT_SEARCH_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location',
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,nextPageToken',
     },
-    body: JSON.stringify({ textQuery: normalizedQuery, languageCode: 'zh-TW' }),
+    body: JSON.stringify({
+      textQuery: normalizedQuery,
+      languageCode: 'zh-TW',
+      ...(pageToken?.trim() ? { pageToken: pageToken.trim() } : {}),
+    }),
   });
   if (!response.ok) throw new Error(`Google Places Text Search failed (${response.status})`);
-  return mapTextSearchPlaces(await response.json() as GoogleTextSearchPayload);
+  const payload = await response.json() as GoogleTextSearchPayload;
+  return {
+    results: mapTextSearchPlaces(payload),
+    nextPageToken: payload.nextPageToken?.trim() || null,
+  };
+}
+
+export async function searchGooglePlacesText(query: string, apiKey?: string): Promise<GeocodingResult[]> {
+  return (await searchGooglePlacesTextPage(query, apiKey)).results;
 }
 
 export async function searchGooglePlaces(query: string, apiKey?: string): Promise<GeocodingResult[]> {

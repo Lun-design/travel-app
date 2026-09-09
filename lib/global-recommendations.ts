@@ -1,6 +1,6 @@
 import { inferTimezoneFromDestination } from './timezone';
 import { searchPlaces, type GeocodingResult } from './geocoding';
-import { hasGooglePlacesApiKey, searchGooglePlacesText } from './google-places';
+import { hasGooglePlacesApiKey, searchGooglePlacesTextPage } from './google-places';
 import type { ItineraryItemSaveInput } from './itinerary';
 
 export type GlobalPlaceCategory = 'outdoor' | 'indoor' | 'other';
@@ -21,6 +21,64 @@ export type GlobalPlaceSearchResult = {
 };
 
 export type GlobalPlaceSearchProvider = (query: string) => Promise<GeocodingResult[]>;
+
+export type RecommendationRawPage = {
+  results: GeocodingResult[];
+  nextPageToken?: string | null;
+};
+
+export type RecommendationPageProvider = (query: string, pageToken?: string) => Promise<RecommendationRawPage>;
+
+export type RecommendationPage = {
+  results: GlobalPlaceSearchResult[];
+  nextPageToken: string | null;
+};
+
+export type RecommendationPageOptions = {
+  subcategory?: RecommendationSubcategoryId;
+  pageToken?: string | null;
+  provider?: RecommendationPageProvider;
+  cache?: RecommendationSessionCache;
+};
+
+export type RecommendationSessionCache = {
+  getOrFetch: <T>(key: string, fetcher: () => Promise<T>) => Promise<T>;
+  clear: () => void;
+};
+
+export function createRecommendationSessionCache(): RecommendationSessionCache {
+  const entries = new Map<string, Promise<unknown>>();
+  return {
+    getOrFetch<T>(key: string, fetcher: () => Promise<T>) {
+      const cached = entries.get(key) as Promise<T> | undefined;
+      if (cached) return cached;
+      const request = fetcher().catch((error: unknown) => {
+        entries.delete(key);
+        throw error;
+      });
+      entries.set(key, request);
+      return request;
+    },
+    clear() {
+      entries.clear();
+    },
+  };
+}
+
+const recommendationSessionCache = createRecommendationSessionCache();
+
+export function clearRecommendationSessionCache() {
+  recommendationSessionCache.clear();
+}
+
+export function mergeRecommendationResults<T extends { id: string }>(current: T[], incoming: T[]): T[] {
+  const seen = new Set<string>();
+  return [...current, ...incoming].filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
 
 export type RecommendationThemeId = 'must-see' | 'food' | 'indoor' | 'free-time';
 
@@ -155,6 +213,42 @@ export function paginateRecommendations<T>(items: T[], requestedPage: number, pa
   };
 }
 
+async function defaultRecommendationPageProvider(query: string, pageToken?: string): Promise<RecommendationRawPage> {
+  if (hasGooglePlacesApiKey()) {
+    try {
+      const page = await searchGooglePlacesTextPage(query, undefined, pageToken);
+      if (page.results.length || pageToken) return page;
+    } catch (error) {
+      console.warn('[recommendations] Google Text Search unavailable; falling back to geocoding', error);
+      if (pageToken) return { results: [], nextPageToken: null };
+    }
+  }
+  if (pageToken) return { results: [], nextPageToken: null };
+  return { results: await searchPlaces(query), nextPageToken: null };
+}
+
+export async function searchDynamicRecommendationsPage(
+  destination: string,
+  theme: RecommendationThemeId,
+  options: RecommendationPageOptions = {},
+): Promise<RecommendationPage> {
+  const normalizedDestination = destination.trim();
+  if (normalizedDestination.length < 2) return { results: [], nextPageToken: null };
+  const query = buildRecommendationQuery(normalizedDestination, theme, options.subcategory ?? 'all');
+  const pageToken = options.pageToken?.trim() || '';
+  const cache = options.cache ?? recommendationSessionCache;
+  const provider = options.provider ?? defaultRecommendationPageProvider;
+  return cache.getOrFetch(`${query}|${pageToken}`, async () => {
+    const raw = await provider(query, pageToken || undefined);
+    return {
+      results: raw.results
+        .filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude))
+        .map(normalizeGlobalPlace),
+      nextPageToken: raw.nextPageToken?.trim() || null,
+    };
+  });
+}
+
 /** Fetches live recommendations for the selected destination and theme. */
 export async function searchDynamicRecommendations(
   destination: string,
@@ -166,10 +260,7 @@ export async function searchDynamicRecommendations(
   if (normalizedDestination.length < 2) return [];
   const query = buildRecommendationQuery(normalizedDestination, theme, subcategory);
   if (provider !== searchPlaces) return searchGlobalPlaces(query, provider);
-  const initial = await searchPlaces(query);
-  if (initial.some((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude))) return initial.filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude)).map(normalizeGlobalPlace);
-  if (hasGooglePlacesApiKey()) return searchGlobalPlaces(query, searchGooglePlacesText);
-  return searchGlobalPlaces(query, () => Promise.resolve(initial));
+  return (await searchDynamicRecommendationsPage(normalizedDestination, theme, { subcategory })).results;
 }
 
 export type GlobalItineraryPayload = ItineraryItemSaveInput & { timezone: string };

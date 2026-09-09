@@ -15,12 +15,14 @@ import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import {
   buildGlobalItineraryPayload,
   getRecommendationSubcategories,
+  mergeRecommendationResults,
   paginateRecommendations,
   RECOMMENDATION_THEMES,
-  searchDynamicRecommendations,
+  searchDynamicRecommendationsPage,
   searchGlobalPlaces,
   type GlobalItineraryPayload,
   type GlobalPlaceSearchResult,
+  type RecommendationPage,
   type RecommendationSubcategoryId,
   type RecommendationThemeId,
 } from '@/lib/global-recommendations';
@@ -52,6 +54,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [activeTheme, setActiveTheme] = useState<RecommendationThemeId>('must-see');
   const [activeSubcategory, setActiveSubcategory] = useState<RecommendationSubcategoryId>('all');
   const [page, setPage] = useState(1);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
   const [searched, setSearched] = useState(false);
 
   useEffect(() => {
@@ -70,15 +74,19 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     if (normalized.length < 2) {
       setRecommendations([]);
       setRecommendationSearched(false);
+      setNextPageToken(null);
       return;
     }
     setRecommendationLoading(true);
     setRecommendationSearched(true);
     setRecommendationError('');
     try {
-      setRecommendations(await searchDynamicRecommendations(normalized, themeValue, undefined, subcategoryValue));
+      const firstPage = await searchDynamicRecommendationsPage(normalized, themeValue, { subcategory: subcategoryValue });
+      setRecommendations(firstPage.results);
+      setNextPageToken(firstPage.nextPageToken);
     } catch (error) {
       setRecommendations([]);
+      setNextPageToken(null);
       setRecommendationError(error instanceof Error ? error.message : '暫時無法取得即時推薦');
     } finally {
       setRecommendationLoading(false);
@@ -89,6 +97,28 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     if (!isOpen || selectedDestination.trim().length < 2) return;
     void loadRecommendations(selectedDestination, activeTheme, activeSubcategory);
   }, [activeSubcategory, activeTheme, isOpen, loadRecommendations, selectedDestination]);
+
+  const loadMoreRecommendations = useCallback(async (): Promise<RecommendationPage | null> => {
+    const normalized = selectedDestination.trim();
+    const token = nextPageToken;
+    if (normalized.length < 2 || !token || recommendationLoadingMore) return null;
+    setRecommendationLoadingMore(true);
+    setRecommendationError('');
+    try {
+      const nextPage = await searchDynamicRecommendationsPage(normalized, activeTheme, {
+        subcategory: activeSubcategory,
+        pageToken: token,
+      });
+      setRecommendations((current) => mergeRecommendationResults(current, nextPage.results));
+      setNextPageToken(nextPage.nextPageToken);
+      return nextPage;
+    } catch (error) {
+      setRecommendationError(error instanceof Error ? error.message : '?急??⊥????單??刻');
+      return null;
+    } finally {
+      setRecommendationLoadingMore(false);
+    }
+  }, [activeSubcategory, activeTheme, nextPageToken, recommendationLoadingMore, selectedDestination]);
 
   function selectDestination(value: string) {
     const normalized = value.trim();
@@ -108,6 +138,16 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   function handleSubcategorySelect(nextSubcategory: RecommendationSubcategoryId) {
     setActiveSubcategory(nextSubcategory);
     setPage(1);
+  }
+
+  async function handleNextPage() {
+    if (recommendationPage.hasNext) {
+      setPage((current) => current + 1);
+      return;
+    }
+    if (!nextPageToken) return;
+    const loaded = await loadMoreRecommendations();
+    if (loaded?.results.length) setPage((current) => current + 1);
   }
 
   async function handleSearch() {
@@ -309,13 +349,25 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="下一頁推薦"
-                    disabled={!recommendationPage.hasNext}
-                    onPress={() => setPage((current) => current + 1)}
-                    style={[styles.paginationButton, { borderColor: theme.colors.border, opacity: recommendationPage.hasNext ? 1 : 0.45 }]}
+                    disabled={(!recommendationPage.hasNext && !nextPageToken) || recommendationLoadingMore}
+                    onPress={() => void handleNextPage()}
+                    style={[styles.paginationButton, { borderColor: theme.colors.border, opacity: recommendationPage.hasNext || nextPageToken ? 1 : 0.45 }]}
                   >
-                    <Text style={[styles.paginationText, { color: theme.colors.text }]}>下一頁</Text>
+                    {recommendationLoadingMore ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.paginationText, { color: theme.colors.text }]}>下一頁</Text>}
                   </Pressable>
                 </View>
+              ) : null}
+
+              {nextPageToken ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="查看更多景點"
+                  disabled={recommendationLoadingMore}
+                  onPress={() => void loadMoreRecommendations()}
+                  style={[styles.loadMoreButton, { borderColor: theme.colors.primary, opacity: recommendationLoadingMore ? 0.6 : 1 }]}
+                >
+                  {recommendationLoadingMore ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.loadMoreText, { color: theme.colors.primary }]}>查看更多景點</Text>}
+                </Pressable>
               ) : null}
 
               {searched && !searching && results.length === 0 ? <Text style={[styles.emptyText, { color: theme.colors.muted }]}>查無結果，請嘗試英文、日文或城市名稱。</Text> : null}
@@ -378,6 +430,8 @@ const styles = StyleSheet.create({
   paginationButton: { minHeight: 40, borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   paginationText: { fontSize: 12, fontWeight: '800' },
   pageIndicator: { fontSize: 12, fontWeight: '700' },
+  loadMoreButton: { minHeight: 44, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  loadMoreText: { fontSize: 13, fontWeight: '800' },
   results: { width: '100%', gap: 8 },
   result: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, padding: 10 },
   copy: { flex: 1, minWidth: 0, gap: 3 },
