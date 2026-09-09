@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import { fetchGooglePlaceDetails, resolveTripPlaceAddress, searchGooglePlaces } from '@/lib/google-places';
 import type { GeocodingResult } from '@/lib/geocoding';
-import type { GlobalItineraryPayload, GlobalPlaceSearchResult, RecommendationPreset } from '@/lib/global-recommendations';
+import type { GlobalItineraryPayload, GlobalPlaceSearchResult } from '@/lib/global-recommendations';
 import { createTripPlace, deleteTripPlace, scheduleTripPlace, type TripPlace } from '@/lib/trip-places-api';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { RecommendationPanel } from '@/components/RecommendationPanel';
@@ -12,13 +12,14 @@ type Props = {
   userId: string;
   places: TripPlace[];
   days: number[];
+  destination?: string | null;
   themeMode: ThemeMode;
   onChanged: () => Promise<void>;
   onScheduled: (itemId: string, dayNumber: number) => Promise<void>;
   onTimezoneDetected?: (timezone: string) => Promise<void>;
 };
 
-export function TripPlacesPanel({ tripId, userId, places, days, themeMode, onChanged, onScheduled, onTimezoneDetected }: Props) {
+export function TripPlacesPanel({ tripId, userId, places, days, destination, themeMode, onChanged, onScheduled, onTimezoneDetected }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<GeocodingResult[]>([]);
@@ -158,43 +159,8 @@ export function TripPlacesPanel({ tripId, userId, places, days, themeMode, onCha
     }
   }
 
-  async function handlePresetImport(preset: RecommendationPreset) {
-    setBusy(true);
-    try {
-      let lastItemId = '';
-      let lastDay = days[0] ?? 1;
-      let detectedTimezone = '';
-      for (const place of preset.places) {
-        const created = await createTripPlace({
-          trip_id: tripId,
-          title: place.title,
-          address: place.address,
-          lat: place.latitude,
-          lng: place.longitude,
-          category: place.category,
-          notes: null,
-          created_by: userId,
-        });
-        const scheduled = await scheduleTripPlace(created.id, {
-          dayNumber: place.dayNumber,
-          startTime: place.suggestedStartTime,
-          durationMinutes: place.estimatedDurationMinutes,
-          createdBy: userId,
-        });
-        lastItemId = scheduled.item.id;
-        lastDay = place.dayNumber;
-        if (!detectedTimezone) detectedTimezone = place.timezone;
-      }
-      if (onTimezoneDetected && detectedTimezone) await onTimezoneDetected(detectedTimezone);
-      await onChanged();
-      if (lastItemId) await onScheduled(lastItemId, lastDay);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-    <RecommendationPanel tripId={tripId} userId={userId} dayNumber={selectedDay} themeMode={themeMode} onAddToItinerary={handleRecommendationAdd} onImportPreset={handlePresetImport} />
+    <RecommendationPanel tripId={tripId} userId={userId} dayNumber={selectedDay} destination={destination} themeMode={themeMode} onAddToItinerary={handleRecommendationAdd} />
     <View style={[styles.header, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
       <Text style={[styles.title, { color: theme.colors.text }]}>💡 靈感收藏庫</Text>
       <Text style={[styles.subtitle, { color: theme.colors.muted }]}>先收藏想去的地方，再安排到適合的日期。</Text>

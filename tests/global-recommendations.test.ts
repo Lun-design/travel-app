@@ -3,12 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   buildGlobalItineraryPayload,
-  buildPresetItineraryPayloads,
   classifyGlobalPlace,
-  getCuratedRecommendations,
-  getPresetItineraries,
   RECOMMENDATION_THEMES,
   normalizeGlobalPlace,
+  searchDynamicRecommendations,
   searchGlobalPlaces,
   type GlobalPlaceSearchResult,
 } from '../lib/global-recommendations';
@@ -91,26 +89,27 @@ describe('global recommendation helpers', () => {
     expect(source).toContain('estimatedDurationMinutes');
     expect(source).toContain('timezone');
     expect(source).toContain('RECOMMENDATION_THEMES');
-    expect(source).toContain('一鍵帶入全天行程');
-    expect(source).toContain('onImportPreset');
+    expect(source).toContain('searchDynamicRecommendations');
+    expect(source).toContain('選擇推薦地區');
+    expect(source).toContain('destinationInput');
+    expect(source).toContain('recommendationLoading');
   });
 
-  it('provides destination presets with complete places and a batch payload builder', () => {
-    const presets = getPresetItineraries('東京');
-    expect(presets.length).toBeGreaterThan(0);
-    expect(presets[0].places.length).toBeGreaterThan(1);
-    expect(presets[0].places[0]).toEqual(expect.objectContaining({ latitude: expect.any(Number), longitude: expect.any(Number) }));
-
-    const payloads = buildPresetItineraryPayloads(presets[0], { tripId: 'trip-1', createdBy: 'user-1' });
-    expect(payloads).toHaveLength(presets[0].places.length);
-    expect(payloads[0]).toEqual(expect.objectContaining({ trip_id: 'trip-1', day_number: 1, timezone: 'Asia/Tokyo' }));
-  });
-
-  it('shows themed recommendations even before a destination is entered', () => {
+  it('exposes all four theme tabs for zero-input recommendations', () => {
     expect(RECOMMENDATION_THEMES.map((theme) => theme.id)).toEqual(['must-see', 'food', 'indoor', 'free-time']);
-    expect(getCuratedRecommendations('', 'must-see').length).toBeGreaterThan(0);
-    expect(getCuratedRecommendations('巴黎', 'indoor')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ category: 'indoor', timezone: 'Europe/Paris' }),
-    ]));
+  });
+
+  it('queries the external places provider with the selected destination and theme', async () => {
+    const queries: string[] = [];
+    const provider = async (query: string): Promise<GeocodingResult[]> => {
+      queries.push(query);
+      return [{ id: 'place-1', title: 'Test Cafe', displayName: 'Test Cafe, Banqiao, Taiwan', latitude: 25.011, longitude: 121.461 }];
+    };
+
+    const results = await searchDynamicRecommendations('板橋', 'food', provider);
+
+    expect(queries[0]).toContain('板橋');
+    expect(queries[0]).toContain('美食');
+    expect(results[0]).toMatchObject({ title: 'Test Cafe', latitude: 25.011, longitude: 121.461 });
   });
 });
