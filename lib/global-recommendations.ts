@@ -109,15 +109,62 @@ export const RECOMMENDATION_THEME_QUERY: Record<RecommendationThemeId, string> =
   'free-time': '附近景點 咖啡 空檔',
 };
 
+export type RecommendationSubcategoryId = 'all' | 'bbq' | 'hotpot' | 'noodles' | 'izakaya' | 'dessert' | 'landmark' | 'shrine' | 'nature' | 'shopping';
+export type RecommendationSubcategory = { id: RecommendationSubcategoryId; label: string; keyword: string };
+
+const RECOMMENDATION_SUBCATEGORIES: Record<RecommendationThemeId, RecommendationSubcategory[]> = {
+  food: [
+    { id: 'all', label: '全部', keyword: '美食 餐廳' },
+    { id: 'bbq', label: '燒肉／烤肉', keyword: '燒肉 烤肉 BBQ' },
+    { id: 'hotpot', label: '火鍋', keyword: '火鍋 涮涮鍋' },
+    { id: 'noodles', label: '拉麵／麵食', keyword: '拉麵 麵食' },
+    { id: 'izakaya', label: '居酒屋／酒吧', keyword: '居酒屋 酒吧' },
+    { id: 'dessert', label: '甜點咖啡', keyword: '甜點 咖啡' },
+  ],
+  'must-see': [
+    { id: 'all', label: '全部', keyword: '必去景點 地標' },
+    { id: 'landmark', label: '地標／展覽', keyword: '地標 展覽' },
+    { id: 'shrine', label: '神社／古蹟', keyword: '神社 古蹟' },
+    { id: 'nature', label: '自然／公園', keyword: '自然 公園' },
+    { id: 'shopping', label: '購物商圈', keyword: '購物 商圈' },
+  ],
+  indoor: [{ id: 'all', label: '全部', keyword: '室內景點 博物館' }],
+  'free-time': [{ id: 'all', label: '全部', keyword: '附近景點 咖啡 空檔' }],
+};
+
+export function getRecommendationSubcategories(theme: RecommendationThemeId): RecommendationSubcategory[] {
+  return RECOMMENDATION_SUBCATEGORIES[theme].map((item) => ({ ...item }));
+}
+
+export function buildRecommendationQuery(destination: string, theme: RecommendationThemeId, subcategory: RecommendationSubcategoryId = 'all'): string {
+  const category = getRecommendationSubcategories(theme).find((item) => item.id === subcategory)
+    ?? getRecommendationSubcategories(theme)[0];
+  return `${destination.trim()} ${category.keyword}`.trim();
+}
+
+export function paginateRecommendations<T>(items: T[], requestedPage: number, pageSize = 6) {
+  const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 6;
+  const totalPages = Math.max(1, Math.ceil(items.length / safeSize));
+  const page = Math.min(totalPages, Math.max(1, Math.floor(requestedPage) || 1));
+  return {
+    page,
+    totalPages,
+    items: items.slice((page - 1) * safeSize, page * safeSize),
+    hasPrevious: page > 1,
+    hasNext: page < totalPages,
+  };
+}
+
 /** Fetches live recommendations for the selected destination and theme. */
 export async function searchDynamicRecommendations(
   destination: string,
   theme: RecommendationThemeId,
   provider: GlobalPlaceSearchProvider = searchPlaces,
+  subcategory: RecommendationSubcategoryId = 'all',
 ): Promise<GlobalPlaceSearchResult[]> {
   const normalizedDestination = destination.trim();
   if (normalizedDestination.length < 2) return [];
-  const query = `${normalizedDestination} ${RECOMMENDATION_THEME_QUERY[theme]}`;
+  const query = buildRecommendationQuery(normalizedDestination, theme, subcategory);
   if (provider !== searchPlaces) return searchGlobalPlaces(query, provider);
   const initial = await searchPlaces(query);
   if (initial.some((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude))) return initial.filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude)).map(normalizeGlobalPlace);

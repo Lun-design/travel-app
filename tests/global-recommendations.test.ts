@@ -5,7 +5,10 @@ import {
   buildGlobalItineraryPayload,
   classifyGlobalPlace,
   RECOMMENDATION_THEMES,
+  getRecommendationSubcategories,
   normalizeGlobalPlace,
+  paginateRecommendations,
+  buildRecommendationQuery,
   searchDynamicRecommendations,
   searchGlobalPlaces,
   type GlobalPlaceSearchResult,
@@ -111,5 +114,28 @@ describe('global recommendation helpers', () => {
     expect(queries[0]).toContain('板橋');
     expect(queries[0]).toContain('美食');
     expect(results[0]).toMatchObject({ title: 'Test Cafe', latitude: 25.011, longitude: 121.461 });
+  });
+
+  it('builds deep food and sightseeing subcategory queries', () => {
+    expect(getRecommendationSubcategories('food').map((item) => item.id)).toEqual(['all', 'bbq', 'hotpot', 'noodles', 'izakaya', 'dessert']);
+    expect(getRecommendationSubcategories('must-see').map((item) => item.id)).toEqual(['all', 'landmark', 'shrine', 'nature', 'shopping']);
+    expect(buildRecommendationQuery('東京', 'food', 'bbq')).toContain('燒肉');
+    expect(buildRecommendationQuery('東京', 'must-see', 'shrine')).toContain('神社');
+  });
+
+  it('paginates recommendation cards with stable page boundaries', () => {
+    const results = Array.from({ length: 13 }, (_, index) => ({ id: String(index) }));
+    expect(paginateRecommendations(results, 1, 6)).toMatchObject({ page: 1, totalPages: 3, items: results.slice(0, 6), hasPrevious: false, hasNext: true });
+    expect(paginateRecommendations(results, 99, 6)).toMatchObject({ page: 3, totalPages: 3, items: results.slice(12), hasPrevious: true, hasNext: false });
+  });
+
+  it('exposes modal, subcategory and pagination controls in the recommendation panel', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    expect(source).toContain('<Modal');
+    expect(source).toContain('setIsOpen');
+    expect(source).toContain('getRecommendationSubcategories');
+    expect(source).toContain('paginateRecommendations');
+    expect(source).toContain('上一頁');
+    expect(source).toContain('下一頁');
   });
 });
