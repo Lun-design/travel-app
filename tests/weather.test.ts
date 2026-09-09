@@ -5,6 +5,7 @@ import {
   isWeatherAlert,
   parseOpenMeteoForecast,
   parseOpenMeteoResponse,
+  parseDaytimeHourlyForecast,
   WEATHER_CACHE_VERSION,
   isWeatherSummaryCacheValid,
   sanitizeWeatherForecast,
@@ -17,6 +18,42 @@ import {
 import { blockedNetworkFetch } from './setup';
 
 describe('weather helpers', () => {
+  it('keeps only the 08:00-20:00 hourly rain timeline for each day', () => {
+    const payload = {
+      hourly: {
+        time: ['2026-01-22T07:00', '2026-01-22T08:00', '2026-01-22T12:00', '2026-01-22T20:00', '2026-01-22T21:00'],
+        precipitation_probability: [80, 10, 60, 20, 90],
+        precipitation: [1, 0, 0.4, 0, 2],
+        weather_code: [63, 1, 61, 2, 63],
+      },
+    };
+    expect(parseDaytimeHourlyForecast(payload, '2026-01-22')).toEqual([
+      expect.objectContaining({ time: '2026-01-22T08:00', precipitationProbability: 10, weatherCode: 1 }),
+      expect.objectContaining({ time: '2026-01-22T12:00', precipitationProbability: 60, weatherCode: 61 }),
+      expect.objectContaining({ time: '2026-01-22T20:00', precipitationProbability: 20, weatherCode: 2 }),
+    ]);
+  });
+
+  it('uses the last successful local weather cache when the network fails', async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    });
+    const payload = { daily: { time: ['2026-01-22'], temperature_2m_min: [18], temperature_2m_max: [27], precipitation_probability_max: [10], weather_code: [1] } };
+    const success = createWeatherService(vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })), { now: () => 1000 });
+    await success.getForecast(25.03, 121.56, '2026-01-22', 'Asia/Taipei');
+
+    const offline = createWeatherService(vi.fn().mockRejectedValue(new Error('offline')), { now: () => 2000 });
+    await expect(offline.getForecast(25.03, 121.56, '2026-01-22', 'Asia/Taipei')).resolves.toMatchObject({
+      source: 'cached',
+      cachedAt: expect.any(String),
+      temperatureMinC: 18,
+      temperatureMaxC: 27,
+    });
+  });
+
   it('returns the daily temperature range and wear tip for a large swing', () => {
     expect(getTemperatureRangeC({ temperatureMinC: 18, temperatureMaxC: 27 })).toBe(9);
     expect(getWearTip({ temperatureMinC: 18, temperatureMaxC: 27 })).toBe('日夜溫差大，建議攜帶薄外套');
@@ -264,7 +301,7 @@ describe('weather helpers', () => {
   });
 
   it('uses a versioned cache namespace after weather parsing changes', () => {
-    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v6');
+    expect(WEATHER_CACHE_VERSION).toBe('weather_cache_v7');
   });
 
   it('rejects stale clear-weather cache entries with an implausible rain rate', () => {

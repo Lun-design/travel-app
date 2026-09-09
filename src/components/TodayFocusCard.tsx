@@ -46,6 +46,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const focusDate = scheduleDate;
   const compactMode = compact && shouldUseCompactTodayBanner(focus.mode, items.length > 0);
   const [compactExpanded, setCompactExpanded] = useState(false);
+  const [expandedHourlyDate, setExpandedHourlyDate] = useState<string | null>(null);
   const distanceKm = distanceToFocusSpot(focus.scheduled, schedule);
   const navigationUrl = getGoogleMapsDirectionsUrl(focusItem?.latitude, focusItem?.longitude);
   const itemVouchers = focusItem ? vouchers.filter((voucher) => voucher.item_id === focusItem.id) : [];
@@ -55,6 +56,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
 
   useEffect(() => {
     setCompactExpanded(false);
+    setExpandedHourlyDate(null);
   }, [compactMode, scheduleDate]);
 
   useEffect(() => {
@@ -133,9 +135,10 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
         {weather ? <View style={styles.weatherRow}><Text style={[styles.weather, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={[styles.rain, { color: weather.precipitationWarning ? theme.colors.warningText : theme.colors.primary }]}>☔ {Math.round(weather.precipitationProbability)}%{isWeatherAlert(weather) ? ' 預警' : ''}</Text> : null}</View> : <Text style={[styles.muted, { color: theme.colors.muted }]}>正在載入天氣…</Text>}
         <View style={styles.metaRow}><Text style={[styles.meta, { color: theme.colors.muted }]}>🧭 {distanceKm === null ? '距離上一站資料不足' : `距離上一站約 ${formatDistance(distanceKm)}`}</Text>{focusItem.address ? <Text numberOfLines={1} style={[styles.meta, styles.address, { color: theme.colors.muted }]}>{focusItem.address}</Text> : null}</View>
         {weather?.currentTemperatureC != null ? <Text style={[styles.muted, { color: theme.colors.text }]}>目前氣溫 {Math.round(weather.currentTemperatureC)}°C</Text> : null}
+        {weather?.source === 'cached' ? <Text accessibilityLabel="目前為離線氣象資料" style={[styles.cachedLabel, { color: theme.colors.muted, borderColor: theme.colors.border }]}>目前為離線氣象資料{weather.cachedAt ? `（更新於 ${formatCachedAt(weather.cachedAt)}）` : ''}</Text> : null}
         {wearTip ? <Text accessibilityLabel={wearTip} style={[styles.wearTip, { color: theme.colors.warningText, backgroundColor: theme.colors.warningSurface }]}>{wearTip}</Text> : null}
         {forecast.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.forecastRow}>
-          {forecast.slice(0, 7).map((day) => <View key={day.date} style={styles.forecastCell}><Text style={styles.forecastDate}>{day.date.slice(5)}</Text><Text style={styles.forecastIcon}>{day.icon}</Text><Text style={styles.forecastTemperature}>{formatDayTemperature(day)}</Text><Text style={styles.forecastRain}>{day.precipitationProbability == null ? '—' : `☔${Math.round(day.precipitationProbability)}%`}</Text>{getWearTip(day) ? <Text numberOfLines={3} style={styles.forecastWearTip}>{getWearTip(day)}</Text> : null}</View>)}
+          {forecast.slice(0, 7).map((day) => <Pressable key={day.date} accessibilityRole="button" accessibilityLabel={`${expandedHourlyDate === day.date ? '收合' : '展開'} ${day.date} 逐時降雨`} onPress={() => setExpandedHourlyDate((current) => current === day.date ? null : day.date)} style={styles.forecastCell}><Text style={styles.forecastDate}>{day.date.slice(5)}</Text><Text style={styles.forecastIcon}>{day.icon}</Text><Text style={styles.forecastTemperature}>{formatDayTemperature(day)}</Text><Text style={styles.forecastRain}>{day.precipitationProbability == null ? '—' : `☔${Math.round(day.precipitationProbability)}%`}</Text><Text style={styles.forecastToggle}>{expandedHourlyDate === day.date ? '收合逐時' : '查看逐時'}</Text>{getWearTip(day) ? <Text numberOfLines={3} style={styles.forecastWearTip}>{getWearTip(day)}</Text> : null}{expandedHourlyDate === day.date && day.hourly?.length ? <View style={styles.hourlyTimeline}>{day.hourly.map((hour) => <Text key={hour.time} style={styles.hourlyPoint}>{hour.time.slice(11, 16)} ({hour.precipitationProbability == null ? '—' : `${Math.round(hour.precipitationProbability)}%`}) {hour.condition}</Text>)}</View> : null}</Pressable>)}
         </ScrollView> : null}
         <View style={styles.actions}>
           {backupItem && onSwitchToBackupPlan ? <Pressable accessibilityRole="button" style={[styles.backupButton, { borderColor: shouldOfferBackup ? theme.colors.warningText : theme.colors.border, backgroundColor: shouldOfferBackup ? theme.colors.warningSurface : theme.colors.card }]} disabled={switchingBackup} onPress={() => void switchToBackup()}><Text style={[styles.backupText, { color: shouldOfferBackup ? theme.colors.warningText : theme.colors.primary }]}>{switchingBackup ? '切換中…' : shouldOfferBackup ? '☔ 切換雨天備案' : '查看雨天備案'}</Text></Pressable> : null}
@@ -161,6 +164,7 @@ function formatMinutes(value: number | null) {
 function formatDistance(value: number) { return value < 1 ? `${Math.round(value * 1000)} 公尺` : `${value.toFixed(1)} 公里`; }
 function formatTemperature(weather: WeatherSummary) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}–${max}°C`; if (max !== null) return `${max}°C`; if (min !== null) return `${min}°C`; return '溫度未知'; }
 function formatDayTemperature(weather: Pick<WeatherSummary, 'temperatureMinC' | 'temperatureMaxC'>) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}°/${max}°`; return max !== null ? `${max}°` : min !== null ? `${min}°` : '—'; }
+function formatCachedAt(value: string) { const parsed = new Date(value); return Number.isFinite(parsed.getTime()) ? parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : value; }
 
 const styles = StyleSheet.create({
   compactHidden: { display: 'none' },
@@ -185,6 +189,10 @@ const styles = StyleSheet.create({
   forecastIcon: { fontSize: 17, marginVertical: 2 },
   forecastTemperature: { color: EDITORIAL_COLORS.charcoal, fontSize: 10, fontWeight: '800' },
   forecastRain: { color: EDITORIAL_COLORS.terracotta, fontSize: 10, fontWeight: '800' },
+  forecastToggle: { color: EDITORIAL_COLORS.taupe, fontSize: 8, fontWeight: '700' },
+  cachedLabel: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, fontSize: 11, fontWeight: '700' },
+  hourlyTimeline: { width: 180, marginTop: 5, gap: 2 },
+  hourlyPoint: { color: EDITORIAL_COLORS.taupe, fontSize: 8, fontWeight: '700' },
   wearTip: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, fontSize: 12, fontWeight: '800' },
   forecastWearTip: { color: EDITORIAL_COLORS.terracotta, fontSize: 8, fontWeight: '800', textAlign: 'center', marginTop: 2 },
   weather: { fontSize: 15, fontWeight: '800', flexShrink: 1 },

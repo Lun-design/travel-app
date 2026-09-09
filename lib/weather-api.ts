@@ -1,5 +1,12 @@
 export type WeatherPresentation = { icon: string; condition: string; extreme: boolean };
 
+export type WeatherHourlyPoint = WeatherPresentation & {
+  time: string;
+  precipitationProbability: number | null;
+  weatherCode: number | null;
+  precipitationMm?: number | null;
+};
+
 export type WeatherDaySummary = WeatherPresentation & {
   date: string;
   temperatureMinC: number | null;
@@ -11,6 +18,8 @@ export type WeatherDaySummary = WeatherPresentation & {
   source: 'live' | 'cached' | 'mock';
   isSimulated: boolean;
   measuredPrecipitationMm?: number | null;
+  hourly?: WeatherHourlyPoint[];
+  cachedAt?: string | null;
 };
 
 export type WeatherSummary = WeatherDaySummary & {
@@ -37,7 +46,7 @@ export function getWearTip(weather: TemperatureRangeInput | null | undefined): s
 }
 
 /** Bump when response mapping changes so an old in-memory weather entry is never reused. */
-export const WEATHER_CACHE_VERSION = 'weather_cache_v6';
+export const WEATHER_CACHE_VERSION = 'weather_cache_v7';
 
 /** Stable fallback used when Open-Meteo cannot serve historical/out-of-range dates. */
 export function createMockWeatherSummary(date: string): WeatherSummary {
@@ -61,7 +70,7 @@ export function createMockWeatherSummary(date: string): WeatherSummary {
   return summary;
 }
 
-type OpenMeteoPayload = {
+export type OpenMeteoPayload = {
   current?: {
     temperature_2m?: unknown;
     weather_code?: unknown;
@@ -172,6 +181,42 @@ function normalizeWeatherCode(weatherCode: number | null, measuredPrecipitationM
   return weatherCode;
 }
 
+/** Parse the daytime rain timeline used by the compact forecast cards. */
+export function parseDaytimeHourlyForecast(payload: OpenMeteoPayload, date: string): WeatherHourlyPoint[] {
+  const times = Array.isArray(payload.hourly?.time) ? payload.hourly.time.map(String) : [];
+  return times.reduce<WeatherHourlyPoint[]>((result, time, index) => {
+    if (!time.startsWith(`${date}T`)) return result;
+    const hour = Number(/^\d{4}-\d{2}-\d{2}T(\d{2}):/.exec(time)?.[1]);
+    if (!Number.isFinite(hour) || hour < 8 || hour > 20) return result;
+    const measuredPrecipitation = numberAt(payload.hourly?.precipitation, index);
+    const weatherCode = normalizeWeatherCode(numberAt(payload.hourly?.weather_code, index), measuredPrecipitation);
+    const presentation = weatherCodeToPresentation(weatherCode);
+    const precipitationProbability = alignProbabilityWithWeatherPattern(
+      weatherCode,
+      numberAt(payload.hourly?.precipitation_probability, index),
+    );
+    result.push({
+      time,
+      precipitationProbability,
+      weatherCode,
+      ...presentation,
+      precipitationMm: measuredPrecipitation,
+    });
+    return result;
+  }, []);
+}
+
+function sanitizeHourlyPoint(point: WeatherHourlyPoint): WeatherHourlyPoint {
+  const weatherCode = normalizeWeatherCode(point.weatherCode, point.precipitationMm ?? 0);
+  const precipitationProbability = alignProbabilityWithWeatherPattern(weatherCode, point.precipitationProbability);
+  return {
+    ...point,
+    weatherCode,
+    precipitationProbability,
+    ...weatherCodeToPresentation(weatherCode),
+  };
+}
+
 function sanitizeWeatherDay(day: WeatherDaySummary): WeatherDaySummary {
   // Legacy cached cards do not carry measured precipitation. Treat that as
   // no measured rain so stale drizzle/high-POP values are safely corrected.
@@ -182,6 +227,7 @@ function sanitizeWeatherDay(day: WeatherDaySummary): WeatherDaySummary {
     ...day,
     ...presentation,
     weatherCode,
+    hourly: day.hourly?.map(sanitizeHourlyPoint),
     precipitationProbability,
     precipitationWarning: precipitationProbability !== null && precipitationProbability > 60,
     extremeWarning: presentation.extreme,
@@ -248,6 +294,15 @@ export function sanitizePersistedWeather(raw: unknown): WeatherSummary | null {
     const weatherCode = numberValue(row.weatherCode ?? row.weather_code);
     const presentation = weatherCodeToPresentation(weatherCode);
     const source = row.source === 'live' || row.source === 'mock' || row.source === 'cached' ? row.source : 'cached';
+    const hourly = Array.isArray(row.hourly)
+      ? row.hourly.filter((point): point is Record<string, unknown> => Boolean(point && typeof point === 'object')).map((point) => ({
+        time: String(point.time ?? ''),
+        precipitationProbability: numberValue(point.precipitationProbability ?? point.precipitation_probability),
+        weatherCode: numberValue(point.weatherCode ?? point.weather_code),
+        precipitationMm: numberValue(point.precipitationMm ?? point.precipitation),
+        ...weatherCodeToPresentation(numberValue(point.weatherCode ?? point.weather_code)),
+      })).filter((point) => point.time.length > 0)
+      : undefined;
     return {
       date: dayDate,
       icon: typeof row.icon === 'string' ? row.icon : presentation.icon,
@@ -262,6 +317,8 @@ export function sanitizePersistedWeather(raw: unknown): WeatherSummary | null {
       source,
       isSimulated: Boolean(row.isSimulated),
       measuredPrecipitationMm: numberValue(row.measuredPrecipitationMm ?? row.precipitation),
+      hourly,
+      cachedAt: typeof row.cachedAt === 'string' ? row.cachedAt : typeof row.cached_at === 'string' ? row.cached_at : null,
     };
   };
 
@@ -269,10 +326,12 @@ export function sanitizePersistedWeather(raw: unknown): WeatherSummary | null {
   if (!summary) return null;
   const forecast = rawForecast.map((value) => toDay(value)).filter((day): day is WeatherDaySummary => Boolean(day));
   const currentTemperatureC = numberValue(summarySource.currentTemperatureC ?? summarySource.temperature_2m);
+  const cachedAt = typeof summarySource.cachedAt === 'string' ? summarySource.cachedAt : typeof summarySource.cached_at === 'string' ? summarySource.cached_at : null;
   return sanitizeWeatherSummary({
     ...summary,
     currentTemperatureC,
     forecast,
+    cachedAt,
   });
 }
 
@@ -298,6 +357,46 @@ function addDays(date: string, days: number): string {
   if (!Number.isFinite(value.getTime())) return date;
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+}
+
+type WeatherStorage = { getItem: (key: string) => string | null; setItem: (key: string, value: string) => void };
+type WeatherCacheEnvelope = { weather: WeatherSummary; cachedAt: string };
+
+function getWeatherStorage(): WeatherStorage | null {
+  try {
+    const storage = (globalThis as typeof globalThis & { localStorage?: WeatherStorage }).localStorage;
+    return storage && typeof storage.getItem === 'function' && typeof storage.setItem === 'function' ? storage : null;
+  } catch {
+    return null;
+  }
+}
+
+function readWeatherCache(key: string): WeatherSummary | null {
+  const storage = getWeatherStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(key);
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as WeatherCacheEnvelope | WeatherSummary;
+    const candidate = 'weather' in envelope ? envelope.weather : envelope;
+    const weather = sanitizePersistedWeather(candidate);
+    if (!weather) return null;
+    const cachedAt = 'cachedAt' in envelope && typeof envelope.cachedAt === 'string' ? envelope.cachedAt : weather.cachedAt ?? null;
+    return { ...weather, source: 'cached', isSimulated: false, cachedAt };
+  } catch {
+    return null;
+  }
+}
+
+function writeWeatherCache(key: string, weather: WeatherSummary): void {
+  const storage = getWeatherStorage();
+  if (!storage) return;
+  try {
+    const cachedAt = new Date().toISOString();
+    storage.setItem(key, JSON.stringify({ weather: { ...weather, cachedAt }, cachedAt } satisfies WeatherCacheEnvelope));
+  } catch {
+    // Storage can be unavailable or full; in-memory caching still remains active.
+  }
 }
 
 export function weatherCodeToPresentation(code: number | null | undefined): WeatherPresentation {
@@ -351,6 +450,7 @@ export function parseOpenMeteoResponse(payload: OpenMeteoPayload, date: string, 
     source,
     isSimulated: false,
     measuredPrecipitationMm: measuredPrecipitation,
+    hourly: parseDaytimeHourlyForecast(payload, date),
     forecast: parseOpenMeteoForecast(payload, source),
     currentTemperatureC,
   };
@@ -381,6 +481,7 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
       source,
       isSimulated: false,
       measuredPrecipitationMm: measuredPrecipitation,
+      hourly: parseDaytimeHourlyForecast(payload, date),
     };
   });
 }
@@ -433,10 +534,14 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
         if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status})`);
         const payload = await response.json() as OpenMeteoPayload;
         console.debug('[Weather] Open-Meteo response', payload);
-        return parseOpenMeteoResponse(payload, date, 'live', targetTime) ?? createMockWeatherSummary(date);
+        const weather = parseOpenMeteoResponse(payload, date, 'live', targetTime) ?? createMockWeatherSummary(date);
+        if (weather.source === 'live' && !weather.isSimulated) writeWeatherCache(key, weather);
+        return weather;
       })
       .catch((error) => {
         console.warn('[Weather] forecast lookup skipped', error);
+        const cached = readWeatherCache(key);
+        if (cached) return cached;
         return createMockWeatherSummary(date);
       });
     cache.set(key, { expiresAt: now() + ttlMs, value: request });

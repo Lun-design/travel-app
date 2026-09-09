@@ -44,4 +44,12 @@ describe('trip detail module boundaries', () => {
     expect(card).toContain("TodayFocusCard Sanitized Forecast:");
     expect(timeline).toContain('persistedWeather');
   });
+
+  it('offers an expandable daytime rain timeline and labels cached weather', () => {
+    const card = read('src/components/TodayFocusCard.tsx');
+    expect(card).toContain('expandedHourlyDate');
+    expect(card).toContain('setExpandedHourlyDate');
+    expect(card).toContain('目前為離線氣象資料');
+    expect(card).toContain('day.hourly');
+  });
 });
