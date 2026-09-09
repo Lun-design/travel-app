@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   buildGlobalItineraryPayload,
+  buildPresetItineraryPayloads,
   classifyGlobalPlace,
+  getCuratedRecommendations,
+  getPresetItineraries,
+  RECOMMENDATION_THEMES,
   normalizeGlobalPlace,
   searchGlobalPlaces,
   type GlobalPlaceSearchResult,
@@ -86,5 +90,27 @@ describe('global recommendation helpers', () => {
     expect(source).toContain('一鍵帶入');
     expect(source).toContain('estimatedDurationMinutes');
     expect(source).toContain('timezone');
+    expect(source).toContain('RECOMMENDATION_THEMES');
+    expect(source).toContain('一鍵帶入全天行程');
+    expect(source).toContain('onImportPreset');
+  });
+
+  it('provides destination presets with complete places and a batch payload builder', () => {
+    const presets = getPresetItineraries('東京');
+    expect(presets.length).toBeGreaterThan(0);
+    expect(presets[0].places.length).toBeGreaterThan(1);
+    expect(presets[0].places[0]).toEqual(expect.objectContaining({ latitude: expect.any(Number), longitude: expect.any(Number) }));
+
+    const payloads = buildPresetItineraryPayloads(presets[0], { tripId: 'trip-1', createdBy: 'user-1' });
+    expect(payloads).toHaveLength(presets[0].places.length);
+    expect(payloads[0]).toEqual(expect.objectContaining({ trip_id: 'trip-1', day_number: 1, timezone: 'Asia/Tokyo' }));
+  });
+
+  it('shows themed recommendations even before a destination is entered', () => {
+    expect(RECOMMENDATION_THEMES.map((theme) => theme.id)).toEqual(['must-see', 'food', 'indoor', 'free-time']);
+    expect(getCuratedRecommendations('', 'must-see').length).toBeGreaterThan(0);
+    expect(getCuratedRecommendations('巴黎', 'indoor')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'indoor', timezone: 'Europe/Paris' }),
+    ]));
   });
 });
