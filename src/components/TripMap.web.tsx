@@ -66,10 +66,18 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
     const compactMap = window.matchMedia('(max-width: 480px)').matches;
     const map = L.map('map', { zoomControl: false });
     L.control.zoom({ position: 'topleft' }).addTo(map);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const primaryTileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    const fallbackTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const tileLayer = L.tileLayer(primaryTileUrl, {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
     }).addTo(map);
+    let usingFallbackTiles = false;
+    tileLayer.on('tileerror', function () {
+      if (usingFallbackTiles) return;
+      usingFallbackTiles = true;
+      tileLayer.setUrl(fallbackTileUrl);
+    });
     const coordinates = points.map(function (point) { return [point.latitude, point.longitude]; });
     points.forEach(function (point) {
       const icon = L.divIcon({ className: 'numbered-marker', html: '<span>' + point.order + '</span>', iconSize: [36, 36], iconAnchor: [18, 18] });

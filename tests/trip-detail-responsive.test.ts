@@ -282,6 +282,8 @@ describe('trip detail responsive layout', () => {
     expect(map).toContain("L.control.zoom({ position: 'topleft' }).addTo(map)");
     expect(map).toContain('.leaflet-top.leaflet-left { top: 12px; left: 12px; }');
     expect(map).toContain('paddingBottomRight: compactMap ? [170, 78] : [48, 48]');
+    expect(map).toContain('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png');
+    expect(map).toContain("tileLayer.on('tileerror'");
     expect(map).toContain('getTripDetailLayout(width)');
     expect(map).not.toContain('minHeight: 320');
   });

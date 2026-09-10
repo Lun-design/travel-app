@@ -92,7 +92,7 @@ export type ExchangeRateService = {
 
 // Frankfurter accepts EUR/USD as a base more reliably than TWD. We derive
 // TWD-per-currency rates from the shared EUR quote below.
-const EXCHANGE_RATE_ENDPOINT = 'https://api.frankfurter.app/latest?from=EUR&to=TWD,JPY,KRW,USD';
+const EXCHANGE_RATE_ENDPOINT = 'https://api.frankfurter.dev/v1/latest?from=EUR&to=TWD,JPY,KRW,USD';
 const EXCHANGE_RATE_CACHE_KEY = 'travel-planner.exchange-rates.v1';
 const EXCHANGE_RATE_MANUAL_KEY = 'travel-planner.exchange-rates.manual.v1';
 const EXCHANGE_RATE_TTL_MS = 6 * 60 * 60 * 1000;

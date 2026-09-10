@@ -60,7 +60,7 @@ describe('exchange rate and split helpers', () => {
     expect(first.updatedAt).toBeTruthy();
     expect(second.rates.USD).toBeCloseTo(32, 6);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[0]).toContain('from=EUR');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.frankfurter.dev/v1/latest?from=EUR&to=TWD,JPY,KRW,USD');
     expect(fetchMock.mock.calls[0]?.[1]).toBeUndefined();
   });
 });
