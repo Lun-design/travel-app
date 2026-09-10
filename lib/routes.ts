@@ -10,9 +10,21 @@ export type RoutePoint = Partial<Coordinate> & {
 export type RouteEstimate = {
   distanceKm: number;
   durationMinutes: number;
+  legs?: RouteLegEstimate[];
   mode: TravelMode;
   source: 'google' | 'fallback';
   navigationUrl: string | null;
+};
+
+export type RouteLegEstimate = {
+  distanceKm: number;
+  durationMinutes: number;
+};
+
+export type RouteSequenceEstimate = {
+  legs: RouteEstimate[];
+  totalDistanceKm: number;
+  totalDurationMinutes: number;
 };
 
 export type RouteFetcher = (input: string, init?: RequestInit) => Promise<Response>;
@@ -22,6 +34,7 @@ export type RouteEstimatorOptions = {
   endpoint?: string;
   fetcher?: RouteFetcher;
   cache?: Map<string, RouteEstimate>;
+  routingPreference?: 'TRAFFIC_AWARE' | 'TRAFFIC_UNAWARE';
 };
 
 const DEFAULT_ROUTES_ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes';
@@ -96,36 +109,71 @@ function fallbackEstimate(origin: RoutePoint, destination: RoutePoint, mode: Tra
   return {
     distanceKm,
     durationMinutes: calculateFallbackTravelMinutes(distanceKm, mode),
+    legs: [{ distanceKm, durationMinutes: calculateFallbackTravelMinutes(distanceKm, mode) }],
     mode,
     source: 'fallback',
     navigationUrl: buildGoogleMapsRouteUrl(origin, destination, mode),
   };
 }
 
+function parseDurationSeconds(value: unknown): number | null {
+  if (typeof value === 'string') {
+    const seconds = Number.parseFloat(value.replace(/s$/i, ''));
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+  }
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+}
+
 function parseRouteEstimate(payload: unknown, mode: TravelMode, fallback: RouteEstimate): RouteEstimate | null {
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { routes?: unknown }).routes)) return null;
-  const route = (payload as { routes: Array<{ distanceMeters?: unknown; duration?: unknown }> }).routes[0];
+  const route = (payload as { routes: Array<{ distanceMeters?: unknown; duration?: unknown; legs?: unknown }> }).routes[0];
   if (!route) return null;
-  const distanceMeters = Number(route.distanceMeters);
-  const durationSeconds = typeof route.duration === 'string'
-    ? Number.parseFloat(route.duration.replace(/s$/i, ''))
-    : Number(route.duration);
-  if (!Number.isFinite(distanceMeters) || distanceMeters < 0 || !Number.isFinite(durationSeconds) || durationSeconds < 0) return null;
+  const rawLegs = Array.isArray(route.legs) ? route.legs : [];
+  const parsedLegs = rawLegs.map((leg) => {
+    if (!leg || typeof leg !== 'object') return null;
+    const distanceMeters = Number((leg as { distanceMeters?: unknown }).distanceMeters);
+    const durationSeconds = parseDurationSeconds((leg as { duration?: unknown }).duration);
+    if (!Number.isFinite(distanceMeters) || distanceMeters < 0 || durationSeconds === null) return null;
+    return {
+      distanceKm: distanceMeters / 1000,
+      // Keep seconds internally so a route made of several short legs is
+      // rounded only once after all legs have been added together.
+      durationSeconds,
+      durationMinutes: Math.max(1, Math.ceil(durationSeconds / 60)),
+    };
+  });
+  const routeDistanceMeters = Number(route.distanceMeters);
+  const routeDurationSeconds = parseDurationSeconds(route.duration);
+  const hasLegs = rawLegs.length > 0 && parsedLegs.every((leg): leg is RouteLegEstimate & { durationSeconds: number } => leg !== null);
+  if (!hasLegs && (!Number.isFinite(routeDistanceMeters) || routeDistanceMeters < 0 || routeDurationSeconds === null)) return null;
+  const distanceKm = hasLegs
+    ? parsedLegs.reduce((sum, leg) => sum + leg.distanceKm, 0)
+    : routeDistanceMeters / 1000;
+  const durationMinutes = hasLegs
+    ? Math.max(1, Math.ceil(parsedLegs.reduce((sum, leg) => sum + leg.durationSeconds, 0) / 60))
+    : Math.max(1, Math.ceil((routeDurationSeconds as number) / 60));
   return {
     ...fallback,
-    distanceKm: distanceMeters / 1000,
-    durationMinutes: Math.max(1, Math.ceil(durationSeconds / 60)),
+    distanceKm,
+    durationMinutes,
+    legs: hasLegs
+      ? parsedLegs.map(({ distanceKm: legDistanceKm, durationMinutes: legDurationMinutes }) => ({
+        distanceKm: legDistanceKm,
+        durationMinutes: legDurationMinutes,
+      }))
+      : [{ distanceKm, durationMinutes }],
     mode,
     source: 'google',
   };
 }
 
-function routesRequestBody(origin: Coordinate, destination: Coordinate, mode: TravelMode): string {
+function routesRequestBody(origin: Coordinate, destination: Coordinate, mode: TravelMode, routingPreference: 'TRAFFIC_AWARE' | 'TRAFFIC_UNAWARE'): string {
   return JSON.stringify({
     origin: { location: { latLng: { latitude: origin.latitude, longitude: origin.longitude } } },
     destination: { location: { latLng: { latitude: destination.latitude, longitude: destination.longitude } } },
     travelMode: routesApiTravelMode(mode),
-    ...(mode === 'DRIVING' ? { routingPreference: 'TRAFFIC_AWARE' } : {}),
+    ...(mode === 'DRIVING' ? { routingPreference } : {}),
     languageCode: 'zh-TW',
     units: 'METRIC',
   });
@@ -146,6 +194,7 @@ export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
   const endpoint = options.endpoint ?? DEFAULT_ROUTES_ENDPOINT;
   const apiKey = options.apiKey ?? (typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY : undefined);
   const fetcher = options.fetcher ?? (typeof fetch === 'function' ? fetch.bind(globalThis) : undefined);
+  const routingPreference = options.routingPreference ?? 'TRAFFIC_UNAWARE';
 
   return {
     cache,
@@ -168,9 +217,9 @@ export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline',
+            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration',
           },
-          body: routesRequestBody(originCoordinate, destinationCoordinate, mode),
+          body: routesRequestBody(originCoordinate, destinationCoordinate, mode, routingPreference),
         });
         if (!response.ok) {
           const body = await readErrorBody(response);
@@ -193,5 +242,20 @@ export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
         return fallback;
       }
     },
+  };
+}
+
+/** Estimate every adjacent leg of a route and aggregate the API-backed totals. */
+export async function estimateRouteSequence(
+  points: readonly RoutePoint[],
+  mode: TravelMode = 'DRIVING',
+  estimator = createRouteEstimator(),
+): Promise<RouteSequenceEstimate> {
+  if (points.length < 2) return { legs: [], totalDistanceKm: 0, totalDurationMinutes: 0 };
+  const legs = await Promise.all(points.slice(0, -1).map((point, index) => estimator.getRoute(point, points[index + 1], mode)));
+  return {
+    legs,
+    totalDistanceKm: legs.reduce((sum, leg) => sum + leg.distanceKm, 0),
+    totalDurationMinutes: legs.reduce((sum, leg) => sum + leg.durationMinutes, 0),
   };
 }

@@ -3,6 +3,7 @@ import {
   buildGoogleMapsRouteUrl,
   calculateFallbackTravelMinutes,
   createRouteEstimator,
+  estimateRouteSequence,
   routeCacheKey,
   type RoutePoint,
 } from '../lib/routes';
@@ -46,8 +47,9 @@ describe('route estimates', () => {
       destination: { location: { latLng: { latitude: 25.033968, longitude: 121.564468 } } },
       travelMode: 'TRANSIT',
     });
+    expect(body.routeModifiers).toBeUndefined();
     expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
-      'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline',
+      'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration',
     });
   });
 
@@ -65,6 +67,48 @@ describe('route estimates', () => {
     expect(result.durationMinutes).toBe(120);
   });
 
+  it('aggregates every response leg instead of using only a partial route total', async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{
+        distanceMeters: 999,
+        duration: '999s',
+        legs: [
+          { distanceMeters: 1000, duration: '60s' },
+          { distanceMeters: 2000, duration: '120s' },
+        ],
+      }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    const result = await estimator.getRoute(taipeiMainStation, taipei101, 'DRIVING');
+
+    expect(result.distanceKm).toBeCloseTo(3, 6);
+    expect(result.durationMinutes).toBe(3);
+    expect(result.legs).toEqual([
+      { distanceKm: 1, durationMinutes: 1 },
+      { distanceKm: 2, durationMinutes: 2 },
+    ]);
+  });
+
+  it('sums each adjacent leg for a multi-stop route sequence', async () => {
+    const responses = [
+      { distanceMeters: 1000, duration: '60s' },
+      { distanceMeters: 2500, duration: '150s' },
+    ];
+    let requestIndex = 0;
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [responses[requestIndex++] ?? responses[0]] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+    const sequence = await estimateRouteSequence([taipeiMainStation, taipei101, { latitude: 25.01, longitude: 121.5 }], 'DRIVING', estimator);
+
+    expect(sequence.totalDistanceKm).toBeCloseTo(3.5, 6);
+    expect(sequence.totalDurationMinutes).toBe(4);
+    expect(sequence.legs).toHaveLength(2);
+  });
+
   it('translates app travel modes to the Routes API v2 enum values', async () => {
     const fetcher = vi.fn(async (_input: string, _init?: RequestInit) => ({
       ok: true,
@@ -79,6 +123,8 @@ describe('route estimates', () => {
     const secondBody = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
     expect(firstBody.travelMode).toBe('DRIVE');
     expect(secondBody.travelMode).toBe('WALK');
+    expect(firstBody.routingPreference).toBe('TRAFFIC_UNAWARE');
+    expect(firstBody.routeModifiers).toBeUndefined();
   });
 
   it('filters invalid coordinates before sending a Routes API request', async () => {

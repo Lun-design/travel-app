@@ -20,6 +20,7 @@ export type RouteOptimizationResult<T extends OptimizableStop> = {
   items: T[];
   legs: RouteOptimizationLeg[];
   originalDistanceKm: number;
+  originalDurationMinutes: number;
   totalDistanceKm: number;
   totalDurationMinutes: number;
   optimized: boolean;
@@ -153,13 +154,15 @@ export function optimizeRoute<T extends OptimizableStop>(
     const legs = items.length > 1 ? buildLegs(items) : [];
     const totalDistanceKm = legs.reduce((sum, leg) => sum + leg.distanceKm, 0);
     const totalDurationMinutes = legs.reduce((sum, leg) => sum + leg.durationMinutes, 0);
-    return { items: original, legs, originalDistanceKm: totalDistanceKm, totalDistanceKm, totalDurationMinutes, optimized: false, strategy: 'none', reason: 'insufficient-stops' };
+    return { items: original, legs, originalDistanceKm: totalDistanceKm, originalDurationMinutes: totalDurationMinutes, totalDistanceKm, totalDurationMinutes, optimized: false, strategy: 'none', reason: 'insufficient-stops' };
   }
   if (items.some((item) => coordinateOf(item) === null)) {
-    return { items: original, legs: [], originalDistanceKm: 0, totalDistanceKm: 0, totalDurationMinutes: 0, optimized: false, strategy: 'none', reason: 'missing-coordinates' };
+    return { items: original, legs: [], originalDistanceKm: 0, originalDurationMinutes: 0, totalDistanceKm: 0, totalDurationMinutes: 0, optimized: false, strategy: 'none', reason: 'missing-coordinates' };
   }
 
   const fixFirstDestination = options.fixFirstDestination ?? true;
+  const originalLegs = buildLegs(items);
+  const originalDurationMinutes = originalLegs.reduce((sum, leg) => sum + leg.durationMinutes, 0);
   const optimizedItems = items.length <= EXACT_STOP_LIMIT
     ? exactRoute(items, fixFirstDestination)
     : nearestNeighborRoute(items, fixFirstDestination);
@@ -171,6 +174,7 @@ export function optimizeRoute<T extends OptimizableStop>(
     items: optimizedItems,
     legs,
     originalDistanceKm: routeDistance(items),
+    originalDurationMinutes,
     totalDistanceKm,
     totalDurationMinutes,
     optimized: changed,

@@ -17,6 +17,7 @@ import { EDITORIAL_COLORS } from '@/lib/theme';
 import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
+import { createRouteEstimator, estimateRouteSequence, type RoutePoint } from '@/lib/routes';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -47,6 +48,18 @@ type Props = {
 };
 
 type OptimizationPreview = { result: RouteOptimizationResult<ItineraryItem>; scheduledItems: ItineraryItem[] };
+const routeSequenceEstimator = createRouteEstimator();
+
+function toRoutePoint(item: ItineraryItem): RoutePoint {
+  const latitude = Number(item.latitude);
+  const longitude = Number(item.longitude);
+  return {
+    latitude: Number.isFinite(latitude) ? latitude : undefined,
+    longitude: Number.isFinite(longitude) ? longitude : undefined,
+    title: item.location_name,
+    address: item.address,
+  };
+}
 
 export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onReorder, onApplyRouteOptimization, onAdd }: Props) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
@@ -65,13 +78,37 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   }, [trip, visibleItems]);
   function toggleMap() { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); onToggleMap(); }
   function completeSpot(itemId: string) { setCompletedIds((current) => new Set(current).add(itemId)); }
-  function openOptimizationPreview() {
+  async function openOptimizationPreview() {
+    if (optimizationBusy) return;
     const result = optimizeRoute(visibleItems);
     if (result.strategy === 'none') {
       Alert.alert('無法最佳化路線', result.reason === 'missing-coordinates' ? '請先補齊所有景點的經緯度座標。' : '至少需要 3 個景點才能進行路線最佳化。');
       return;
     }
-    setOptimizationPreview({ result, scheduledItems: applyOptimizedSchedule(result, { defaultStartTime: trip.default_departure_time ?? '09:00' }) });
+    setOptimizationBusy(true);
+    try {
+      const originalRoute = await estimateRouteSequence(visibleItems.map(toRoutePoint), 'DRIVING', routeSequenceEstimator);
+      const optimizedRoute = await estimateRouteSequence(result.items.map(toRoutePoint), 'DRIVING', routeSequenceEstimator);
+      const refinedResult: RouteOptimizationResult<ItineraryItem> = {
+        ...result,
+        originalDistanceKm: originalRoute.totalDistanceKm,
+        originalDurationMinutes: originalRoute.totalDurationMinutes,
+        totalDistanceKm: optimizedRoute.totalDistanceKm,
+        totalDurationMinutes: optimizedRoute.totalDurationMinutes,
+        legs: optimizedRoute.legs.map((leg, index) => ({
+          fromId: result.items[index].id,
+          toId: result.items[index + 1].id,
+          distanceKm: leg.distanceKm,
+          durationMinutes: leg.durationMinutes,
+          mode: 'DRIVING',
+        })),
+      };
+      setOptimizationPreview({ result: refinedResult, scheduledItems: applyOptimizedSchedule(refinedResult, { defaultStartTime: trip.default_departure_time ?? '09:00' }) });
+    } catch (error) {
+      Alert.alert('Route optimization failed', error instanceof Error ? error.message : 'Unable to estimate routes');
+    } finally {
+      setOptimizationBusy(false);
+    }
   }
   async function applyOptimization() {
     if (!optimizationPreview || optimizationBusy) return;
@@ -107,6 +144,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
         {optimizationPreview ? <>
           <Text style={styles.modalSummary}>距離 {formatDistance(optimizationPreview.result.originalDistanceKm)} → {formatDistance(optimizationPreview.result.totalDistanceKm)}（預估節省 {formatDistance(Math.max(0, optimizationPreview.result.originalDistanceKm - optimizationPreview.result.totalDistanceKm))}）</Text>
           <Text style={styles.modalHint}>{optimizationPreview.result.optimized ? '建議順序會固定第一站，重新安排後續景點。' : '目前順序已接近最短路線，仍可套用建議時間。'}</Text>
+           <Text style={styles.modalHint}>{`總車程 ${optimizationPreview.result.originalDurationMinutes} → ${optimizationPreview.result.totalDurationMinutes} 分鐘`}</Text>
           <ScrollView style={styles.previewList} contentContainerStyle={styles.previewContent}>
             {optimizationPreview.scheduledItems.map((item, index) => <View key={item.id} style={styles.previewRow}>
               <View style={styles.previewStop}><Text style={styles.previewIndex}>{index + 1}</Text><View style={styles.previewCopy}><Text style={styles.previewTime}>{item.time ?? '未設定'}</Text><Text style={styles.previewName}>{item.location_name}</Text></View></View>

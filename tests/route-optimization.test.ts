@@ -20,6 +20,8 @@ describe('route optimization', () => {
     expect(result.items[0]).toBe(stops[0]);
     expect(result.strategy).toBe('exact');
     expect(result.totalDistanceKm).toBeLessThan(120);
+    expect(result.originalDistanceKm - result.totalDistanceKm).toBeGreaterThan(0);
+    expect(result.originalDurationMinutes).toBeGreaterThan(result.totalDurationMinutes);
   });
 
   it('can optimize every stop when the first destination is not fixed', () => {
@@ -59,6 +61,7 @@ describe('route optimization', () => {
     expect(result.originalDistanceKm).toBeGreaterThan(100);
     expect(result.totalDistanceKm).toBeCloseTo(result.originalDistanceKm, 8);
     expect(result.legs).toHaveLength(1);
+    expect(result.originalDurationMinutes).toBe(result.totalDurationMinutes);
     expect(result.totalDurationMinutes).toBeGreaterThan(0);
   });
 
