@@ -51,6 +51,22 @@ describe('route estimates', () => {
     });
   });
 
+  it('translates app travel modes to the Routes API v2 enum values', async () => {
+    const fetcher = vi.fn(async (_input: string, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 1000, duration: '120s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    await estimator.getRoute(taipeiMainStation, taipei101, 'DRIVING');
+    await estimator.getRoute(taipeiMainStation, taipei101, 'WALKING');
+
+    const firstBody = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    const secondBody = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
+    expect(firstBody.travelMode).toBe('DRIVE');
+    expect(secondBody.travelMode).toBe('WALK');
+  });
+
   it('filters invalid coordinates before sending a Routes API request', async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

@@ -69,6 +69,17 @@ function googleTravelMode(mode: TravelMode): string {
   return mode.toLowerCase();
 }
 
+/**
+ * The app keeps user-facing mode names, while Routes API v2 uses a different
+ * enum (`DRIVE`, `WALK`, `TRANSIT`). Sending `DRIVING` or `WALKING` directly
+ * makes computeRoutes reject an otherwise valid request with HTTP 400.
+ */
+function routesApiTravelMode(mode: TravelMode): 'DRIVE' | 'TRANSIT' | 'WALK' {
+  if (mode === 'DRIVING') return 'DRIVE';
+  if (mode === 'WALKING') return 'WALK';
+  return 'TRANSIT';
+}
+
 export function buildGoogleMapsRouteUrl(origin: RoutePoint, destination: RoutePoint, mode: TravelMode): string | null {
   const originValue = routePointValue(origin);
   const destinationValue = routePointValue(destination);
@@ -113,7 +124,7 @@ function routesRequestBody(origin: Coordinate, destination: Coordinate, mode: Tr
   return JSON.stringify({
     origin: { location: { latLng: { latitude: origin.latitude, longitude: origin.longitude } } },
     destination: { location: { latLng: { latitude: destination.latitude, longitude: destination.longitude } } },
-    travelMode: mode,
+    travelMode: routesApiTravelMode(mode),
     ...(mode === 'DRIVING' ? { routingPreference: 'TRAFFIC_AWARE' } : {}),
     languageCode: 'zh-TW',
     units: 'METRIC',
