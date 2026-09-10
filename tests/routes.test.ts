@@ -51,6 +51,20 @@ describe('route estimates', () => {
     });
   });
 
+  it('converts Routes API duration seconds and distance meters exactly once', async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 133300, duration: '7200s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    const result = await estimator.getRoute(taipeiMainStation, taipei101, 'DRIVING');
+
+    expect(result.source).toBe('google');
+    expect(result.distanceKm).toBeCloseTo(133.3, 6);
+    expect(result.durationMinutes).toBe(120);
+  });
+
   it('translates app travel modes to the Routes API v2 enum values', async () => {
     const fetcher = vi.fn(async (_input: string, _init?: RequestInit) => ({
       ok: true,

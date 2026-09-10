@@ -40,9 +40,11 @@ const WALKING_SPEED_KMH = 5;
 const DRIVING_SPEED_KMH = 35;
 
 function coordinateOf<T extends OptimizableStop>(item: T): Coordinate | null {
-  return Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
-    ? { latitude: item.latitude as number, longitude: item.longitude as number }
-    : null;
+  const latitude = typeof item.latitude === 'number' || typeof item.latitude === 'string' ? Number(item.latitude) : NaN;
+  const longitude = typeof item.longitude === 'number' || typeof item.longitude === 'string' ? Number(item.longitude) : NaN;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return { latitude, longitude };
 }
 
 function distanceBetween<T extends OptimizableStop>(from: T, to: T): number {
@@ -148,7 +150,10 @@ export function optimizeRoute<T extends OptimizableStop>(
 ): RouteOptimizationResult<T> {
   const original = items as T[];
   if (items.length < 3) {
-    return { items: original, legs: [], originalDistanceKm: 0, totalDistanceKm: 0, totalDurationMinutes: 0, optimized: false, strategy: 'none', reason: 'insufficient-stops' };
+    const legs = items.length > 1 ? buildLegs(items) : [];
+    const totalDistanceKm = legs.reduce((sum, leg) => sum + leg.distanceKm, 0);
+    const totalDurationMinutes = legs.reduce((sum, leg) => sum + leg.durationMinutes, 0);
+    return { items: original, legs, originalDistanceKm: totalDistanceKm, totalDistanceKm, totalDurationMinutes, optimized: false, strategy: 'none', reason: 'insufficient-stops' };
   }
   if (items.some((item) => coordinateOf(item) === null)) {
     return { items: original, legs: [], originalDistanceKm: 0, totalDistanceKm: 0, totalDurationMinutes: 0, optimized: false, strategy: 'none', reason: 'missing-coordinates' };

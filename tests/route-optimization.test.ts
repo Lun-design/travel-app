@@ -50,6 +50,32 @@ describe('route optimization', () => {
     }
   });
 
+  it('keeps the real distance and travel leg for a two-stop route', () => {
+    const stops = [stop('origin', 25.03, 121.46), stop('destination', 24.15, 120.68)];
+
+    const result = optimizeRoute(stops);
+
+    expect(result.items).toBe(stops);
+    expect(result.originalDistanceKm).toBeGreaterThan(100);
+    expect(result.totalDistanceKm).toBeCloseTo(result.originalDistanceKm, 8);
+    expect(result.legs).toHaveLength(1);
+    expect(result.totalDurationMinutes).toBeGreaterThan(0);
+  });
+
+  it('accepts numeric coordinate values returned as strings by a data adapter', () => {
+    const stops = [
+      { ...stop('origin', 25.03, 121.46), latitude: '25.03' as unknown as number, longitude: '121.46' as unknown as number },
+      { ...stop('destination', 24.15, 120.68), latitude: '24.15' as unknown as number, longitude: '120.68' as unknown as number },
+      stop('third', 24.2, 120.7),
+    ];
+
+    const result = optimizeRoute(stops);
+
+    expect(result.strategy).toBe('exact');
+    expect(result.reason).toBeUndefined();
+    expect(result.totalDistanceKm).toBeGreaterThan(0);
+  });
+
   it('uses nearest-neighbor for more than ten stops', () => {
     const stops = [
       stop('stop-0', 25, 121.05),
