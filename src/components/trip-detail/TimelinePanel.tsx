@@ -18,6 +18,7 @@ import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
 import { createRouteEstimator, estimateRouteSequence, type RoutePoint } from '@/lib/routes';
+import { formatRouteLegContext } from '@/lib/route-connector';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -146,10 +147,21 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
           <Text style={styles.modalHint}>{optimizationPreview.result.optimized ? '建議順序會固定第一站，重新安排後續景點。' : '目前順序已接近最短路線，仍可套用建議時間。'}</Text>
            <Text style={styles.modalHint}>{`總車程 ${optimizationPreview.result.originalDurationMinutes} → ${optimizationPreview.result.totalDurationMinutes} 分鐘`}</Text>
           <ScrollView style={styles.previewList} contentContainerStyle={styles.previewContent}>
-            {optimizationPreview.scheduledItems.map((item, index) => <View key={item.id} style={styles.previewRow}>
+            {optimizationPreview.scheduledItems.map((item, index) => {
+              const previousItem = optimizationPreview.scheduledItems[index - 1];
+              const leg = optimizationPreview.result.legs[index - 1];
+              return <React.Fragment key={item.id}>
+                {previousItem && leg ? <View style={styles.routeConnector}>
+                  <View style={styles.routeRail}><View style={styles.routeDot} /></View>
+                  <View style={styles.routeConnectorBody}>
+                    <Text style={styles.routeConnectorLabel}>{formatRouteLegContext({ fromName: previousItem.location_name, toName: item.location_name, durationMinutes: leg.durationMinutes, mode: leg.mode })}</Text>
+                  </View>
+                </View> : null}
+                <View style={styles.previewRow}>
               <View style={styles.previewStop}><Text style={styles.previewIndex}>{index + 1}</Text><View style={styles.previewCopy}><Text style={styles.previewTime}>{item.time ?? '未設定'}</Text><Text style={styles.previewName}>{item.location_name}</Text></View></View>
-              {optimizationPreview.result.legs[index] ? <Text style={styles.previewLeg}>{optimizationPreview.result.legs[index].mode === 'WALKING' ? '🚶 步行' : '🚗 車程'} · 約 {optimizationPreview.result.legs[index].durationMinutes} 分鐘</Text> : null}
-            </View>)}
+                </View>
+              </React.Fragment>;
+            })}
           </ScrollView>
           <View style={styles.modalActions}><Pressable style={styles.cancelButton} disabled={optimizationBusy} onPress={() => setOptimizationPreview(null)}><Text style={styles.cancelText}>取消</Text></Pressable><Pressable style={styles.applyButton} disabled={optimizationBusy} onPress={() => void applyOptimization()}><Text style={styles.applyText}>{optimizationBusy ? '套用中…' : '確認套用'}</Text></Pressable></View>
         </> : null}
@@ -190,6 +202,11 @@ const styles = StyleSheet.create({
   previewContent: { gap: 8, paddingVertical: 4 },
   previewRow: { borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 10, gap: 7 },
   previewStop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  routeConnector: { flexDirection: 'row', alignItems: 'stretch', minHeight: 58, paddingHorizontal: 8, gap: 10 },
+  routeRail: { width: 20, alignItems: 'center', justifyContent: 'center' },
+  routeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 2, borderColor: EDITORIAL_COLORS.paper },
+  routeConnectorBody: { flex: 1, justifyContent: 'center', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.terracottaSoft, paddingLeft: 10 },
+  routeConnectorLabel: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 18, fontWeight: '700' },
   previewIndex: { width: 26, height: 26, borderRadius: 13, textAlign: 'center', paddingTop: 4, color: EDITORIAL_COLORS.paper, backgroundColor: EDITORIAL_COLORS.terracotta, fontWeight: '900' },
   previewCopy: { flex: 1, gap: 2 },
   previewTime: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '900' },
