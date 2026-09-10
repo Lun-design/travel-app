@@ -37,6 +37,10 @@ function isCoordinate(value: unknown): value is number {
 
 function pointCoordinates(point: RoutePoint): Coordinate | null {
   if (!isCoordinate(point.latitude) || !isCoordinate(point.longitude)) return null;
+  // Routes API rejects coordinates outside the valid latitude/longitude ranges.
+  // Validate them before constructing the request so malformed persisted places
+  // transparently use the geometry fallback instead of returning a 400.
+  if (point.latitude < -90 || point.latitude > 90 || point.longitude < -180 || point.longitude > 180) return null;
   return { latitude: point.latitude, longitude: point.longitude };
 }
 
@@ -116,6 +120,16 @@ function routesRequestBody(origin: Coordinate, destination: Coordinate, mode: Tr
   });
 }
 
+async function readErrorBody(response: Response): Promise<string> {
+  try {
+    if (typeof response.text === 'function') return await response.text();
+    if (typeof response.json === 'function') return JSON.stringify(await response.json());
+  } catch {
+    // Keep the original HTTP error useful even if the response body is unreadable.
+  }
+  return '';
+}
+
 export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
   const cache = options.cache ?? new Map<string, RouteEstimate>();
   const endpoint = options.endpoint ?? DEFAULT_ROUTES_ENDPOINT;
@@ -143,11 +157,23 @@ export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters',
+            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline',
           },
           body: routesRequestBody(originCoordinate, destinationCoordinate, mode),
         });
-        if (!response.ok) throw new Error(`Routes API request failed (${response.status})`);
+        if (!response.ok) {
+          const body = await readErrorBody(response);
+          console.error('[Routes] API request failed', {
+            endpoint,
+            status: response.status,
+            statusText: response.statusText,
+            body,
+            origin: originCoordinate,
+            destination: destinationCoordinate,
+            mode,
+          });
+          throw new Error(`Routes API request failed (${response.status})${body ? `: ${body}` : ''}`);
+        }
         const parsed = parseRouteEstimate(await response.json(), mode, fallback) ?? fallback;
         cache.set(key, parsed);
         return parsed;
@@ -158,4 +184,3 @@ export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
     },
   };
 }
-

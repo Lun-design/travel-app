@@ -39,7 +39,56 @@ describe('route estimates', () => {
     expect(first).toMatchObject({ distanceKm: 1.8, durationMinutes: 15, mode: 'TRANSIT', source: 'google' });
     expect(second).toEqual(first);
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher.mock.calls[0]?.[1]?.body).toContain('"travelMode":"TRANSIT"');
+    const request = fetcher.mock.calls[0]?.[1];
+    const body = JSON.parse(String(request?.body));
+    expect(body).toMatchObject({
+      origin: { location: { latLng: { latitude: 25.0478, longitude: 121.517 } } },
+      destination: { location: { latLng: { latitude: 25.033968, longitude: 121.564468 } } },
+      travelMode: 'TRANSIT',
+    });
+    expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
+      'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline',
+    });
+  });
+
+  it('filters invalid coordinates before sending a Routes API request', async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 100, duration: '60s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    const result = await estimator.getRoute({ title: '缺少座標的景點' }, taipei101, 'DRIVING');
+
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(result.source).toBe('fallback');
+  });
+
+  it('logs the full error body and falls back on a 400 response', async () => {
+    const responseBody = JSON.stringify({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        message: 'Invalid latLng',
+        details: [{ field: 'origin.location.latLng.latitude' }],
+      },
+    });
+    const fetcher = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => responseBody,
+    }) as unknown as Response);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    const result = await estimator.getRoute(taipeiMainStation, taipei101, 'TRANSIT');
+
+    expect(result.source).toBe('fallback');
+    expect(result.distanceKm).toBeGreaterThan(0);
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[Routes] API request failed',
+      expect.objectContaining({ status: 400, body: responseBody }),
+    );
   });
 
   it('falls back to geometry when Routes API is unavailable', async () => {
