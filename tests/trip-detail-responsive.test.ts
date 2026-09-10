@@ -282,9 +282,18 @@ describe('trip detail responsive layout', () => {
     expect(map).toContain("L.control.zoom({ position: 'topleft' }).addTo(map)");
     expect(map).toContain('.leaflet-top.leaflet-left { top: 12px; left: 12px; }');
     expect(map).toContain('paddingBottomRight: compactMap ? [170, 78] : [48, 48]');
-    expect(map).toContain('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png');
+    expect(map).toContain("const primaryTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'");
+    expect(map).not.toContain('basemaps.cartocdn.com');
     expect(map).toContain("tileLayer.on('tileerror'");
     expect(map).toContain('getTripDetailLayout(width)');
     expect(map).not.toContain('minHeight: 320');
+  });
+
+  it('keeps timeline quick actions focused on address and navigation', () => {
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    expect(timeline).toContain('複製地址');
+    expect(timeline).toContain('開啟 Google Maps 導航');
+    expect(timeline).not.toContain('複製座標');
+    expect(timeline).not.toContain('formatPlaceCoordinates');
   });
 });

@@ -6,7 +6,7 @@ import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type We
 import type { Voucher } from '@/lib/vouchers';
 import { buildDaySchedule, type ScheduleContext, type ScheduledItem } from '@/lib/schedule';
 import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
-import { formatPlaceCoordinates, formatPlaceAddress } from '@/lib/place-actions';
+import { formatPlaceAddress } from '@/lib/place-actions';
 import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -155,7 +155,6 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
   const navigationUrl = getGoogleMapsDirectionsUrl(item.latitude, item.longitude);
   const placeAddress = formatPlaceAddress(item.address);
-  const placeCoordinates = formatPlaceCoordinates(item.latitude, item.longitude);
   const [favorite, setFavorite] = useState(false);
   return (
     <View>
@@ -186,7 +185,6 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
                 <Pressable style={styles.actionButton} onPress={() => onEdit(item)}><Text style={[styles.edit, { color: theme.colors.primary }]}>編輯</Text></Pressable>
                 <Pressable style={styles.actionButton} onPress={() => onDelete(item)}><Text style={styles.delete}>刪除</Text></Pressable>
                 {placeAddress ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="複製地址" onPress={() => void copyCardText(placeAddress, '景點地址已複製。')}><Text style={[styles.utilityAction, { color: theme.colors.primary }]}>複製地址</Text></Pressable> : null}
-                {placeCoordinates ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="複製座標" onPress={() => void copyCardText(placeCoordinates, '景點座標已複製。')}><Text style={[styles.utilityAction, { color: theme.colors.primary }]}>複製座標</Text></Pressable> : null}
                 {itemVouchers.length > 0 && onPreviewVoucher ? <Pressable style={styles.actionButton} onPress={() => onPreviewVoucher(itemVouchers[0])}><Text style={styles.voucher}>🎫 檢視票券{itemVouchers.length > 1 ? ` (${itemVouchers.length})` : ''}</Text></Pressable> : null}
                 <Pressable onPress={() => setFavorite((current) => !current)}><View style={styles.favorite}>{favorite ? <PuppyMascot puppy="-3" size={28} accessibilityLabel="已收藏" /> : <Text style={styles.favoriteText}>♡ 收藏</Text>}</View></Pressable>
               </View>

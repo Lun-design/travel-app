@@ -66,11 +66,11 @@ function createLeafletDocument(markers: ReturnType<typeof mapMarkersForDay>) {
     const compactMap = window.matchMedia('(max-width: 480px)').matches;
     const map = L.map('map', { zoomControl: false });
     L.control.zoom({ position: 'topleft' }).addTo(map);
-    const primaryTileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-    const fallbackTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const primaryTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const fallbackTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     const tileLayer = L.tileLayer(primaryTileUrl, {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+      attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     let usingFallbackTiles = false;
     tileLayer.on('tileerror', function () {
