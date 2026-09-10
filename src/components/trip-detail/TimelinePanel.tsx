@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, LayoutAnimation, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, LayoutAnimation, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { TimelineViewport } from './TimelineViewport';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { ItineraryItem } from '@/lib/itinerary';
 import type { Trip } from '@/lib/trips';
 import type { Voucher } from '@/lib/vouchers';
 import { exportTripCalendar } from '@/lib/calendar';
+import { buildDayItineraryText } from '@/lib/itinerary-share';
+import { shareOrCopyText } from '@/lib/share-actions';
 import { DayTabs } from '@/components/DayTabs';
 import { TripMap } from '@/components/TripMap';
 import { ItineraryTimeline } from '@/components/ItineraryTimeline';
@@ -128,12 +130,29 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     try { await exportTripCalendar(trip, items); }
     catch (error: any) { Alert.alert('匯出失敗', error?.message ?? '無法建立行事曆檔案。'); }
   }
+  async function shareDayItinerary() {
+    const text = buildDayItineraryText(trip, items, day);
+    const browserNavigator = (globalThis as any).navigator;
+    const nativeShare = typeof (Share as any)?.share === 'function'
+      ? (message: string) => (Share as any).share({ message })
+      : undefined;
+    try {
+      const result = await shareOrCopyText(text, {
+        webShare: typeof browserNavigator?.share === 'function' ? (data) => browserNavigator.share(data) : undefined,
+        clipboardWrite: typeof browserNavigator?.clipboard?.writeText === 'function' ? (value) => browserNavigator.clipboard.writeText(value) : undefined,
+        nativeShare,
+      });
+      Alert.alert(result === 'copied' ? '已複製今日行程' : '已開啟分享', result === 'copied' ? '可以貼到 LINE 或其他聊天工具。' : '請選擇要分享的 App。');
+    } catch (error: any) {
+      Alert.alert('分享失敗', error?.message ?? '此裝置暫時無法分享行程。');
+    }
+  }
   const { width, height } = useWindowDimensions();
   const optimizationStatus = optimizationPreview
     ? getRouteOptimizationStatus(optimizationPreview.result.originalDistanceKm, optimizationPreview.result.totalDistanceKm)
     : null;
   return <>
-    <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable></View>
+    <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable><Pressable style={styles.shareButton} onPress={() => void shareDayItinerary()}><Text style={styles.shareText}>↗ 分享今日行程</Text></Pressable></View></View>
     <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>🧭 最佳化今日路線</Text></Pressable>
     <DayTabs days={days} selected={day} onChange={onDayChange} themeMode={themeMode} />
     <TodayFocusCard schedule={scheduled} items={items} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} onSwitchToBackupPlan={onSwitchToBackupPlan} persistedWeather={persistedWeather} compact={layout.compact} />
@@ -181,12 +200,15 @@ function formatDistance(distanceKm: number): string {
 const styles = StyleSheet.create({
   mobileTimeline: { width: '100%', paddingVertical: 12 },
   mobileFab: { position: 'relative', alignSelf: 'flex-end', marginTop: 16 },
-  dayHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
+  dayHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
+  dayHeaderActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, flexShrink: 1 },
   dayTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
   optimizeButton: { width: '100%', minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
   calendarText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
+  shareButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 10, paddingVertical: 8 },
+  shareText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '800' },
   mapToggle: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, overflow: 'hidden' },
   mapToggleText: { color: EDITORIAL_COLORS.terracotta, fontSize: 14, fontWeight: '800', textAlign: 'center' },
   mapPane: { width: '100%', maxWidth: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden', marginBottom: 12 },
