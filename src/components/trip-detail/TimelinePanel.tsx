@@ -18,7 +18,7 @@ import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
 import { createRouteEstimator, estimateRouteSequence, type RoutePoint } from '@/lib/routes';
-import { formatRouteLegContext } from '@/lib/route-connector';
+import { formatRouteDuration, formatRouteLegContext, getRouteOptimizationStatus } from '@/lib/route-connector';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -129,6 +129,9 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     catch (error: any) { Alert.alert('匯出失敗', error?.message ?? '無法建立行事曆檔案。'); }
   }
   const { width, height } = useWindowDimensions();
+  const optimizationStatus = optimizationPreview
+    ? getRouteOptimizationStatus(optimizationPreview.result.originalDistanceKm, optimizationPreview.result.totalDistanceKm)
+    : null;
   return <>
     <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable></View>
     <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>🧭 最佳化今日路線</Text></Pressable>
@@ -143,9 +146,10 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
       <View style={styles.modalBackdrop}><View style={styles.modalCard}>
         <View style={styles.modalHeader}><Text style={styles.modalTitle}>🧭 今日路線最佳化</Text><Pressable accessibilityRole="button" accessibilityLabel="關閉路線最佳化預覽" onPress={() => { if (!optimizationBusy) setOptimizationPreview(null); }}><Text style={styles.modalClose}>×</Text></Pressable></View>
         {optimizationPreview ? <>
-          <Text style={styles.modalSummary}>距離 {formatDistance(optimizationPreview.result.originalDistanceKm)} → {formatDistance(optimizationPreview.result.totalDistanceKm)}（預估節省 {formatDistance(Math.max(0, optimizationPreview.result.originalDistanceKm - optimizationPreview.result.totalDistanceKm))}）</Text>
+          <Text style={styles.modalSummary}>距離 {formatDistance(optimizationPreview.result.originalDistanceKm)} → {formatDistance(optimizationPreview.result.totalDistanceKm)}</Text>
+          {optimizationStatus ? <View style={styles.optimizationStatusRow}><Text style={[styles.optimizationStatusBadge, optimizationStatus.isOptimal ? styles.optimizationStatusOptimal : styles.optimizationStatusSaving]}>{optimizationStatus.label}</Text></View> : null}
           <Text style={styles.modalHint}>{optimizationPreview.result.optimized ? '建議順序會固定第一站，重新安排後續景點。' : '目前順序已接近最短路線，仍可套用建議時間。'}</Text>
-           <Text style={styles.modalHint}>{`總車程 ${optimizationPreview.result.originalDurationMinutes} → ${optimizationPreview.result.totalDurationMinutes} 分鐘`}</Text>
+           <Text style={styles.modalHint}>{`總車程 ${formatRouteDuration(optimizationPreview.result.originalDurationMinutes)} → ${formatRouteDuration(optimizationPreview.result.totalDurationMinutes)}`}</Text>
           <ScrollView style={styles.previewList} contentContainerStyle={styles.previewContent}>
             {optimizationPreview.scheduledItems.map((item, index) => {
               const previousItem = optimizationPreview.scheduledItems[index - 1];
@@ -197,6 +201,10 @@ const styles = StyleSheet.create({
   modalTitle: { color: EDITORIAL_COLORS.charcoal, fontSize: 20, fontWeight: '900' },
   modalClose: { color: EDITORIAL_COLORS.taupe, fontSize: 28, lineHeight: 30, paddingHorizontal: 8 },
   modalSummary: { color: EDITORIAL_COLORS.charcoal, fontSize: 15, fontWeight: '800' },
+  optimizationStatusRow: { flexDirection: 'row', alignItems: 'center' },
+  optimizationStatusBadge: { alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12, fontWeight: '800' },
+  optimizationStatusOptimal: { color: EDITORIAL_COLORS.taupe, backgroundColor: EDITORIAL_COLORS.sand, borderColor: EDITORIAL_COLORS.line },
+  optimizationStatusSaving: { color: EDITORIAL_COLORS.terracotta, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderColor: EDITORIAL_COLORS.terracottaSoft },
   modalHint: { color: EDITORIAL_COLORS.taupe, fontSize: 13, lineHeight: 19 },
   previewList: { maxHeight: 360 },
   previewContent: { gap: 8, paddingVertical: 4 },

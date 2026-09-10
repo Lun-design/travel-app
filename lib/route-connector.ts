@@ -26,3 +26,12 @@ export function formatRouteLegContext({ fromName, toName, durationMinutes, mode 
   const destination = toName.trim() || '下一站';
   return `${modeLabel(mode)}｜${origin} ➔ ${destination}：${mode === 'DRIVING' ? '車程' : mode === 'WALKING' ? '步行' : '行程'}約 ${formatRouteDuration(durationMinutes)}`;
 }
+
+export function getRouteOptimizationStatus(originalDistanceKm: number, optimizedDistanceKm: number): { label: string; isOptimal: boolean } {
+  const savingsKm = Math.max(0, originalDistanceKm - optimizedDistanceKm);
+  if (savingsKm < 0.001) return { label: '已是最佳順序', isOptimal: true };
+  const label = savingsKm < 1
+    ? `預估節省 ${Math.round(savingsKm * 1000)} 公尺`
+    : `預估節省 ${savingsKm.toFixed(1)} 公里`;
+  return { label, isOptimal: false };
+}
