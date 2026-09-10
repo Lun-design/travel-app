@@ -163,6 +163,20 @@ export default function TripDetailScreen() {
     }
     setRefreshKey((current) => current + 1);
   }
+  async function applyRouteOptimization(optimizedItems: ItineraryItem[]) {
+    if (!tripId) throw new Error('找不到行程 ID。');
+    const savedItems = await Promise.all(optimizedItems.map((item) => data.saveItem({
+      ...item,
+      trip_id: tripId,
+      created_by: item.created_by || data.userId,
+    })));
+    const savedById = new Map(savedItems.map((item) => [item.id, item]));
+    data.setItems((currentItems) => sortItineraryItemsByStartTime(currentItems.map((item) => savedById.get(item.id) ?? item)));
+    await data.reload();
+    data.setItems((currentItems) => sortItineraryItemsByStartTime(currentItems.map((item) => savedById.get(item.id) ?? item)));
+    setRefreshKey((current) => current + 1);
+    setDay(optimizedItems[0]?.day_number ?? day);
+  }
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
   async function deleteExpense(expense: any) { await data.removeExpense(expense.id); await data.reload(); }
@@ -206,7 +220,7 @@ export default function TripDetailScreen() {
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
     <TripDetailTabs value={tab} onChange={setTab} theme={theme} />
-    {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setItemModal(true); }} onDelete={deleteItem} onReorder={data.reorderItems} onAdd={() => { setEditingItem(null); setItemModal(true); }} />}
+    {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setItemModal(true); }} onDelete={deleteItem} onReorder={data.reorderItems} onApplyRouteOptimization={applyRouteOptimization} onAdd={() => { setEditingItem(null); setItemModal(true); }} />}
     {tab === 'expenses' && <ExpensesPanel tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} refreshToken={data.packingRevision} /></ScrollView></View>}
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} /></View>}
