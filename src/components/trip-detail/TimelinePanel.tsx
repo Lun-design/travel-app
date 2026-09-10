@@ -148,7 +148,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
         {optimizationPreview ? <>
           <Text style={styles.modalSummary}>距離 {formatDistance(optimizationPreview.result.originalDistanceKm)} → {formatDistance(optimizationPreview.result.totalDistanceKm)}</Text>
           {optimizationStatus ? <View style={styles.optimizationStatusRow}><Text style={[styles.optimizationStatusBadge, optimizationStatus.isOptimal ? styles.optimizationStatusOptimal : styles.optimizationStatusSaving]}>{optimizationStatus.label}</Text></View> : null}
-          <Text style={styles.modalHint}>{optimizationPreview.result.optimized ? '建議順序會固定第一站，重新安排後續景點。' : '目前順序已接近最短路線，仍可套用建議時間。'}</Text>
+          {optimizationStatus && !optimizationStatus.isOptimal ? <Text style={styles.modalHint}>{optimizationPreview.result.optimized ? '建議順序會固定第一站，重新安排後續景點。' : '目前順序已接近最短路線，仍可套用建議時間。'}</Text> : null}
            <Text style={styles.modalHint}>{`總車程 ${formatRouteDuration(optimizationPreview.result.originalDurationMinutes)} → ${formatRouteDuration(optimizationPreview.result.totalDurationMinutes)}`}</Text>
           <ScrollView style={styles.previewList} contentContainerStyle={styles.previewContent}>
             {optimizationPreview.scheduledItems.map((item, index) => {
@@ -158,7 +158,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
                 {previousItem && leg ? <View style={styles.routeConnector}>
                   <View style={styles.routeRail}><View style={styles.routeDot} /></View>
                   <View style={styles.routeConnectorBody}>
-                    <Text style={styles.routeConnectorLabel}>{formatRouteLegContext({ fromName: previousItem.location_name, toName: item.location_name, durationMinutes: leg.durationMinutes, mode: leg.mode })}</Text>
+                    <Text numberOfLines={1} ellipsizeMode="tail" style={styles.routeConnectorLabel}>{formatRouteLegContext({ fromName: previousItem.location_name, toName: item.location_name, durationMinutes: leg.durationMinutes, mode: leg.mode })}</Text>
                   </View>
                 </View> : null}
                 <View style={styles.previewRow}>
@@ -213,8 +213,8 @@ const styles = StyleSheet.create({
   routeConnector: { flexDirection: 'row', alignItems: 'stretch', minHeight: 58, paddingHorizontal: 8, gap: 10 },
   routeRail: { width: 20, alignItems: 'center', justifyContent: 'center' },
   routeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 2, borderColor: EDITORIAL_COLORS.paper },
-  routeConnectorBody: { flex: 1, justifyContent: 'center', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.terracottaSoft, paddingLeft: 10 },
-  routeConnectorLabel: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  routeConnectorBody: { flex: 1, minWidth: 0, justifyContent: 'center', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.terracottaSoft, paddingLeft: 10 },
+  routeConnectorLabel: { flex: 1, minWidth: 0, color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 18, fontWeight: '700' },
   previewIndex: { width: 26, height: 26, borderRadius: 13, textAlign: 'center', paddingTop: 4, color: EDITORIAL_COLORS.paper, backgroundColor: EDITORIAL_COLORS.terracotta, fontWeight: '900' },
   previewCopy: { flex: 1, gap: 2 },
   previewTime: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '900' },

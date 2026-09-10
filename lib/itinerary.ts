@@ -20,7 +20,7 @@ export type ItineraryItem = {
  * The form uses strings for some fields, so keep this normalization in a
  * pure helper that can also be covered without loading the Supabase client.
  */
-export type ItineraryItemSaveInput = Partial<ItineraryItem> & { trip_id: string; created_by: string };
+export type ItineraryItemSaveInput = Partial<ItineraryItem> & { trip_id: string; created_by: string; spot_type?: string | null };
 
 /** Persist first, update the visible collection, then reconcile with Supabase. */
 export async function saveItineraryItemAndRefresh<T>({ save, apply, refresh }: {
@@ -82,11 +82,59 @@ function normalizeTimeValue(value: unknown): string | null | undefined {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(trimmed);
-  if (!match) return trimmed;
+  if (!match) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return trimmed;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
   return `${String(hours).padStart(2, '0')}:${match[2]}`;
+}
+
+const ITINERARY_CATEGORIES = ['flight', 'food', 'spot', 'hotel', 'trail', 'outdoor'] as const;
+const ITINERARY_DIFFICULTIES = ['easy', 'moderate', 'hard'] as const;
+const OPENING_HOURS_WEEKDAYS: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+function normalizeOptionalText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeCoordinateValue(value: unknown, minimum: number, maximum: number): number | null {
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= minimum && numeric <= maximum ? numeric : null;
+}
+
+function normalizeOpeningClock(value: unknown): string | null {
+  const normalized = normalizeTimeValue(value);
+  return normalized ?? null;
+}
+
+/** Keep JSONB opening-hours values predictable for the database and schedule parser. */
+function normalizeOpeningHoursValue(value: unknown): OpeningHours | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  const output: Partial<OpeningHours> = {};
+  let configured = false;
+  for (const weekday of OPENING_HOURS_WEEKDAYS) {
+    const rawDay = input[weekday];
+    if (!rawDay || typeof rawDay !== 'object' || Array.isArray(rawDay)) continue;
+    const day = rawDay as { closed?: unknown; periods?: unknown };
+    const closed = day.closed === true;
+    const periods = closed || !Array.isArray(day.periods) ? [] : day.periods.slice(0, 2).flatMap((rawPeriod) => {
+      if (!rawPeriod || typeof rawPeriod !== 'object' || Array.isArray(rawPeriod)) return [];
+      const period = rawPeriod as { open?: unknown; close?: unknown };
+      const open = normalizeOpeningClock(period.open);
+      const close = normalizeOpeningClock(period.close);
+      return open && close ? [{ open, close }] : [];
+    });
+    if (closed || periods.length || 'closed' in day || 'periods' in day) {
+      output[weekday] = { closed, periods };
+      configured = configured || closed || periods.length > 0;
+    }
+  }
+  return configured ? output as OpeningHours : null;
 }
 
 /** Normalize form/AI values while preserving omitted fields for partial updates. */
@@ -103,7 +151,21 @@ export function normalizeItineraryItemPayload(item: ItineraryItemSaveInput): Iti
       ? Math.round(duration)
       : null;
   }
-  if ('opening_hours' in item) payload.opening_hours = item.opening_hours ?? null;
+  if ('address' in item) payload.address = normalizeOptionalText(item.address);
+  if ('notes' in item) payload.notes = normalizeOptionalText(item.notes);
+  if ('latitude' in item) payload.latitude = normalizeCoordinateValue(item.latitude, -90, 90);
+  if ('longitude' in item) payload.longitude = normalizeCoordinateValue(item.longitude, -180, 180);
+  if ('opening_hours' in item) payload.opening_hours = normalizeOpeningHoursValue(item.opening_hours);
+  const rawItem = item as ItineraryItemSaveInput & { spot_type?: unknown };
+  if ('category' in item || 'spot_type' in rawItem) {
+    const candidate = normalizeOptionalText(rawItem.category ?? rawItem.spot_type);
+    payload.category = ITINERARY_CATEGORIES.includes(candidate as (typeof ITINERARY_CATEGORIES)[number]) ? candidate as string : 'spot';
+    delete (payload as ItineraryItemSaveInput & { spot_type?: unknown }).spot_type;
+  }
+  if ('difficulty' in item) {
+    const candidate = normalizeOptionalText(item.difficulty);
+    payload.difficulty = ITINERARY_DIFFICULTIES.includes(candidate as (typeof ITINERARY_DIFFICULTIES)[number]) ? candidate as string : null;
+  }
   return payload;
 }
 

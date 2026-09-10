@@ -14,7 +14,7 @@ describe('route connector presentation', () => {
       toName: '台中文心秀泰影城',
       durationMinutes: 114,
       mode: 'DRIVING',
-    })).toBe('🚗 車程｜新北市新莊國民運動中心 ➔ 台中文心秀泰影城：車程約 1 小時 54 分鐘');
+    })).toBe('🚗 新北市新莊國民運動中心 ➔ 台中文心秀泰影城 (約 1 小時 54 分鐘)');
   });
 
   it('marks a zero-distance improvement as already optimal', () => {

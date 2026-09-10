@@ -32,6 +32,14 @@ describe('exchange rate and split helpers', () => {
     expect(snapshot.updatedAt).toBe('2026-09-06T00:00:00.000Z');
   });
 
+  it('parses an EUR-base Frankfurter response through cross rates', () => {
+    const snapshot = parseLiveExchangeRates({ base: 'EUR', rates: { TWD: 35, USD: 1.1, JPY: 165, KRW: 1500 } }, new Date('2026-09-06T00:00:00.000Z'));
+    expect(snapshot.rates.EUR).toBe(35);
+    expect(snapshot.rates.USD).toBeCloseTo(35 / 1.1, 6);
+    expect(snapshot.rates.JPY).toBeCloseTo(35 / 165, 6);
+    expect(snapshot.rates.TWD).toBe(1);
+  });
+
   it('falls back to defaults when live fetch fails and keeps a manual lock', async () => {
     const fetcher = async () => { throw new Error('offline'); };
     const storage = new Map<string, string>();
@@ -52,5 +60,7 @@ describe('exchange rate and split helpers', () => {
     expect(first.updatedAt).toBeTruthy();
     expect(second.rates.USD).toBeCloseTo(32, 6);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('from=EUR');
+    expect(fetchMock.mock.calls[0]?.[1]).toBeUndefined();
   });
 });

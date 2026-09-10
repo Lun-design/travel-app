@@ -90,7 +90,9 @@ export type ExchangeRateService = {
   clearManualRate: (currency: string) => Promise<ExchangeRateSnapshot>;
 };
 
-const EXCHANGE_RATE_ENDPOINT = 'https://api.frankfurter.app/latest?from=TWD&to=JPY,KRW,USD,EUR';
+// Frankfurter accepts EUR/USD as a base more reliably than TWD. We derive
+// TWD-per-currency rates from the shared EUR quote below.
+const EXCHANGE_RATE_ENDPOINT = 'https://api.frankfurter.app/latest?from=EUR&to=TWD,JPY,KRW,USD';
 const EXCHANGE_RATE_CACHE_KEY = 'travel-planner.exchange-rates.v1';
 const EXCHANGE_RATE_MANUAL_KEY = 'travel-planner.exchange-rates.manual.v1';
 const EXCHANGE_RATE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -143,12 +145,16 @@ function readManualState(storage: ExchangeRateStorage | null): { rates: Partial<
 
 export function parseLiveExchangeRates(payload: unknown, now = new Date()): ExchangeRateSnapshot {
   const record = payload as { base?: unknown; rates?: Record<string, unknown> };
-  if (record?.base !== 'TWD' || !record.rates || typeof record.rates !== 'object') throw new Error('Unsupported exchange-rate response');
+  const base = typeof record?.base === 'string' ? record.base.trim().toUpperCase() : '';
+  if (!SUPPORTED_CURRENCIES.includes(base as SupportedCurrency) || !record.rates || typeof record.rates !== 'object') throw new Error('Unsupported exchange-rate response');
+  const baseToTwd = base === 'TWD' ? 1 : Number(record.rates.TWD);
+  if (!Number.isFinite(baseToTwd) || baseToTwd <= 0) throw new Error('Exchange-rate response must include a TWD quote');
   const rates = Object.fromEntries(SUPPORTED_CURRENCIES.map((currency) => {
     if (currency === 'TWD') return [currency, 1];
-    const foreignPerTwd = Number(record.rates?.[currency]);
-    if (!Number.isFinite(foreignPerTwd) || foreignPerTwd <= 0) return [currency, DEFAULT_TWD_RATES[currency]];
-    return [currency, 1 / foreignPerTwd];
+    if (currency === base) return [currency, baseToTwd];
+    const foreignPerBase = Number(record.rates?.[currency]);
+    if (!Number.isFinite(foreignPerBase) || foreignPerBase <= 0) return [currency, DEFAULT_TWD_RATES[currency]];
+    return [currency, baseToTwd / foreignPerBase];
   })) as Record<SupportedCurrency, number>;
   return { rates, updatedAt: now.toISOString(), source: 'live', lockedCurrencies: [] };
 }

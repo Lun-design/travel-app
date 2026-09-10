@@ -15,16 +15,16 @@ export function formatRouteDuration(durationMinutes: number): string {
   return minutes > 0 ? `${hours} 小時 ${minutes} 分鐘` : `${hours} 小時`;
 }
 
-function modeLabel(mode: TravelMode): string {
+function modeIcon(mode: TravelMode): string {
   if (mode === 'WALKING') return '🚶 步行';
   if (mode === 'TRANSIT') return '🚇 大眾運輸';
-  return '🚗 車程';
+  return '🚗';
 }
 
 export function formatRouteLegContext({ fromName, toName, durationMinutes, mode }: RouteLegContext): string {
   const origin = fromName.trim() || '上一站';
   const destination = toName.trim() || '下一站';
-  return `${modeLabel(mode)}｜${origin} ➔ ${destination}：${mode === 'DRIVING' ? '車程' : mode === 'WALKING' ? '步行' : '行程'}約 ${formatRouteDuration(durationMinutes)}`;
+  return `${modeIcon(mode)} ${origin} ➔ ${destination} (約 ${formatRouteDuration(durationMinutes)})`;
 }
 
 export function getRouteOptimizationStatus(originalDistanceKm: number, optimizedDistanceKm: number): { label: string; isOptimal: boolean } {
