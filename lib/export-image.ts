@@ -34,11 +34,6 @@ export type ItineraryExportData = {
 
 export type ItineraryExportFormat = 'png' | 'pdf';
 
-/** Delay used to let the generated print document render before opening the dialog. */
-export const PDF_PRINT_DELAY_MS = 300;
-/** Give the browser time to finish the print job before removing the iframe. */
-export const PDF_IFRAME_CLEANUP_DELAY_MS = 1000;
-
 const EXPORT_WIDTH = 1200;
 const HEADER_HEIGHT = 190;
 const ROW_HEIGHT = 116;
@@ -91,15 +86,37 @@ export function buildItineraryExportText(data: ItineraryExportData): string {
 }
 
 /** Creates a self-contained editorial SVG that can be rasterized to PNG or printed to PDF. */
-export function buildItineraryCardSvg(data: ItineraryExportData): string {
+function buildLegacyItineraryCardSvg(data: ItineraryExportData): string {
   const items = normalizeItineraryExportItems(data.items);
   const height = HEADER_HEIGHT + Math.max(items.length, 1) * ROW_HEIGHT + 36;
   const rows = items.length ? items.map((item, index) => {
     const y = HEADER_HEIGHT + index * ROW_HEIGHT;
-    const navigation = item.navigationUrl ? `導航：${item.navigationUrl}` : '尚未提供座標導航';
+    const navigation = item.navigationUrl ? '🗺️ 開啟導航' : '尚未設定座標';
     return `<g><rect x="48" y="${y}" width="1104" height="92" rx="16" fill="#F8F6F0" stroke="#E5E2D9"/><circle cx="88" cy="${y + 46}" r="22" fill="#9A6A45"/><text x="88" y="${y + 54}" text-anchor="middle" font-size="20" font-family="Arial,sans-serif" fill="#FFFFFF">${index + 1}</text><text x="130" y="${y + 34}" font-size="25" font-weight="700" font-family="Arial,sans-serif" fill="#1F1F1F">${escapeXml(item.time ?? '未設定')} · ${escapeXml(item.title)}</text><text x="130" y="${y + 61}" font-size="17" font-family="Arial,sans-serif" fill="#756F66">停留 ${item.durationMinutes} 分鐘${item.category ? ` · ${escapeXml(item.category)}` : ''}</text><text x="130" y="${y + 82}" font-size="13" font-family="Arial,sans-serif" fill="#756F66">${escapeXml(item.address ?? '未提供地址')} · ${escapeXml(navigation)}</text></g>`;
   }).join('') : '<text x="600" y="285" text-anchor="middle" font-size="22" font-family="Arial,sans-serif" fill="#756F66">尚未安排景點</text>';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${EXPORT_WIDTH}" height="${height}" viewBox="0 0 ${EXPORT_WIDTH} ${height}"><rect width="100%" height="100%" fill="#FFFFFF"/><rect x="24" y="24" width="1152" height="${height - 48}" rx="24" fill="#FFFFFF" stroke="#E5E2D9"/><text x="60" y="82" font-size="36" font-weight="800" font-family="Arial,sans-serif" fill="#1F1F1F">${escapeXml(data.title)}</text><text x="60" y="119" font-size="20" font-family="Arial,sans-serif" fill="#756F66">${escapeXml([data.destination, `Day ${data.dayNumber}`, data.date].filter(Boolean).join(' · '))}</text><line x1="60" y1="145" x2="1140" y2="145" stroke="#E5E2D9"/>${rows}</svg>`;
+}
+
+function truncateExportText(value: string, maxLength: number): string {
+  const text = value.trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+/** Builds a compact editorial card; raw navigation URLs stay out of the visual output. */
+export function buildItineraryCardSvg(data: ItineraryExportData): string {
+  const items = normalizeItineraryExportItems(data.items);
+  const height = 300 + Math.max(items.length, 1) * 126;
+  const rows = items.length
+    ? items.map((item, index) => {
+      const y = 246 + index * 126;
+      const fill = index % 2 === 0 ? '#F8F6F0' : '#FBFAF6';
+      const navigation = item.navigationUrl ? '🗺️ 開啟導航' : '尚未設定座標';
+      const address = truncateExportText(item.address ?? '地址待補', 58);
+      return `<g><line x1="92" y1="${y - 46}" x2="92" y2="${y + 78}" stroke="#D8C6B8" stroke-width="3"/><circle cx="92" cy="${y}" r="25" fill="#9A6A45"/><text x="92" y="${y + 7}" text-anchor="middle" font-size="20" font-weight="700" font-family="Arial,sans-serif" fill="#FFFFFF">${index + 1}</text><rect x="138" y="${y - 52}" width="1010" height="104" rx="18" fill="${fill}" stroke="#E5E2D9"/><text x="168" y="${y - 16}" font-size="25" font-weight="700" font-family="Arial,sans-serif" fill="#1F1F1F">${escapeXml(item.time ?? '未設定')}  ·  ${escapeXml(truncateExportText(item.title, 34))}</text><text x="168" y="${y + 13}" font-size="16" font-family="Arial,sans-serif" fill="#756F66">停留 ${item.durationMinutes} 分鐘${item.category ? `  ·  ${escapeXml(item.category)}` : ''}</text><text x="168" y="${y + 38}" font-size="14" font-family="Arial,sans-serif" fill="#756F66">${escapeXml(address)}</text><text x="1004" y="${y + 38}" text-anchor="end" font-size="14" font-weight="700" font-family="Arial,sans-serif" fill="#9A6A45">${escapeXml(navigation)}</text></g>`;
+    }).join('')
+    : '<text x="600" y="300" text-anchor="middle" font-size="22" font-family="Arial,sans-serif" fill="#756F66">尚未安排景點</text>';
+  const meta = [data.destination, `Day ${data.dayNumber}`, data.date].filter(Boolean).join('  ·  ');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}"><rect width="100%" height="100%" fill="#F1EEE7"/><rect x="28" y="28" width="1144" height="${height - 56}" rx="28" fill="#FFFFFF" stroke="#E5E2D9"/><text x="72" y="88" font-size="16" letter-spacing="3" font-family="Arial,sans-serif" fill="#9A6A45">TRAVEL NOTEBOOK</text><text x="72" y="144" font-size="40" font-weight="800" font-family="Arial,sans-serif" fill="#1F1F1F">${escapeXml(truncateExportText(data.title, 36))}</text><text x="72" y="178" font-size="18" font-family="Arial,sans-serif" fill="#756F66">${escapeXml(meta)}</text><line x1="72" y1="204" x2="1128" y2="204" stroke="#E5E2D9"/>${rows}</svg>`;
 }
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -132,56 +149,88 @@ async function downloadPng(data: ItineraryExportData, fileName: string): Promise
   downloadBlob(blob, fileName);
 }
 
-async function printPdf(data: ItineraryExportData): Promise<void> {
+async function renderSvgCanvasForPdf(data: ItineraryExportData): Promise<HTMLCanvasElement> {
   if (typeof window === 'undefined' || typeof document === 'undefined') throw new Error('此裝置不支援 PDF 匯出。');
-  const body = document.body;
-  if (!body) throw new Error('此裝置不支援 PDF 匯出。');
-
-  // Use a hidden iframe so printing is not blocked by popup policies or left on about:blank.
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.top = '-9999px';
-  iframe.style.left = '-9999px';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.tabIndex = -1;
-  body.appendChild(iframe);
-
-  const frameWindow = iframe.contentWindow;
-  const frameDocument = frameWindow?.document;
-  if (!frameWindow || !frameDocument) {
-    body.removeChild(iframe);
-    throw new Error('無法建立 PDF 列印文件，請稍後再試。');
-  }
-
-  const htmlContent = `<!doctype html><html><head><title>${escapeXml(data.title)}</title><style>@page{size:auto;margin:12mm}body{margin:0;background:#fff}svg{display:block;width:100%;height:auto}</style></head><body>${buildItineraryCardSvg(data)}</body></html>`;
-  frameDocument.open();
-  frameDocument.write(htmlContent);
-  frameDocument.close();
-
-  await new Promise<void>((resolve) => {
-    setTimeout(() => {
-      try {
-        frameWindow.focus();
-        frameWindow.print();
-      } finally {
-        setTimeout(() => {
-          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-          else body.removeChild(iframe);
-          resolve();
-        }, PDF_IFRAME_CLEANUP_DELAY_MS);
-      }
-    }, PDF_PRINT_DELAY_MS);
+  const image = new window.Image();
+  const loaded = new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error('無法產生 PDF 預覽。'));
   });
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildItineraryCardSvg(data))}`;
+  await loaded;
+  const canvas = document.createElement('canvas');
+  canvas.width = EXPORT_WIDTH;
+  canvas.height = Math.max(1, Math.ceil(image.height || HEADER_HEIGHT + data.items.length * ROW_HEIGHT + 36));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('此裝置不支援 PDF 匯出。');
+  context.drawImage(image, 0, 0);
+  return canvas;
 }
+
+function decodeBase64(value: string): Uint8Array {
+  if (typeof globalThis.atob !== 'function') throw new Error('此裝置不支援 PDF 匯出。');
+  const binary = globalThis.atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function concatBytes(...chunks: Uint8Array[]): Uint8Array {
+  const result = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.length, 0));
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return result;
+}
+
+/** Wraps a JPEG data URL in a small, standards-compliant single-page PDF. */
+export function buildPdfBlobFromJpeg(jpegDataUrl: string, width: number, height: number): Blob {
+  const match = /^data:image\/jpeg;base64,(.+)$/i.exec(jpegDataUrl);
+  if (!match) throw new Error('無效的 JPEG 資料。');
+  const jpegBytes = decodeBase64(match[1]);
+  const encoder = new TextEncoder();
+  const pageWidth = 612;
+  const pageHeight = Math.max(1, Math.round(pageWidth * height / Math.max(1, width)));
+  const pageContent = `q ${pageWidth} 0 0 ${pageHeight} 0 0 cm /Im0 Do Q\n`;
+  const pageContentBytes = encoder.encode(pageContent);
+  const objects: Uint8Array[] = [
+    encoder.encode('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'),
+    encoder.encode('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'),
+    encoder.encode(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`),
+    concatBytes(encoder.encode(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${Math.max(1, Math.round(width))} /Height ${Math.max(1, Math.round(height))} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`), jpegBytes, encoder.encode('\nendstream\nendobj\n')),
+    concatBytes(encoder.encode(`5 0 obj\n<< /Length ${pageContentBytes.length} >>\nstream\n`), pageContentBytes, encoder.encode('endstream\nendobj\n')),
+  ];
+  const chunks: Uint8Array[] = [];
+  let offset = 0;
+  const append = (chunk: Uint8Array) => { chunks.push(chunk); offset += chunk.length; };
+  append(encoder.encode('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n'));
+  const offsets = [0];
+  objects.forEach((object) => {
+    offsets.push(offset);
+    append(object);
+  });
+  const xrefOffset = offset;
+  const xref = [`xref\n0 ${objects.length + 1}`, '0000000000 65535 f '];
+  offsets.slice(1).forEach((entry) => xref.push(`${String(entry).padStart(10, '0')} 00000 n `));
+  xref.push(`trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
+  append(encoder.encode(`${xref.join('\n')}\n`));
+  return new Blob(chunks as BlobPart[], { type: 'application/pdf' });
+}
+
+async function downloadPdf(data: ItineraryExportData, fileName: string): Promise<void> {
+  if (typeof Blob === 'undefined') throw new Error('此裝置不支援 PDF 匯出。');
+  const canvas = await renderSvgCanvasForPdf(data);
+  const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  downloadBlob(buildPdfBlobFromJpeg(jpegDataUrl, canvas.width, canvas.height), fileName);
+}
+
+// PDF is generated as a downloadable file; browser print dialogs are intentionally avoided.
 
 /** Exports PNG directly; PDF uses the browser's native print dialog (Save as PDF). */
 export async function exportItineraryCard(data: ItineraryExportData, format: ItineraryExportFormat): Promise<void> {
   const safeTitle = data.title.trim() || '行程圖卡';
   if (format === 'png') return downloadPng(data, `${safeTitle}-Day${data.dayNumber}.png`);
-  return printPdf(data);
+  return downloadPdf(data, `${safeTitle}-Day${data.dayNumber}.pdf`);
 }

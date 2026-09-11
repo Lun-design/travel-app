@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 import {
   buildItineraryCardSvg,
   buildItineraryExportText,
+  buildPdfBlobFromJpeg,
   normalizeItineraryExportItems,
-  PDF_PRINT_DELAY_MS,
   exportItineraryCard,
   type ItineraryExportData,
 } from '../lib/export-image';
@@ -46,6 +46,22 @@ describe('itinerary image/PDF export helpers', () => {
     expect(svg).toContain('viewBox="0 0 1200 ');
   });
 
+  it('keeps the card visual clean by showing a navigation label instead of the raw URL', () => {
+    const svg = buildItineraryCardSvg(sample);
+    expect(svg).not.toContain('https://www.google.com/maps/dir/');
+    expect(svg).toContain('開啟導航');
+    expect(svg).toContain('#F8F6F0');
+    expect(svg).toContain('#9A6A45');
+  });
+
+  it('builds a downloadable PDF Blob without requiring window.print', async () => {
+    const jpegDataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2w==';
+    const blob = buildPdfBlobFromJpeg(jpegDataUrl, 1200, 800);
+    expect(blob.type).toBe('application/pdf');
+    expect(blob.size).toBeGreaterThan(100);
+    expect(new TextDecoder().decode(await blob.slice(0, 8).arrayBuffer())).toContain('%PDF-1.4');
+  });
+
   it('exposes PNG/PDF choices from the Timeline export action', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/components/trip-detail/TimelinePanel.tsx'), 'utf8');
     const modal = readFileSync(resolve(process.cwd(), 'src/components/ItineraryCardExport.tsx'), 'utf8');
@@ -56,57 +72,51 @@ describe('itinerary image/PDF export helpers', () => {
     expect(modal).toContain('disabled={busy}');
   });
 
-  it('waits for the generated PDF document before triggering print and cleanup', () => {
+  it('uses a direct PDF download path without popup or iframe printing', () => {
     const source = readFileSync(resolve(process.cwd(), 'lib/export-image.ts'), 'utf8');
-    expect(PDF_PRINT_DELAY_MS).toBe(300);
-    expect(source).toContain("document.createElement('iframe')");
-    expect(source).toContain('iframe.contentWindow');
-    expect(source).toContain('setTimeout(() => {');
-    expect(source).toContain('frameWindow.print();');
-    expect(source).toContain('PDF_IFRAME_CLEANUP_DELAY_MS');
+    expect(source).toContain('buildPdfBlobFromJpeg');
+    expect(source).toContain("canvas.toDataURL('image/jpeg'");
     expect(source).not.toContain("window.open('', '_blank'");
+    expect(source).not.toContain("document.createElement('iframe')");
   });
 
-  it('prints from a hidden iframe after 300ms and removes it after cleanup delay', async () => {
-    vi.useFakeTimers();
-    const print = vi.fn();
-    const removeChild = vi.fn();
-    const frameWindow = {
-      document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
-      focus: vi.fn(),
-      print,
+  it('downloads the generated PDF directly as a .pdf file', async () => {
+    class MockImage {
+      height = 800;
+      onload?: () => void;
+      onerror?: () => void;
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    const canvas = {
+      width: 1200,
+      height: 800,
+      getContext: vi.fn(() => ({ drawImage: vi.fn() })),
+      toDataURL: vi.fn(() => 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2w=='),
     };
-    const iframe = {
+    const anchor = {
       style: {} as Record<string, string>,
-      contentWindow: frameWindow,
-      setAttribute: vi.fn(),
+      click: vi.fn(),
+      remove: vi.fn(),
+      download: '',
+      href: '',
     };
-    vi.stubGlobal('window', {});
+    const createElement = vi.fn((tag: string) => tag === 'canvas' ? canvas : anchor);
+    vi.stubGlobal('window', { Image: MockImage });
     vi.stubGlobal('document', {
-      createElement: vi.fn(() => iframe),
-      body: { appendChild: vi.fn(), removeChild },
+      createElement,
+      body: { appendChild: vi.fn() },
     });
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() });
 
     try {
-      const pending = exportItineraryCard(sample, 'pdf');
-      await vi.advanceTimersByTimeAsync(0);
-      expect(print).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(PDF_PRINT_DELAY_MS - 1);
-      expect(print).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(1);
-      expect(print).toHaveBeenCalledOnce();
-      expect(iframe.style.position).toBe('fixed');
-      expect(iframe.style.top).toBe('-9999px');
-      expect(iframe.style.left).toBe('-9999px');
-      expect(iframe.style.width).toBe('0');
-      expect(frameWindow.document.write).toHaveBeenCalledWith(expect.stringContaining('<svg'));
-      expect(removeChild).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(1000);
-      await pending;
-      expect(removeChild).toHaveBeenCalledWith(iframe);
+      await exportItineraryCard(sample, 'pdf');
+      expect(canvas.toDataURL).toHaveBeenCalledWith('image/jpeg', 0.92);
+      expect(anchor.download).toContain('.pdf');
+      expect(anchor.click).toHaveBeenCalledOnce();
     } finally {
       vi.unstubAllGlobals();
-      vi.useRealTimers();
     }
   });
 
@@ -114,5 +124,7 @@ describe('itinerary image/PDF export helpers', () => {
     const modal = readFileSync(resolve(process.cwd(), 'src/components/ItineraryCardExport.tsx'), 'utf8');
     expect(modal).toContain('openPdfExport');
     expect(modal).toContain('列印準備中');
+    expect(modal).toContain('下載 PDF');
+    expect(modal).not.toContain('開啟列印並儲存 PDF');
   });
 });
