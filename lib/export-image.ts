@@ -35,7 +35,9 @@ export type ItineraryExportData = {
 export type ItineraryExportFormat = 'png' | 'pdf';
 
 /** Delay used to let the generated print document render before opening the dialog. */
-export const PDF_PRINT_DELAY_MS = 500;
+export const PDF_PRINT_DELAY_MS = 300;
+/** Give the browser time to finish the print job before removing the iframe. */
+export const PDF_IFRAME_CLEANUP_DELAY_MS = 1000;
 
 const EXPORT_WIDTH = 1200;
 const HEADER_HEIGHT = 190;
@@ -132,19 +134,46 @@ async function downloadPng(data: ItineraryExportData, fileName: string): Promise
 
 async function printPdf(data: ItineraryExportData): Promise<void> {
   if (typeof window === 'undefined' || typeof document === 'undefined') throw new Error('此裝置不支援 PDF 匯出。');
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
-  if (!printWindow) throw new Error('瀏覽器封鎖了列印視窗，請允許彈出視窗後再試。');
-  printWindow.document.open();
-  printWindow.document.write(`<!doctype html><html><head><title>${escapeXml(data.title)}</title><style>@page{size:auto;margin:12mm}body{margin:0;background:#fff}svg{display:block;width:100%;height:auto}</style></head><body>${buildItineraryCardSvg(data)}</body></html>`);
-  printWindow.document.close();
+  const body = document.body;
+  if (!body) throw new Error('此裝置不支援 PDF 匯出。');
+
+  // Use a hidden iframe so printing is not blocked by popup policies or left on about:blank.
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.top = '-9999px';
+  iframe.style.left = '-9999px';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.tabIndex = -1;
+  body.appendChild(iframe);
+
+  const frameWindow = iframe.contentWindow;
+  const frameDocument = frameWindow?.document;
+  if (!frameWindow || !frameDocument) {
+    body.removeChild(iframe);
+    throw new Error('無法建立 PDF 列印文件，請稍後再試。');
+  }
+
+  const htmlContent = `<!doctype html><html><head><title>${escapeXml(data.title)}</title><style>@page{size:auto;margin:12mm}body{margin:0;background:#fff}svg{display:block;width:100%;height:auto}</style></head><body>${buildItineraryCardSvg(data)}</body></html>`;
+  frameDocument.open();
+  frameDocument.write(htmlContent);
+  frameDocument.close();
+
   await new Promise<void>((resolve) => {
     setTimeout(() => {
       try {
-        printWindow.focus();
-        printWindow.print();
+        frameWindow.focus();
+        frameWindow.print();
       } finally {
-        printWindow.close();
-        resolve();
+        setTimeout(() => {
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+          else body.removeChild(iframe);
+          resolve();
+        }, PDF_IFRAME_CLEANUP_DELAY_MS);
       }
     }, PDF_PRINT_DELAY_MS);
   });

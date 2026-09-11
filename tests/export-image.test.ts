@@ -58,26 +58,34 @@ describe('itinerary image/PDF export helpers', () => {
 
   it('waits for the generated PDF document before triggering print and cleanup', () => {
     const source = readFileSync(resolve(process.cwd(), 'lib/export-image.ts'), 'utf8');
-    expect(PDF_PRINT_DELAY_MS).toBe(500);
-    expect(source).toContain('printWindow.document.close();');
+    expect(PDF_PRINT_DELAY_MS).toBe(300);
+    expect(source).toContain("document.createElement('iframe')");
+    expect(source).toContain('iframe.contentWindow');
     expect(source).toContain('setTimeout(() => {');
-    expect(source).toContain('printWindow.print();');
-    expect(source).toContain('printWindow.close();');
-    expect(source).toContain('}, PDF_PRINT_DELAY_MS);');
+    expect(source).toContain('frameWindow.print();');
+    expect(source).toContain('PDF_IFRAME_CLEANUP_DELAY_MS');
+    expect(source).not.toContain("window.open('', '_blank'");
   });
 
-  it('prints only after the 500ms render delay and then closes the print window', async () => {
+  it('prints from a hidden iframe after 300ms and removes it after cleanup delay', async () => {
     vi.useFakeTimers();
     const print = vi.fn();
-    const close = vi.fn();
-    const printWindow = {
+    const removeChild = vi.fn();
+    const frameWindow = {
       document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
       focus: vi.fn(),
       print,
-      close,
     };
-    vi.stubGlobal('window', { open: vi.fn(() => printWindow) });
-    vi.stubGlobal('document', {});
+    const iframe = {
+      style: {} as Record<string, string>,
+      contentWindow: frameWindow,
+      setAttribute: vi.fn(),
+    };
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => iframe),
+      body: { appendChild: vi.fn(), removeChild },
+    });
 
     try {
       const pending = exportItineraryCard(sample, 'pdf');
@@ -86,10 +94,16 @@ describe('itinerary image/PDF export helpers', () => {
       await vi.advanceTimersByTimeAsync(PDF_PRINT_DELAY_MS - 1);
       expect(print).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(1);
-      await pending;
       expect(print).toHaveBeenCalledOnce();
-      expect(close).toHaveBeenCalledOnce();
-      expect(printWindow.document.write).toHaveBeenCalledWith(expect.stringContaining('<svg'));
+      expect(iframe.style.position).toBe('fixed');
+      expect(iframe.style.top).toBe('-9999px');
+      expect(iframe.style.left).toBe('-9999px');
+      expect(iframe.style.width).toBe('0');
+      expect(frameWindow.document.write).toHaveBeenCalledWith(expect.stringContaining('<svg'));
+      expect(removeChild).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1000);
+      await pending;
+      expect(removeChild).toHaveBeenCalledWith(iframe);
     } finally {
       vi.unstubAllGlobals();
       vi.useRealTimers();
@@ -99,6 +113,6 @@ describe('itinerary image/PDF export helpers', () => {
   it('exposes a print-in-progress state for PDF exports', () => {
     const modal = readFileSync(resolve(process.cwd(), 'src/components/ItineraryCardExport.tsx'), 'utf8');
     expect(modal).toContain('openPdfExport');
-    expect(modal).toContain('列印中');
+    expect(modal).toContain('列印準備中');
   });
 });
