@@ -21,6 +21,8 @@ import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
 import { createRouteEstimator, estimateRouteSequence, type RoutePoint } from '@/lib/routes';
 import { formatRouteDuration, formatRouteLegContext, getRouteOptimizationStatus } from '@/lib/route-connector';
+import { ItineraryCardExport } from '@/components/ItineraryCardExport';
+import type { ItineraryExportData } from '@/lib/export-image';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -68,9 +70,11 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
   const [optimizationBusy, setOptimizationBusy] = useState(false);
+  const [exportVisible, setExportVisible] = useState(false);
   const scheduleContext = useMemo<ScheduleContext>(() => ({ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time, timezone: trip.timezone }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const scheduled = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
   const scheduleDate = useMemo(() => tripDateForDay(trip.start_date, day), [day, trip.start_date]);
+  const exportData = useMemo<ItineraryExportData>(() => ({ title: trip.title, destination: trip.destination, dayNumber: day, date: scheduleDate, items: visibleItems }), [day, scheduleDate, trip.destination, trip.title, visibleItems]);
   const persistedWeather = useMemo(() => {
     for (const candidate of [trip, ...visibleItems]) {
       if (!candidate || typeof candidate !== 'object') continue;
@@ -152,7 +156,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     ? getRouteOptimizationStatus(optimizationPreview.result.originalDistanceKm, optimizationPreview.result.totalDistanceKm)
     : null;
   return <>
-    <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable><Pressable style={styles.shareButton} onPress={() => void shareDayItinerary()}><Text style={styles.shareText}>↗ 分享今日行程</Text></Pressable></View></View>
+    <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable><Pressable style={styles.exportButton} onPress={() => setExportVisible(true)}><Text style={styles.exportButtonText}>🖼️ 匯出行程圖卡</Text></Pressable><Pressable style={styles.shareButton} onPress={() => void shareDayItinerary()}><Text style={styles.shareText}>↗ 分享今日行程</Text></Pressable></View></View>
     <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>🧭 最佳化今日路線</Text></Pressable>
     <DayTabs days={days} selected={day} onChange={onDayChange} themeMode={themeMode} />
     <TodayFocusCard schedule={scheduled} items={items} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} onSwitchToBackupPlan={onSwitchToBackupPlan} persistedWeather={persistedWeather} compact={layout.compact} />
@@ -190,6 +194,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
         </> : null}
       </View></View>
     </Modal>
+    <ItineraryCardExport visible={exportVisible} data={exportData} themeMode={themeMode} onClose={() => setExportVisible(false)} />
   </>;
 }
 
@@ -207,6 +212,8 @@ const styles = StyleSheet.create({
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
   calendarText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
+  exportButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
+  exportButtonText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   shareButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 10, paddingVertical: 8 },
   shareText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '800' },
   mapToggle: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, overflow: 'hidden' },
