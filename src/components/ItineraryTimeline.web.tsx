@@ -7,7 +7,7 @@ import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { displayRouteSegments, EmptyTimeline, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import type { TravelMode } from '@/lib/routes';
-import { createDragContainerStyle, createDragPreviewStyle, reconcileDraggedItems } from '@/lib/drag-drop';
+import { createDragCloneStyle, createDragContainerStyle, createDragPreviewStyle, reconcileDraggedItems } from '@/lib/drag-drop';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
@@ -61,10 +61,17 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
 
   if (!localItems.length) return <EmptyTimeline />;
   return <DragDropContext onDragEnd={(result) => void finishDrag(result)}>
-    <Droppable droppableId="itinerary-timeline">
+    <Droppable droppableId="itinerary-timeline" renderClone={(dragProvided, _snapshot, rubric) => {
+      const item = localItems[rubric.source.index];
+      if (!item) return null;
+      return <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} {...dragProvided.dragHandleProps} style={createDragCloneStyle(dragProvided.draggableProps.style ?? {})}>
+        <span style={dragCloneTimeStyle}>{item.time ?? item.start_time ?? '—'}</span>
+        <strong style={dragCloneNameStyle}>{item.location_name}</strong>
+      </div>;
+    }}>
       {(dropProvided) => <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} style={dropZoneStyle}>
         {localItems.map((item, index) => <Draggable key={item.id} draggableId={item.id} index={index}>
-          {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={createDragPreviewStyle(dragProvided.draggableProps.style ?? {}, snapshot.isDragging)}>
+          {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={createDragPreviewStyle({ ...(dragProvided.draggableProps.style ?? {}), opacity: snapshot.isDragging ? 0 : 1 }, snapshot.isDragging)}>
             <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={index > 0} canMoveDown={index < localItems.length - 1} />
           </div>}
         </Draggable>)}
@@ -76,3 +83,5 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
 
 const dropZoneStyle: React.CSSProperties = { ...createDragContainerStyle(), minHeight: 1 };
 const webGripStyle: React.CSSProperties = { width: 32, minHeight: 76, display: 'grid', placeItems: 'center', flexShrink: 0, borderRadius: 8, background: EDITORIAL_COLORS.sand, color: EDITORIAL_COLORS.taupe, fontSize: 25, fontWeight: 900, userSelect: 'none', touchAction: 'none' };
+const dragCloneTimeStyle: React.CSSProperties = { color: EDITORIAL_COLORS.terracotta, fontSize: 14, fontWeight: 800, marginBottom: 8 };
+const dragCloneNameStyle: React.CSSProperties = { color: EDITORIAL_COLORS.charcoal, fontSize: 18, lineHeight: 1.3 };

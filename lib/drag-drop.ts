@@ -26,6 +26,27 @@ export function createDragPreviewStyle(baseStyle: CSSProperties = {}, isDragging
 }
 
 /**
+ * Style for the Web drag overlay. It deliberately uses a small, fixed-flow
+ * surface so long-distance pointer moves do not force the full card subtree to
+ * participate in layout/repaint on every frame.
+ */
+export function createDragCloneStyle(baseStyle: CSSProperties = {}): CSSProperties {
+  return {
+    ...baseStyle,
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    maxWidth: '100%',
+    minHeight: '80px',
+    overflow: 'hidden',
+    contain: 'layout paint',
+    willChange: 'transform',
+    backfaceVisibility: 'hidden',
+    boxSizing: 'border-box',
+  };
+}
+
+/**
  * Establish a clipping/stacking boundary around the timeline.  This keeps a
  * browser drag preview from painting over the map or floating actions while
  * preserving the list's natural height after the drop placeholder is gone.
