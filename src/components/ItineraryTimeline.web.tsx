@@ -63,15 +63,14 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
   return <DragDropContext onDragEnd={(result) => void finishDrag(result)}>
     <Droppable droppableId="itinerary-timeline" renderClone={(dragProvided, _snapshot, rubric) => {
       const item = localItems[rubric.source.index];
-      if (!item) return null;
       return <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} {...dragProvided.dragHandleProps} style={createDragCloneStyle(dragProvided.draggableProps.style ?? {})}>
-        <span style={dragCloneTimeStyle}>{item.time ?? item.start_time ?? '—'}</span>
-        <strong style={dragCloneNameStyle}>{item.location_name}</strong>
+        <span style={dragCloneTimeStyle}>{item?.time ?? item?.start_time ?? '—'}</span>
+        <strong style={dragCloneNameStyle}>{item?.location_name ?? '拖曳景點'}</strong>
       </div>;
     }}>
       {(dropProvided) => <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} style={dropZoneStyle}>
         {localItems.map((item, index) => <Draggable key={item.id} draggableId={item.id} index={index}>
-          {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={createDragPreviewStyle({ ...(dragProvided.draggableProps.style ?? {}), opacity: snapshot.isDragging ? 0 : 1 }, snapshot.isDragging)}>
+          {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={createDragPreviewStyle(dragProvided.draggableProps.style ?? {}, snapshot.isDragging)}>
             <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={index > 0} canMoveDown={index < localItems.length - 1} />
           </div>}
         </Draggable>)}

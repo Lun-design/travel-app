@@ -14,6 +14,8 @@ describe('drag and drop layout safeguards', () => {
       pointerEvents: 'none',
       willChange: 'transform',
       backfaceVisibility: 'hidden',
+      opacity: 1,
+      visibility: 'visible',
     });
   });
 
@@ -32,7 +34,15 @@ describe('drag and drop layout safeguards', () => {
       contain: 'layout paint',
       willChange: 'transform',
       backfaceVisibility: 'hidden',
+      opacity: 1,
+      visibility: 'visible',
     });
+  });
+
+  it('never hides the source preview while a drag clone is mounting', () => {
+    const style = createDragPreviewStyle({ opacity: 0 }, true);
+
+    expect(style.opacity).toBe(1);
   });
 
   it('defines a clipped, isolated drop container so previews cannot cover the map', () => {

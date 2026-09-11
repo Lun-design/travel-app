@@ -18,6 +18,11 @@ export function createDragPreviewStyle(baseStyle: CSSProperties = {}, isDragging
     // the card.  This avoids repeatedly repainting its text and controls.
     willChange: 'transform',
     backfaceVisibility: 'hidden',
+    // Keep a reliable visible source while the optional clone/portal mounts.
+    // Hiding the source creates a blank frame (or a permanently blank drag if
+    // the portal is unavailable in an embedded WebView).
+    opacity: isDragging ? 1 : baseStyle.opacity,
+    visibility: isDragging ? 'visible' : baseStyle.visibility,
     zIndex: isDragging ? 20 : baseStyle.zIndex,
     // Route buttons and links must not receive pointer input while the card
     // is being dragged; the handle remains the sole active gesture target.
@@ -42,6 +47,8 @@ export function createDragCloneStyle(baseStyle: CSSProperties = {}): CSSProperti
     contain: 'layout paint',
     willChange: 'transform',
     backfaceVisibility: 'hidden',
+    opacity: 1,
+    visibility: 'visible',
     boxSizing: 'border-box',
   };
 }
