@@ -41,11 +41,22 @@ export function createDragContainerStyle(): CSSProperties {
   };
 }
 
+/** Keep the native cell measurable while an Animated.View translates it. */
+export function createNativeDragRowStyle() {
+  return {
+    width: '100%' as const,
+    maxWidth: '100%' as const,
+    overflow: 'visible' as const,
+  };
+}
+
 /** Touch dragging starts only after a deliberate long press and movement. */
 export const MOBILE_DRAG_CONFIG = Object.freeze({
   activationDistance: 16,
   delayLongPress: 280,
   scrollEnabled: false,
+  removeClippedSubviews: false,
+  dragItemOverflow: false,
   // A responsive, critically damped spring reduces the visible snap/settle
   // work when neighbouring rows make room for the active card.
   animationConfig: Object.freeze({
@@ -56,6 +67,13 @@ export const MOBILE_DRAG_CONFIG = Object.freeze({
     restSpeedThreshold: 0.35,
     restDisplacementThreshold: 0.35,
   }),
+});
+
+/** Pressable tuning prevents a tiny finger drift from cancelling long press. */
+export const MOBILE_GRIP_CONFIG = Object.freeze({
+  delayLongPress: 280,
+  pressRetentionOffset: 24,
+  hitSlop: 4,
 });
 
 const timelineItemFields = [

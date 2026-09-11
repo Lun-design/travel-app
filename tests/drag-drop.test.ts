@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDragContainerStyle, createDragPreviewStyle, MOBILE_DRAG_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
+import { createDragContainerStyle, createDragPreviewStyle, createNativeDragRowStyle, MOBILE_DRAG_CONFIG, MOBILE_GRIP_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
 
 describe('drag and drop layout safeguards', () => {
   it('keeps a dragging preview full-width and clipped to the timeline bounds', () => {
@@ -33,12 +33,30 @@ describe('drag and drop layout safeguards', () => {
       activationDistance: 16,
       delayLongPress: 280,
       scrollEnabled: false,
+      removeClippedSubviews: false,
+      dragItemOverflow: false,
     }));
     expect(MOBILE_DRAG_CONFIG.animationConfig).toEqual(expect.objectContaining({
       damping: expect.any(Number),
       stiffness: expect.any(Number),
       overshootClamping: true,
     }));
+  });
+
+  it('keeps the measured native drag row mounted and full width', () => {
+    expect(createNativeDragRowStyle()).toEqual(expect.objectContaining({
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'visible',
+    }));
+  });
+
+  it('keeps a touch gesture captured after a small finger drift', () => {
+    expect(MOBILE_GRIP_CONFIG).toEqual({
+      delayLongPress: 280,
+      pressRetentionOffset: 24,
+      hitSlop: 4,
+    });
   });
 
   it('skips TimelineCard re-render when data and interaction state are unchanged', () => {
