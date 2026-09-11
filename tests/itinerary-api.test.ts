@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { normalizeItineraryItemPayload } from '../lib/itinerary';
+import { describe, expect, it, vi } from 'vitest';
+import { normalizeItineraryItemPayload, submitItineraryItem } from '../lib/itinerary';
 
 describe('normalizeItineraryItemPayload', () => {
   it('normalizes AI/form values before writing the itinerary item', () => {
@@ -101,5 +101,37 @@ describe('normalizeItineraryItemPayload', () => {
 
     expect(payload.category).toBe('outdoor');
     expect((payload as Record<string, unknown>).spot_type).toBeUndefined();
+  });
+
+  it('uses a valid spot_type when an empty category field is submitted', () => {
+    const payload = normalizeItineraryItemPayload({
+      trip_id: 'trip-1',
+      created_by: 'user-1',
+      location_name: '戶外步道',
+      category: '   ',
+      spot_type: 'outdoor',
+      difficulty: '',
+    });
+
+    expect(payload.category).toBe('outdoor');
+    expect(payload.difficulty).toBeNull();
+    expect((payload as Record<string, unknown>).spot_type).toBeUndefined();
+  });
+
+  it('normalizes the payload before invoking a direct submit callback', async () => {
+    const onSave = vi.fn(async (_payload: unknown) => {});
+    await submitItineraryItem({
+      trip_id: 'trip-1',
+      created_by: 'user-1',
+      location_name: '戶外景點',
+      category: '',
+      spot_type: 'trail',
+      time: '',
+      address: '',
+      difficulty: '',
+    }, onSave);
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ category: 'trail', time: null, address: null, difficulty: null }));
+    expect((onSave.mock.calls[0][0] as Record<string, unknown>).spot_type).toBeUndefined();
   });
 });

@@ -56,11 +56,14 @@ export async function submitItineraryItem(
   onSave: ((data: ItineraryItemSaveInput) => Promise<void>) | null | undefined,
   fallbackSave?: (data: ItineraryItemSaveInput) => Promise<void>,
 ): Promise<boolean> {
-  if (!canSaveItineraryItem(payload.location_name)) return false;
+  // Normalize at the submission boundary as well as in the Supabase API.
+  // This protects direct onSave callbacks from sending blank/legacy fields.
+  const safePayload = normalizeItineraryItemPayload(payload);
+  if (!canSaveItineraryItem(safePayload.location_name)) return false;
   if (!payload.trip_id?.trim()) throw new Error('找不到行程 ID (Trip ID missing)');
   const save = typeof onSave === 'function' ? onSave : fallbackSave;
   if (typeof save !== 'function') throw new Error('無法連接儲存服務。');
-  await save(payload);
+  await save(safePayload);
   return true;
 }
 
@@ -91,8 +94,9 @@ function normalizeTimeValue(value: unknown): string | null | undefined {
   return `${String(hours).padStart(2, '0')}:${match[2]}`;
 }
 
-const ITINERARY_CATEGORIES = ['flight', 'food', 'spot', 'hotel', 'trail', 'outdoor'] as const;
-const ITINERARY_DIFFICULTIES = ['easy', 'moderate', 'hard'] as const;
+/** Values mirrored by the itinerary_items CHECK constraints in Supabase. */
+export const ITINERARY_CATEGORIES = ['flight', 'food', 'spot', 'hotel', 'trail', 'outdoor'] as const;
+export const ITINERARY_DIFFICULTIES = ['easy', 'moderate', 'hard'] as const;
 const OPENING_HOURS_WEEKDAYS: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 function normalizeOptionalText(value: unknown): string | null {
@@ -160,7 +164,10 @@ export function normalizeItineraryItemPayload(item: ItineraryItemSaveInput): Iti
   if ('opening_hours' in item) payload.opening_hours = normalizeOpeningHoursValue(item.opening_hours);
   const rawItem = item as ItineraryItemSaveInput & { spot_type?: unknown };
   if ('category' in item || 'spot_type' in rawItem) {
-    const candidate = normalizeOptionalText(rawItem.category ?? rawItem.spot_type);
+    // Some older clients send both fields and leave category as an empty
+    // string. Prefer the legacy spot_type in that case so outdoor/trail
+    // selections are not silently replaced with an incompatible default.
+    const candidate = normalizeOptionalText(rawItem.category) || normalizeOptionalText(rawItem.spot_type);
     payload.category = ITINERARY_CATEGORIES.includes(candidate as (typeof ITINERARY_CATEGORIES)[number]) ? candidate as string : 'spot';
     delete (payload as ItineraryItemSaveInput & { spot_type?: unknown }).spot_type;
   }

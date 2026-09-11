@@ -118,7 +118,7 @@ function travelMinutes(from: ScheduleItem, to: ScheduleItem, averageSpeedKmh: nu
   return Math.max(1, Math.round(distanceKm / averageSpeedKmh * 60));
 }
 
-/** Return IDs whose explicit arrival starts before the previous stop can finish. */
+/** Return IDs whose explicit activity window starts before the previous stop finishes. */
 export function detectTimeConflicts(items: ScheduleItem[], context: ScheduleContext): string[] {
   const ordered = sortItineraryItemsByStartTime(items);
   const speed = context.averageSpeedKmh && context.averageSpeedKmh > 0 ? context.averageSpeedKmh : 35;
@@ -131,7 +131,12 @@ export function detectTimeConflicts(items: ScheduleItem[], context: ScheduleCont
     const earliestArrival: number = previous ? previous.departureMinutes + travel : fallbackStart;
     const arrival: number = explicitStart ?? earliestArrival;
     const duration = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0 ? current.duration_minutes as number : DEFAULT_DURATION_MINUTES;
-    if (previous && explicitStart !== null && explicitStart < earliestArrival) conflicts.push(current.id);
+    // A conflict means that the activity windows overlap.  Travel time is
+    // useful when estimating an unset start time, but it must not turn two
+    // explicitly adjacent activities (for example 18:00–19:00 followed by
+    // 19:00) into a false overlap warning.  Use the previous stop's actual
+    // departure as the boundary; equality is a valid hand-off.
+    if (previous && explicitStart !== null && explicitStart < previous.departureMinutes) conflicts.push(current.id);
     previous = { item: current, departureMinutes: arrival + duration };
   }
   return conflicts;

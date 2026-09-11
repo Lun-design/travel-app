@@ -54,6 +54,19 @@ describe('buildDaySchedule', () => {
     expect(schedule[0].estimated).toBe(false);
     expect(schedule[1].overlapWarning).toBe(true);
   });
+
+  it('does not report a conflict when the next explicit start exactly matches the previous departure', () => {
+    const schedule = buildDaySchedule([
+      item({ id: 'evening', time: '18:00', duration_minutes: 60, latitude: 25.0109, longitude: 121.464 }),
+      item({ id: 'night', position: 1, time: '19:00', duration_minutes: 60, latitude: 25.033, longitude: 121.565 }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, defaultDepartureTime: '09:00' });
+
+    expect(schedule.map((entry) => entry.item.id)).toEqual(['evening', 'night']);
+    expect(schedule.map((entry) => entry.overlapWarning)).toEqual([false, false]);
+    expect(detectTimeConflicts(schedule.map((entry) => entry.item), {
+      tripStartDate: '2026-01-20', dayNumber: 1, defaultDepartureTime: '09:00',
+    })).toEqual([]);
+  });
   it('sorts 06:30 before 18:00 and does not report a false overlap', () => {
     const schedule = buildDaySchedule([
       item({ id: 'late', position: 0, time: '18:00', duration_minutes: 60 }),
