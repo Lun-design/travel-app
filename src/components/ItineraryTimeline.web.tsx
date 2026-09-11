@@ -7,7 +7,7 @@ import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { displayRouteSegments, EmptyTimeline, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import type { TravelMode } from '@/lib/routes';
-import { createDragContainerStyle, createDragPreviewStyle } from '@/lib/drag-drop';
+import { createDragContainerStyle, createDragPreviewStyle, reconcileDraggedItems } from '@/lib/drag-drop';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
@@ -17,7 +17,9 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
   const scheduleById = useMemo(() => new Map(scheduled.map((entry) => [entry.item.id, entry])), [scheduled]);
   const weatherById = useWeatherByItem(localItems, scheduleContext);
-  useEffect(() => setLocalItems(sortItineraryItemsByStartTime(items)), [items]);
+  useEffect(() => {
+    setLocalItems((current) => reconcileDraggedItems(current, items, sortItineraryItemsByStartTime));
+  }, [items]);
 
   async function finishDrag(result: DropResult) {
     if (!result.destination) return;

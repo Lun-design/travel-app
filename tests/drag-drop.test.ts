@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDragContainerStyle, createDragPreviewStyle, MOBILE_DRAG_CONFIG } from '../lib/drag-drop';
+import { createDragContainerStyle, createDragPreviewStyle, MOBILE_DRAG_CONFIG, reconcileDraggedItems } from '../lib/drag-drop';
 
 describe('drag and drop layout safeguards', () => {
   it('keeps a dragging preview full-width and clipped to the timeline bounds', () => {
@@ -32,5 +32,17 @@ describe('drag and drop layout safeguards', () => {
       delayLongPress: 280,
       scrollEnabled: false,
     }));
+  });
+
+  it('preserves the local drag order when the parent echoes the same item set', () => {
+    const current = [{ id: 'second', title: '原本第二站' }, { id: 'first', title: '第一站' }];
+    const parentItems = [{ id: 'first', title: '第一站（已同步）' }, { id: 'second', title: '原本第二站' }];
+
+    const reconciled = reconcileDraggedItems(current, parentItems, (items) => items);
+
+    expect(reconciled).toEqual([
+      { id: 'second', title: '原本第二站' },
+      { id: 'first', title: '第一站（已同步）' },
+    ]);
   });
 });

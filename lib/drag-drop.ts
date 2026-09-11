@@ -43,3 +43,21 @@ export const MOBILE_DRAG_CONFIG = Object.freeze({
   delayLongPress: 280,
   scrollEnabled: false,
 });
+
+/**
+ * Reconcile a parent refresh without erasing an in-progress/just-completed
+ * local reorder.  A parent mutation often returns the same IDs in database
+ * order; preserving the current sequence prevents the native list from
+ * snapping back while still accepting refreshed item fields.
+ */
+export function reconcileDraggedItems<T extends { id: string }>(
+  current: readonly T[],
+  incoming: readonly T[],
+  sortIncoming: (items: T[]) => T[] = (items) => items,
+): T[] {
+  if (current.length === incoming.length && current.every((item) => incoming.some((entry) => entry.id === item.id))) {
+    const incomingById = new Map(incoming.map((item) => [item.id, item]));
+    return current.map((item) => incomingById.get(item.id) ?? item);
+  }
+  return sortIncoming([...incoming]);
+}
