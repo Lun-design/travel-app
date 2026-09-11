@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateMinSettlements } from '../lib/settlement';
+import { applySettlementRecords, calculateMinSettlements } from '../lib/settlement';
 
 const members = [{ user_id: 'alice' }, { user_id: 'bob' }, { user_id: 'carol' }];
 
@@ -37,5 +37,20 @@ describe('calculateMinSettlements', () => {
     ], ['alice', 'bob']);
 
     expect(result).toEqual([]);
+  });
+
+  it('subtracts recorded payments from matching settlement suggestions', () => {
+    const remaining = applySettlementRecords(
+      [
+        { from: 'bob', to: 'alice', amount: 100, currency: 'TWD' },
+        { from: 'carol', to: 'alice', amount: 80, currency: 'TWD' },
+      ],
+      [{ from_user_id: 'bob', to_user_id: 'alice', amount: 40, currency: 'TWD' }],
+    );
+
+    expect(remaining).toEqual([
+      { from: 'bob', to: 'alice', amount: 60, currency: 'TWD' },
+      { from: 'carol', to: 'alice', amount: 80, currency: 'TWD' },
+    ]);
   });
 });

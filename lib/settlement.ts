@@ -9,6 +9,7 @@ export type SettlementExpense = {
 };
 export type SettlementMember = string | { user_id: string };
 export type MinSettlement = { from: string; to: string; amount: number; currency: SupportedCurrency };
+export type SettlementClearanceRecord = { from_user_id: string; to_user_id: string; amount: number; currency: string };
 
 function roundAmount(value: number): number {
   return Math.round(value * 100) / 100;
@@ -81,4 +82,24 @@ export function calculateMinSettlements(
     if (creditors[creditorIndex].amount < 0.01) creditorIndex += 1;
   }
   return result;
+}
+
+/** Subtracts persisted payments from the current greedy settlement suggestions. */
+export function applySettlementRecords(
+  settlements: readonly MinSettlement[],
+  records: readonly SettlementClearanceRecord[],
+): MinSettlement[] {
+  const paid = new Map<string, number>();
+  records.forEach((record) => {
+    const amount = Number(record.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const key = `${record.from_user_id}|${record.to_user_id}|${normalizeCurrency(record.currency)}`;
+    paid.set(key, (paid.get(key) ?? 0) + amount);
+  });
+  return settlements.flatMap((settlement) => {
+    const key = `${settlement.from}|${settlement.to}|${settlement.currency}`;
+    const remaining = Math.round((settlement.amount - (paid.get(key) ?? 0)) * 100) / 100;
+    if (remaining <= 0.009) return [];
+    return [{ ...settlement, amount: remaining }];
+  });
 }
