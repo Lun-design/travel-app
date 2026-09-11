@@ -6,6 +6,7 @@ import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { displayRouteSegments, EmptyTimeline, NativeGripHandle, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import type { TravelMode } from '@/lib/routes';
+import { MOBILE_DRAG_CONFIG } from '@/lib/drag-drop';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
@@ -47,8 +48,9 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
   return <DraggableFlatList
     data={localItems}
     keyExtractor={(item) => item.id}
-    scrollEnabled={false}
-    activationDistance={8}
+    {...MOBILE_DRAG_CONFIG}
+    containerStyle={{ width: '100%', flexGrow: 0 }}
+    contentContainerStyle={{ width: '100%', paddingBottom: 0 }}
     onDragEnd={({ data }) => void finishDrag(data)}
     renderItem={({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => <View>
       <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} onRouteModeChange={(fromId, mode) => setRouteModes((current) => ({ ...current, [fromId]: mode }))} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={() => { void moveItem(item.id, -1); }} onMoveDown={() => { void moveItem(item.id, 1); }} canMoveUp={localItems.findIndex((entry) => entry.id === item.id) > 0} canMoveDown={localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1} />

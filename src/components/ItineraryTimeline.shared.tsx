@@ -11,6 +11,7 @@ import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEst
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { PuppyMascot } from './PuppyMascot';
+import { MOBILE_DRAG_CONFIG } from '@/lib/drag-drop';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
 export type ItineraryTimelineProps = {
@@ -203,7 +204,7 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
 
 function formatTemperature(weather: WeatherSummary) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}–${max}°C`; if (max !== null) return `${max}°C`; if (min !== null) return `${min}°C`; return '溫度未知'; }
 export function EmptyTimeline() { return <View style={styles.empty}><PuppyMascot puppy="-7" size={165} accessibilityLabel="目前沒有景點" /><Text style={styles.emptyText}>目前還沒有景點，新增第一站吧！</Text></View>; }
-export function NativeGripHandle({ label, onLongPress }: { label: string; onLongPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.grip} onLongPress={onLongPress} delayLongPress={120}><Text style={styles.gripText}>⋮⋮</Text></Pressable>; }
+export function NativeGripHandle({ label, onLongPress }: { label: string; onLongPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.grip} onLongPress={onLongPress} delayLongPress={MOBILE_DRAG_CONFIG.delayLongPress}><Text style={styles.gripText}>⋮⋮</Text></Pressable>; }
 function formatDistance(distanceKm: number) { return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`; }
 
 const styles = StyleSheet.create({

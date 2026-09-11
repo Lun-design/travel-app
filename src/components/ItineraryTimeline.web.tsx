@@ -7,6 +7,7 @@ import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { displayRouteSegments, EmptyTimeline, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import type { TravelMode } from '@/lib/routes';
+import { createDragContainerStyle, createDragPreviewStyle } from '@/lib/drag-drop';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
@@ -51,7 +52,7 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
     <Droppable droppableId="itinerary-timeline">
       {(dropProvided) => <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} style={dropZoneStyle}>
         {localItems.map((item, index) => <Draggable key={item.id} draggableId={item.id} index={index}>
-          {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={{ ...dragProvided.draggableProps.style, zIndex: snapshot.isDragging ? 10 : undefined }}>
+          {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={createDragPreviewStyle(dragProvided.draggableProps.style ?? {}, snapshot.isDragging)}>
             <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} onRouteModeChange={(fromId, mode) => setRouteModes((current) => ({ ...current, [fromId]: mode }))} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={() => { void moveItem(item.id, -1); }} onMoveDown={() => { void moveItem(item.id, 1); }} canMoveUp={index > 0} canMoveDown={index < localItems.length - 1} />
           </div>}
         </Draggable>)}
@@ -61,5 +62,5 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
   </DragDropContext>;
 }
 
-const dropZoneStyle: React.CSSProperties = { width: '100%', minHeight: 1 };
+const dropZoneStyle: React.CSSProperties = { ...createDragContainerStyle(), minHeight: 1 };
 const webGripStyle: React.CSSProperties = { width: 32, minHeight: 76, display: 'grid', placeItems: 'center', flexShrink: 0, borderRadius: 8, background: EDITORIAL_COLORS.sand, color: EDITORIAL_COLORS.taupe, fontSize: 25, fontWeight: 900, userSelect: 'none', touchAction: 'none' };

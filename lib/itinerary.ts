@@ -60,7 +60,7 @@ export async function submitItineraryItem(
   // This protects direct onSave callbacks from sending blank/legacy fields.
   const safePayload = normalizeItineraryItemPayload(payload);
   if (!canSaveItineraryItem(safePayload.location_name)) return false;
-  if (!payload.trip_id?.trim()) throw new Error('找不到行程 ID (Trip ID missing)');
+  if (!safePayload.trip_id?.trim()) throw new Error('找不到行程 ID (Trip ID missing)');
   const save = typeof onSave === 'function' ? onSave : fallbackSave;
   if (typeof save !== 'function') throw new Error('無法連接儲存服務。');
   await save(safePayload);
