@@ -34,6 +34,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
   const [customTitle, setCustomTitle] = useState('');
   const [customAddress, setCustomAddress] = useState('');
   const [busy, setBusy] = useState(false);
+  const [deletingPlaceId, setDeletingPlaceId] = useState<string | null>(null);
 
   const savedPlaces = useMemo(() => places.filter((place) => place.status === 'saved'), [places]);
 
@@ -117,11 +118,15 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
   }
 
   async function handleDelete(place: TripPlace) {
+    if (deletingPlaceId) return;
+    setDeletingPlaceId(place.id);
     try {
       await deleteTripPlace(place.id);
       await onChanged();
     } catch (error) {
       Alert.alert('刪除失敗', error instanceof Error ? error.message : '請稍後再試');
+    } finally {
+      setDeletingPlaceId(null);
     }
   }
 
@@ -206,7 +211,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
     {savedPlaces.length === 0 ? <View style={[styles.empty, { borderColor: theme.colors.border }]}><Text style={[styles.emptyText, { color: theme.colors.muted }]}>目前還沒有收藏景點，先搜尋一個吧！</Text></View> : <View style={styles.list}>
       {savedPlaces.map((place) => <View key={place.id} style={[styles.card, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
         <View style={styles.cardCopy}><Text style={[styles.cardTitle, { color: theme.colors.text }]}>{place.title}</Text>{place.address ? <Text numberOfLines={2} style={[styles.cardAddress, { color: theme.colors.muted }]}>{place.address}</Text> : null}{place.notes ? <Text style={[styles.cardNotes, { color: theme.colors.muted }]}>{place.notes}</Text> : null}</View>
-        <View style={styles.cardActions}><Pressable onPress={() => { setSelectedDay(days[0] ?? 1); setSelectedPlace(place); }} style={[styles.smallButton, { backgroundColor: theme.colors.primary }]}><Text style={styles.buttonText}>排入行程</Text></Pressable><Pressable onPress={() => openEdit(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]}><Text style={[styles.smallButtonText, { color: theme.colors.text }]}>編輯</Text></Pressable><Pressable onPress={() => void handleDelete(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]}><Text style={[styles.smallButtonText, { color: theme.colors.muted }]}>刪除</Text></Pressable></View>
+        <View style={styles.cardActions}><Pressable onPress={() => { setSelectedDay(days[0] ?? 1); setSelectedPlace(place); }} style={[styles.smallButton, { backgroundColor: theme.colors.primary }]} disabled={Boolean(deletingPlaceId)}><Text style={styles.buttonText}>排入行程</Text></Pressable><Pressable onPress={() => openEdit(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]} disabled={Boolean(deletingPlaceId)}><Text style={[styles.smallButtonText, { color: theme.colors.text }]}>編輯</Text></Pressable><Pressable disabled={deletingPlaceId === place.id} onPress={() => void handleDelete(place)} style={[styles.smallButton, { borderColor: theme.colors.border, opacity: deletingPlaceId === place.id ? 0.55 : 1 }]}><Text style={[styles.smallButtonText, { color: theme.colors.muted }]}>{deletingPlaceId === place.id ? '刪除中…' : '刪除'}</Text></Pressable></View>
       </View>)}
     </View>}
 

@@ -203,8 +203,10 @@ export function buildRecommendationQuery(destination: string, theme: Recommendat
   return `${destination.trim()} ${category.keyword}`.trim();
 }
 
-export function paginateRecommendations<T>(items: T[], requestedPage: number, pageSize = 6, totalItems?: number | null) {
-  const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 6;
+export const DEFAULT_RECOMMENDATION_PAGE_SIZE = 6;
+
+export function paginateRecommendations<T>(items: T[], requestedPage: number, pageSize = DEFAULT_RECOMMENDATION_PAGE_SIZE, totalItems?: number | null) {
+  const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : DEFAULT_RECOMMENDATION_PAGE_SIZE;
   const normalizedTotal = Number.isFinite(totalItems) && (totalItems as number) >= 0
     ? Math.max(items.length, Math.floor(totalItems as number))
     : items.length;

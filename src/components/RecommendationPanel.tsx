@@ -14,6 +14,7 @@ import {
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import {
   buildGlobalItineraryPayload,
+  DEFAULT_RECOMMENDATION_PAGE_SIZE,
   getRecommendationSubcategories,
   mergeRecommendationResults,
   paginateRecommendations,
@@ -37,7 +38,7 @@ type Props = {
   onAddedToItinerary?: (place: GlobalPlaceSearchResult, payload: GlobalItineraryPayload) => void | Promise<void>;
 };
 
-const RECOMMENDATION_PAGE_SIZE = 6;
+const RECOMMENDATION_PAGE_SIZE = DEFAULT_RECOMMENDATION_PAGE_SIZE;
 
 export function RecommendationPanel({ tripId, userId, dayNumber, destination, themeMode, onAddToItinerary, onAddedToItinerary }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());

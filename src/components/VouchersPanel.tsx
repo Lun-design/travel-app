@@ -8,7 +8,7 @@ import { VoucherUploadModal } from './VoucherUploadModal';
 import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 
-export function VouchersPanel({ tripId, userId, items, themeMode = 'system' }: { tripId: string; userId: string; items: ItineraryItem[]; themeMode?: ThemeMode }) {
+export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onChanged }: { tripId: string; userId: string; items: ItineraryItem[]; themeMode?: ThemeMode; onChanged?: () => void | Promise<void> }) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
@@ -55,6 +55,7 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system' }: {
       if (preview?.id === voucher.id) setPreview(null);
       setToast('票券已刪除。');
       setPendingDelete(null);
+      await onChanged?.();
     } catch (error: any) {
       setToast(error?.message ? `刪除票券失敗：${error.message}` : '刪除票券失敗，請稍後再試。');
     } finally {
@@ -75,7 +76,7 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system' }: {
         <Pressable accessibilityRole="button" disabled={deleting} style={styles.deleteButton} onPress={() => setPendingDelete(null)}><Text>取消</Text></Pressable>
       </View></View>
     </Modal>
-    <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} onClose={() => setUploading(false)} onUploaded={load} />
+    <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} onClose={() => setUploading(false)} onUploaded={async () => { await load(); await onChanged?.(); }} />
     <VoucherPreviewModal voucher={preview} onClose={() => setPreview(null)} />
   </ScrollView>;
 }

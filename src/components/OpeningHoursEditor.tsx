@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { OpeningHours, OpeningPeriod, Weekday } from '@/lib/itinerary';
+import { MAX_OPENING_PERIODS } from '@/lib/itinerary';
 import { draftToOpeningHours, toOpeningHoursDraft, WEEKDAYS, type OpeningHoursDraft } from '@/lib/opening-hours';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 
@@ -31,7 +32,7 @@ export function OpeningHoursEditor({ value, onChange }: Props) {
   }
 
   function addPeriod(day: Weekday) {
-    if (draft[day].periods.length >= 2) return;
+    if (draft[day].periods.length >= MAX_OPENING_PERIODS) return;
     updateDay(day, { periods: [...draft[day].periods, { open: '13:00', close: '17:00' }] });
   }
 
@@ -46,7 +47,7 @@ export function OpeningHoursEditor({ value, onChange }: Props) {
   }
 
   return <View style={styles.container}>
-    <Text style={styles.helper}>未設定的日期不會觸發營業時間預警；可新增最多兩段營業時段。</Text>
+    <Text style={styles.helper}>未設定的日期不會觸發營業時間預警；可新增最多 {MAX_OPENING_PERIODS} 段營業時段。</Text>
     {WEEKDAYS.map(({ key, label }) => {
       const day = draft[key];
       return <View key={key} style={styles.dayRow}>
@@ -60,7 +61,7 @@ export function OpeningHoursEditor({ value, onChange }: Props) {
           <Pressable style={styles.timeButton} onPress={() => setPicker({ day: key, periodIndex: index, field: 'close' })}><Text style={styles.timeText}>{period.close}</Text></Pressable>
           <Pressable style={styles.removeButton} onPress={() => removePeriod(key, index)}><Text style={styles.removeText}>移除</Text></Pressable>
         </View>) : <Text style={styles.unsetText}>尚未設定時段</Text>}
-        {!day.closed && day.periods.length < 2 ? <Pressable style={styles.addButton} onPress={() => addPeriod(key)}><Text style={styles.addText}>＋ 新增時段</Text></Pressable> : null}
+        {!day.closed && day.periods.length < MAX_OPENING_PERIODS ? <Pressable style={styles.addButton} onPress={() => addPeriod(key)}><Text style={styles.addText}>＋ 新增時段</Text></Pressable> : null}
       </View>;
     })}
     <Modal visible={Boolean(picker)} transparent animationType="fade" onRequestClose={() => setPicker(null)}>

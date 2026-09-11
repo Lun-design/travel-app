@@ -1,6 +1,8 @@
 export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 export type OpeningPeriod = { open: string; close: string };
 export type OpeningHoursDay = { closed?: boolean; periods?: OpeningPeriod[] };
+/** Maximum number of daily opening intervals persisted by the form/schema. */
+export const MAX_OPENING_PERIODS = 2;
 export type OpeningHours = Partial<Record<Weekday, OpeningHoursDay>>;
 
 export type ItineraryItem = {
@@ -122,7 +124,7 @@ function normalizeOpeningHoursValue(value: unknown): OpeningHours | null {
     if (!rawDay || typeof rawDay !== 'object' || Array.isArray(rawDay)) continue;
     const day = rawDay as { closed?: unknown; periods?: unknown };
     const closed = day.closed === true;
-    const periods = closed || !Array.isArray(day.periods) ? [] : day.periods.slice(0, 2).flatMap((rawPeriod) => {
+    const periods = closed || !Array.isArray(day.periods) ? [] : day.periods.slice(0, MAX_OPENING_PERIODS).flatMap((rawPeriod) => {
       if (!rawPeriod || typeof rawPeriod !== 'object' || Array.isArray(rawPeriod)) return [];
       const period = rawPeriod as { open?: unknown; close?: unknown };
       const open = normalizeOpeningClock(period.open);

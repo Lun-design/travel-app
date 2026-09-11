@@ -28,6 +28,7 @@ type GeocodingSearch = (query: string) => Promise<GeocodingResult[]>;
 
 const PUBLIC_NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 const configuredEndpoint = (process.env.EXPO_PUBLIC_NOMINATIM_URL || PUBLIC_NOMINATIM_URL).replace(/\/$/, '');
+export const NOMINATIM_RESULT_LIMIT = 5;
 let requestQueue: Promise<void> = Promise.resolve();
 let lastRequestStartedAt = 0;
 
@@ -177,7 +178,7 @@ async function requestNominatim(query: string): Promise<GeocodingResult[]> {
     const waitMs = Math.max(0, 1000 - (Date.now() - lastRequestStartedAt));
     if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
     lastRequestStartedAt = Date.now();
-    const url = `${configuredEndpoint}/search?format=jsonv2&limit=5&addressdetails=1&namedetails=1&extratags=1&accept-language=zh-TW&q=${encodeURIComponent(query)}`;
+    const url = `${configuredEndpoint}/search?format=jsonv2&limit=${NOMINATIM_RESULT_LIMIT}&addressdetails=1&namedetails=1&extratags=1&accept-language=zh-TW&q=${encodeURIComponent(query)}`;
     const response = await fetch(url, { headers: { 'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.7', 'User-Agent': 'TravelPlanner/1.0' } });
     if (!response.ok) throw new Error(response.status === 429 ? '地圖搜尋過於頻繁，請稍後再試' : '地圖搜尋失敗');
     return parseNominatimResults(await response.json());

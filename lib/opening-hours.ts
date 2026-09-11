@@ -1,4 +1,4 @@
-import type { OpeningHours, OpeningHoursDay, OpeningPeriod, Weekday } from './itinerary';
+import { MAX_OPENING_PERIODS, type OpeningHours, type OpeningHoursDay, type OpeningPeriod, type Weekday } from './itinerary';
 
 export const WEEKDAYS: { key: Weekday; label: string }[] = [
   { key: 'monday', label: '週一' },
@@ -17,7 +17,7 @@ export function toOpeningHoursDraft(value: OpeningHours | null | undefined): Ope
     const day = value?.[key];
     return [key, {
       closed: day?.closed === true,
-      periods: Array.isArray(day?.periods) ? day.periods.slice(0, 2).map((period) => ({ open: period.open, close: period.close })) : [],
+      periods: Array.isArray(day?.periods) ? day.periods.slice(0, MAX_OPENING_PERIODS).map((period) => ({ open: period.open, close: period.close })) : [],
     }];
   })) as OpeningHoursDraft;
 }
@@ -27,6 +27,6 @@ export function draftToOpeningHours(draft: OpeningHoursDraft): OpeningHours | nu
   if (!hasConfiguration) return null;
   return Object.fromEntries(WEEKDAYS.map(({ key }) => [key, {
     closed: draft[key].closed,
-    periods: draft[key].closed ? [] : draft[key].periods.slice(0, 2),
+    periods: draft[key].closed ? [] : draft[key].periods.slice(0, MAX_OPENING_PERIODS),
   } satisfies OpeningHoursDay])) as OpeningHours;
 }

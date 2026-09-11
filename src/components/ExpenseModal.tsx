@@ -32,6 +32,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
   const [splitValues, setSplitValues] = useState<Record<string, string>>({});
   const [category, setCategory] = useState<string>('其他');
   const [saving, setSaving] = useState(false);
+  const [lockingRate, setLockingRate] = useState(false);
   const [manualRate, setManualRate] = useState('');
 
   useEffect(() => {
@@ -73,12 +74,30 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
     } finally { setSaving(false); }
   }
 
+  async function lockManualRate() {
+    if (!onLockRate || lockingRate) return;
+    const value = Number(manualRate);
+    if (!Number.isFinite(value) || value <= 0) {
+      Alert.alert('匯率格式錯誤', '請輸入大於 0 的匯率。');
+      return;
+    }
+    setLockingRate(true);
+    try {
+      await onLockRate(currency, value);
+      setManualRate('');
+    } catch (error) {
+      Alert.alert('匯率鎖定失敗', error instanceof Error ? error.message : '請稍後再試。');
+    } finally {
+      setLockingRate(false);
+    }
+  }
+
   return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Text style={[styles.title, { color: theme.colors.text }]}>{expense ? '編輯旅費' : '新增旅費'}</Text>
       <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="項目名稱，例如：晚餐" placeholderTextColor={theme.colors.muted} value={title} onChangeText={setTitle} />
       <View style={styles.row}><TextInput style={[styles.input, styles.flex, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="金額" placeholderTextColor={theme.colors.muted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><View style={styles.currencyChoices}>{SUPPORTED_CURRENCIES.map((option) => <Pressable key={option} style={[styles.currencyChip, normalizeCurrency(currency) === option && styles.selected]} onPress={() => setCurrency(option)}><Text style={normalizeCurrency(currency) === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View></View>
-      <Text style={[styles.conversion, { color: theme.colors.muted }]}>≈ TWD {Number.isFinite(total) ? convertToTwd(total, currency, rateSnapshot?.rates).toFixed(2) : '—'}</Text><View style={styles.rateRow}><Text style={[styles.rateHint, { color: theme.colors.muted }]}>1 {normalizeCurrency(currency)} ≈ TWD {rateSnapshot?.rates[normalizeCurrency(currency)]?.toFixed(4) ?? '—'} {rateSnapshot?.source === 'manual' && rateSnapshot.lockedCurrencies.includes(normalizeCurrency(currency)) ? '（已鎖定）' : ''}</Text>{onLockRate && normalizeCurrency(currency) !== 'TWD' ? <><TextInput style={[styles.rateInput, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} keyboardType="decimal-pad" placeholder="自訂匯率" placeholderTextColor={theme.colors.muted} value={manualRate} onChangeText={setManualRate} /><Pressable style={styles.lockRateButton} onPress={() => { const value = Number(manualRate); if (Number.isFinite(value) && value > 0) void onLockRate(currency, value).then(() => setManualRate('')); }}><Text style={styles.lockRateText}>鎖定</Text></Pressable></> : null}</View>
+      <Text style={[styles.conversion, { color: theme.colors.muted }]}>≈ TWD {Number.isFinite(total) ? convertToTwd(total, currency, rateSnapshot?.rates).toFixed(2) : '—'}</Text><View style={styles.rateRow}><Text style={[styles.rateHint, { color: theme.colors.muted }]}>1 {normalizeCurrency(currency)} ≈ TWD {rateSnapshot?.rates[normalizeCurrency(currency)]?.toFixed(4) ?? '—'} {rateSnapshot?.source === 'manual' && rateSnapshot.lockedCurrencies.includes(normalizeCurrency(currency)) ? '（已鎖定）' : ''}</Text>{onLockRate && normalizeCurrency(currency) !== 'TWD' ? <><TextInput style={[styles.rateInput, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} keyboardType="decimal-pad" placeholder="自訂匯率" placeholderTextColor={theme.colors.muted} value={manualRate} onChangeText={setManualRate} editable={!lockingRate} /><Pressable disabled={lockingRate} style={[styles.lockRateButton, lockingRate && styles.disabled]} onPress={() => void lockManualRate()}><Text style={styles.lockRateText}>{lockingRate ? '鎖定中…' : '鎖定'}</Text></Pressable></> : null}</View>
       <Text style={[styles.label, { color: theme.colors.text }]}>費用類別</Text>
       <View style={styles.chips}>{EXPENSE_CATEGORIES.map((option) => <Pressable key={option} style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, category === option && styles.selected]} onPress={() => setCategory(option)}><Text style={category === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View>
       <Text style={[styles.label, { color: theme.colors.text }]}>付款人</Text>
@@ -95,7 +114,7 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 27, fontWeight: '800' },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 13 }, row: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, flex: { flex: 1 },
   currencyChoices: { width: 128, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }, currencyChip: { minHeight: 36, justifyContent: 'center', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 7, backgroundColor: EDITORIAL_COLORS.sand }, conversion: { fontSize: 12, fontWeight: '700' }, rateRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }, rateHint: { fontSize: 11, flexShrink: 1 }, rateInput: { width: 82, minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, fontSize: 12 }, lockRateButton: { minHeight: 40, justifyContent: 'center', borderRadius: 8, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 9, paddingVertical: 8 }, lockRateText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700' },
-  label: { fontWeight: '700', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { minHeight: 44, justifyContent: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: EDITORIAL_COLORS.terracotta }, white: { color: EDITORIAL_COLORS.paper, fontWeight: '700' },
+  label: { fontWeight: '700', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { minHeight: 44, justifyContent: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: EDITORIAL_COLORS.terracotta }, disabled: { opacity: 0.55 }, white: { color: EDITORIAL_COLORS.paper, fontWeight: '700' },
   memberRows: { gap: 8 }, memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }, splitInput: { width: 92, minHeight: 40, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9 }, previewAmount: { marginLeft: 'auto', fontSize: 12 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, alignItems: 'center', marginTop: 12 }, save: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, padding: 13 },
 });

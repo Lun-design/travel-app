@@ -30,6 +30,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const [name, setName] = useState('');
   const [category, setCategory] = useState('未分類');
   const [busy, setBusy] = useState(false);
+  const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
   const [celebrateVisible, setCelebrateVisible] = useState(false);
   const autoRainGearKey = useRef<string | null>(null);
   const offlineScope = { userId, tripId };
@@ -64,7 +65,9 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   useEffect(() => { void load(); }, [tripId, refreshToken, tripStartDate, itineraryItems]);
 
   async function toggle(item: PackingItem) {
+    if (mutatingItemId) return;
     const next = !item.is_checked;
+    setMutatingItemId(item.id);
     setItems((current) => current.map((value) => value.id === item.id ? { ...value, is_checked: next, is_packed: next } : value));
     try {
       await updatePackingItem(item.id, { is_checked: next, is_packed: next }, { offlineScope, store: offlineStore });
@@ -72,6 +75,35 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
       if (next && isPackingComplete(nextItems)) setCelebrateVisible(true);
     }
     catch { await load(); }
+    finally { setMutatingItemId(null); }
+  }
+
+  async function assignItem(item: PackingItem) {
+    if (mutatingItemId) return;
+    const next = members.find((member) => member.user_id !== item.assigned_to);
+    if (!next) return;
+    setMutatingItemId(item.id);
+    try {
+      await updatePackingItem(item.id, { assigned_to: next.user_id }, { offlineScope, store: offlineStore });
+      await load();
+    } catch (error: any) {
+      Alert.alert('更新負責人失敗', error?.message ?? '請稍後再試。');
+    } finally {
+      setMutatingItemId(null);
+    }
+  }
+
+  async function removeItem(item: PackingItem) {
+    if (mutatingItemId) return;
+    setMutatingItemId(item.id);
+    try {
+      await deletePackingItem(item.id);
+      await load();
+    } catch (error: any) {
+      Alert.alert('刪除項目失敗', error?.message ?? '請稍後再試。');
+    } finally {
+      setMutatingItemId(null);
+    }
   }
 
   async function add() {
@@ -109,7 +141,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
     <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={setName} onSubmitEditing={() => void add()} /><Pressable style={styles.addButton} onPress={() => void add()} disabled={busy}><Text style={styles.white}>新增</Text></Pressable></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={category === value ? styles.white : undefined}>{value}</Text></Pressable>)}</ScrollView>
-    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} onPress={() => { const next = members.find((member) => member.user_id !== item.assigned_to); if (next) void updatePackingItem(item.id, { assigned_to: next.user_id }).then(load); }}><ProfileAvatar profile={memberFor(item.assigned_to)?.profile} userId={item.assigned_to ?? undefined} size={26} /><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></Pressable><Pressable onPress={() => void deletePackingItem(item.id).then(load)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
+    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} disabled={mutatingItemId === item.id} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} disabled={mutatingItemId === item.id} onPress={() => void assignItem(item)}><ProfileAvatar profile={memberFor(item.assigned_to)?.profile} userId={item.assigned_to ?? undefined} size={26} /><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></Pressable><Pressable disabled={mutatingItemId === item.id} onPress={() => void removeItem(item)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
     <Modal visible={celebrateVisible} transparent animationType="fade" onRequestClose={() => setCelebrateVisible(false)}>
       <View style={styles.modalBackdrop}>
         <View style={styles.celebrateCard}>
