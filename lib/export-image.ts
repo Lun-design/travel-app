@@ -34,6 +34,9 @@ export type ItineraryExportData = {
 
 export type ItineraryExportFormat = 'png' | 'pdf';
 
+/** Delay used to let the generated print document render before opening the dialog. */
+export const PDF_PRINT_DELAY_MS = 500;
+
 const EXPORT_WIDTH = 1200;
 const HEADER_HEIGHT = 190;
 const ROW_HEIGHT = 116;
@@ -134,10 +137,17 @@ async function printPdf(data: ItineraryExportData): Promise<void> {
   printWindow.document.open();
   printWindow.document.write(`<!doctype html><html><head><title>${escapeXml(data.title)}</title><style>@page{size:auto;margin:12mm}body{margin:0;background:#fff}svg{display:block;width:100%;height:auto}</style></head><body>${buildItineraryCardSvg(data)}</body></html>`);
   printWindow.document.close();
-  await new Promise<void>((resolve) => setTimeout(resolve, 100));
-  printWindow.focus();
-  printWindow.print();
-  printWindow.close();
+  await new Promise<void>((resolve) => {
+    setTimeout(() => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } finally {
+        printWindow.close();
+        resolve();
+      }
+    }, PDF_PRINT_DELAY_MS);
+  });
 }
 
 /** Exports PNG directly; PDF uses the browser's native print dialog (Save as PDF). */

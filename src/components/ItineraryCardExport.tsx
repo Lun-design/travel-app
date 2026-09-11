@@ -17,17 +17,30 @@ export function ItineraryCardExport({ visible, data, themeMode = 'system', onClo
   const [busy, setBusy] = useState(false);
   const items = useMemo(() => normalizeItineraryExportItems(data.items), [data.items]);
 
-  async function handleExport() {
+  async function runExport(selectedFormat: ItineraryExportFormat) {
     if (busy) return;
     setBusy(true);
     try {
-      await exportItineraryCard(data, format);
+      await exportItineraryCard(data, selectedFormat);
       onClose();
     } catch (error) {
       Alert.alert('匯出失敗', error instanceof Error ? error.message : '請稍後再試。');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function openPdfExport() {
+    if (busy) return;
+    await runExport('pdf');
+  }
+
+  async function handleExport() {
+    if (format === 'pdf') {
+      await openPdfExport();
+      return;
+    }
+    await runExport('png');
   }
 
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={() => { if (!busy) onClose(); }}>
@@ -42,7 +55,7 @@ export function ItineraryCardExport({ visible, data, themeMode = 'system', onClo
       </ScrollView>
       <Text selectable numberOfLines={2} style={[styles.accessibleText, { color: theme.colors.muted }]}>{buildItineraryExportText(data)}</Text>
       <View style={styles.formatRow}><Pressable accessibilityRole="radio" accessibilityState={{ selected: format === 'png' }} disabled={busy} onPress={() => setFormat('png')} style={[styles.formatButton, { borderColor: format === 'png' ? theme.colors.primary : theme.colors.border, backgroundColor: format === 'png' ? theme.colors.primary : theme.colors.surfaceMuted }]}><Text style={{ color: format === 'png' ? theme.colors.surface : theme.colors.text }}>圖片 PNG</Text></Pressable><Pressable accessibilityRole="radio" accessibilityState={{ selected: format === 'pdf' }} disabled={busy} onPress={() => setFormat('pdf')} style={[styles.formatButton, { borderColor: format === 'pdf' ? theme.colors.primary : theme.colors.border, backgroundColor: format === 'pdf' ? theme.colors.primary : theme.colors.surfaceMuted }]}><Text style={{ color: format === 'pdf' ? theme.colors.surface : theme.colors.text }}>文件 PDF</Text></Pressable></View>
-      <View style={styles.actions}><Pressable disabled={busy} onPress={onClose} style={[styles.cancel, { borderColor: theme.colors.border }]}><Text style={{ color: theme.colors.text }}>取消</Text></Pressable><Pressable disabled={busy} onPress={() => void handleExport()} style={[styles.export, { backgroundColor: theme.colors.primary, opacity: busy ? 0.6 : 1 }]}>{busy ? <ActivityIndicator color={theme.colors.surface} /> : <Text style={styles.exportText}>{format === 'png' ? '下載 PNG' : '開啟列印並儲存 PDF'}</Text>}</Pressable></View>
+      <View style={styles.actions}><Pressable disabled={busy} onPress={onClose} style={[styles.cancel, { borderColor: theme.colors.border }]}><Text style={{ color: theme.colors.text }}>取消</Text></Pressable><Pressable accessibilityLabel={busy ? (format === 'pdf' ? '列印中' : '匯出中') : (format === 'png' ? '下載 PNG' : '開啟列印並儲存 PDF')} disabled={busy} onPress={() => void handleExport()} style={[styles.export, { backgroundColor: theme.colors.primary, opacity: busy ? 0.6 : 1 }]}>{busy ? <><ActivityIndicator color={theme.colors.surface} /><Text style={styles.exportText}>{format === 'pdf' ? '列印中…' : '匯出中…'}</Text></> : <Text style={styles.exportText}>{format === 'png' ? '下載 PNG' : '開啟列印並儲存 PDF'}</Text>}</Pressable></View>
     </View></View>
   </Modal>;
 }

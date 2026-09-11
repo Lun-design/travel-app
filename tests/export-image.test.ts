@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   buildItineraryCardSvg,
   buildItineraryExportText,
   normalizeItineraryExportItems,
+  PDF_PRINT_DELAY_MS,
+  exportItineraryCard,
   type ItineraryExportData,
 } from '../lib/export-image';
 
@@ -52,5 +54,51 @@ describe('itinerary image/PDF export helpers', () => {
     expect(modal).toContain('圖片 PNG');
     expect(modal).toContain('文件 PDF');
     expect(modal).toContain('disabled={busy}');
+  });
+
+  it('waits for the generated PDF document before triggering print and cleanup', () => {
+    const source = readFileSync(resolve(process.cwd(), 'lib/export-image.ts'), 'utf8');
+    expect(PDF_PRINT_DELAY_MS).toBe(500);
+    expect(source).toContain('printWindow.document.close();');
+    expect(source).toContain('setTimeout(() => {');
+    expect(source).toContain('printWindow.print();');
+    expect(source).toContain('printWindow.close();');
+    expect(source).toContain('}, PDF_PRINT_DELAY_MS);');
+  });
+
+  it('prints only after the 500ms render delay and then closes the print window', async () => {
+    vi.useFakeTimers();
+    const print = vi.fn();
+    const close = vi.fn();
+    const printWindow = {
+      document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
+      focus: vi.fn(),
+      print,
+      close,
+    };
+    vi.stubGlobal('window', { open: vi.fn(() => printWindow) });
+    vi.stubGlobal('document', {});
+
+    try {
+      const pending = exportItineraryCard(sample, 'pdf');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(print).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(PDF_PRINT_DELAY_MS - 1);
+      expect(print).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await pending;
+      expect(print).toHaveBeenCalledOnce();
+      expect(close).toHaveBeenCalledOnce();
+      expect(printWindow.document.write).toHaveBeenCalledWith(expect.stringContaining('<svg'));
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it('exposes a print-in-progress state for PDF exports', () => {
+    const modal = readFileSync(resolve(process.cwd(), 'src/components/ItineraryCardExport.tsx'), 'utf8');
+    expect(modal).toContain('openPdfExport');
+    expect(modal).toContain('列印中');
   });
 });
