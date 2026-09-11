@@ -6,12 +6,20 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
+vi.mock('../lib/itinerary-api', () => ({
+  saveItineraryItem: vi.fn(),
+}));
+
 import { supabase } from '../lib/supabase';
+import { saveItineraryItem } from '../lib/itinerary-api';
 import {
   buildItineraryItemFromPlace,
   buildScheduledPlacePatch,
   createTripPlace,
+  deleteTripPlace,
   listTripPlaces,
+  scheduleTripPlace,
+  updateTripPlace,
   type TripPlace,
 } from '../lib/trip-places-api';
 
@@ -88,5 +96,60 @@ describe('trip places API', () => {
       created_by: 'user-1',
     });
     expect(buildScheduledPlacePatch()).toEqual({ status: 'scheduled' });
+  });
+
+  it('更新收藏景點後回傳最新資料，並將空字串正規化為 null', async () => {
+    const updateQuery = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { ...place, title: '淺草寺（夜間）', address: null }, error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValueOnce(updateQuery as never);
+
+    const result = await updateTripPlace(place.id, { title: '淺草寺（夜間）', address: '  ', notes: '夜景' });
+
+    expect(updateQuery.update).toHaveBeenCalledWith(expect.objectContaining({ title: '淺草寺（夜間）', address: null, notes: '夜景' }));
+    expect(updateQuery.eq).toHaveBeenCalledWith('id', place.id);
+    expect(result.title).toBe('淺草寺（夜間）');
+    expect(result.address).toBeNull();
+  });
+
+  it('刪除景點會呼叫 Supabase delete', async () => {
+    const deleteQuery = {
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValueOnce(deleteQuery as never);
+
+    await deleteTripPlace(place.id);
+
+    expect(deleteQuery.delete).toHaveBeenCalled();
+    expect(deleteQuery.eq).toHaveBeenCalledWith('id', place.id);
+  });
+
+  it('排入行程會先建立 itinerary item，再將來源標記為 scheduled', async () => {
+    const readQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: place, error: null }),
+    };
+    const updateQuery = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { ...place, status: 'scheduled' }, error: null }),
+    };
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce(readQuery as never)
+      .mockReturnValueOnce(updateQuery as never);
+    vi.mocked(saveItineraryItem).mockResolvedValue({ ...buildItineraryItemFromPlace(place, { dayNumber: 2, startTime: '10:30', durationMinutes: 90, createdBy: 'user-1' }), id: 'item-1', position: 0 } as never);
+
+    const result = await scheduleTripPlace(place.id, { dayNumber: 2, startTime: '10:30', durationMinutes: 90, createdBy: 'user-1' });
+
+    expect(saveItineraryItem).toHaveBeenCalledWith(expect.objectContaining({ location_name: '淺草寺', day_number: 2, time: '10:30' }));
+    expect(updateQuery.update).toHaveBeenCalledWith({ status: 'scheduled' });
+    expect(result.place.status).toBe('scheduled');
+    expect(result.item.id).toBe('item-1');
   });
 });

@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { fetchGooglePlaceDetails, resolveTripPlaceAddress, searchGooglePlaces } from '@/lib/google-places';
 import type { GeocodingResult } from '@/lib/geocoding';
 import type { GlobalItineraryPayload, GlobalPlaceSearchResult } from '@/lib/global-recommendations';
-import { createTripPlace, deleteTripPlace, scheduleTripPlace, type TripPlace } from '@/lib/trip-places-api';
+import { createTripPlace, deleteTripPlace, scheduleTripPlace, updateTripPlace, type TripPlace } from '@/lib/trip-places-api';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { RecommendationPanel } from '@/components/RecommendationPanel';
 
@@ -30,6 +30,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
   const [startTime, setStartTime] = useState('10:00');
   const [duration, setDuration] = useState('60');
   const [customVisible, setCustomVisible] = useState(false);
+  const [editingPlace, setEditingPlace] = useState<TripPlace | null>(null);
   const [customTitle, setCustomTitle] = useState('');
   const [customAddress, setCustomAddress] = useState('');
   const [busy, setBusy] = useState(false);
@@ -53,18 +54,23 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
     if (!customTitle.trim()) return;
     setBusy(true);
     try {
-      await createTripPlace({
-        trip_id: tripId,
-        title: customTitle,
-        address: customAddress || null,
-        lat: null,
-        lng: null,
-        category: 'spot',
-        notes: null,
-        created_by: userId,
-      });
+      if (editingPlace) {
+        await updateTripPlace(editingPlace.id, { title: customTitle, address: customAddress });
+      } else {
+        await createTripPlace({
+          trip_id: tripId,
+          title: customTitle,
+          address: customAddress || null,
+          lat: null,
+          lng: null,
+          category: 'spot',
+          notes: null,
+          created_by: userId,
+        });
+      }
       setCustomTitle('');
       setCustomAddress('');
+      setEditingPlace(null);
       setCustomVisible(false);
       setQuery('');
       setResults([]);
@@ -75,6 +81,13 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
     } finally {
       setBusy(false);
     }
+  }
+
+  function openEdit(place: TripPlace) {
+    setEditingPlace(place);
+    setCustomTitle(place.title);
+    setCustomAddress(place.address ?? '');
+    setCustomVisible(true);
   }
 
   async function handleAdd(result: GeocodingResult) {
@@ -194,7 +207,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
     {savedPlaces.length === 0 ? <View style={[styles.empty, { borderColor: theme.colors.border }]}><Text style={[styles.emptyText, { color: theme.colors.muted }]}>目前還沒有收藏景點，先搜尋一個吧！</Text></View> : <View style={styles.list}>
       {savedPlaces.map((place) => <View key={place.id} style={[styles.card, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
         <View style={styles.cardCopy}><Text style={[styles.cardTitle, { color: theme.colors.text }]}>{place.title}</Text>{place.address ? <Text numberOfLines={2} style={[styles.cardAddress, { color: theme.colors.muted }]}>{place.address}</Text> : null}{place.notes ? <Text style={[styles.cardNotes, { color: theme.colors.muted }]}>{place.notes}</Text> : null}</View>
-        <View style={styles.cardActions}><Pressable onPress={() => { setSelectedDay(days[0] ?? 1); setSelectedPlace(place); }} style={[styles.smallButton, { backgroundColor: theme.colors.primary }]}><Text style={styles.buttonText}>排入行程</Text></Pressable><Pressable onPress={() => void handleDelete(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]}><Text style={[styles.smallButtonText, { color: theme.colors.muted }]}>刪除</Text></Pressable></View>
+        <View style={styles.cardActions}><Pressable onPress={() => { setSelectedDay(days[0] ?? 1); setSelectedPlace(place); }} style={[styles.smallButton, { backgroundColor: theme.colors.primary }]}><Text style={styles.buttonText}>排入行程</Text></Pressable><Pressable onPress={() => openEdit(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]}><Text style={[styles.smallButtonText, { color: theme.colors.text }]}>編輯</Text></Pressable><Pressable onPress={() => void handleDelete(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]}><Text style={[styles.smallButtonText, { color: theme.colors.muted }]}>刪除</Text></Pressable></View>
       </View>)}
     </View>}
 
@@ -210,14 +223,14 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
       </View></View>
     </Modal>
 
-    <Modal visible={customVisible} transparent animationType="slide" onRequestClose={() => setCustomVisible(false)}>
+    <Modal visible={customVisible} transparent animationType="slide" onRequestClose={() => { setCustomVisible(false); setEditingPlace(null); }}>
       <View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-        <Text style={[styles.modalTitle, { color: theme.colors.text }]}>手動新增景點</Text>
+        <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{editingPlace ? '編輯收藏景點' : '手動新增景點'}</Text>
         <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>景點名稱</Text>
         <TextInput autoFocus value={customTitle} onChangeText={setCustomTitle} style={[styles.modalInput, { borderColor: theme.colors.border, color: theme.colors.text }]} placeholder="例如：大阪城" />
         <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>地址（選填）</Text>
         <TextInput value={customAddress} onChangeText={setCustomAddress} style={[styles.modalInput, { borderColor: theme.colors.border, color: theme.colors.text }]} placeholder="可稍後補上地址" />
-        <View style={styles.modalActions}><Pressable onPress={() => setCustomVisible(false)} style={[styles.modalButton, { borderColor: theme.colors.border }]}><Text style={{ color: theme.colors.text }}>取消</Text></Pressable><Pressable disabled={busy || !customTitle.trim()} onPress={() => void handleCustomAdd()} style={[styles.modalButton, { backgroundColor: theme.colors.primary, opacity: busy || !customTitle.trim() ? 0.55 : 1 }]}><Text style={styles.buttonText}>{busy ? '儲存中' : '加入收藏庫'}</Text></Pressable></View>
+        <View style={styles.modalActions}><Pressable onPress={() => { setCustomVisible(false); setEditingPlace(null); }} style={[styles.modalButton, { borderColor: theme.colors.border }]}><Text style={{ color: theme.colors.text }}>取消</Text></Pressable><Pressable disabled={busy || !customTitle.trim()} onPress={() => void handleCustomAdd()} style={[styles.modalButton, { backgroundColor: theme.colors.primary, opacity: busy || !customTitle.trim() ? 0.55 : 1 }]}><Text style={styles.buttonText}>{busy ? '儲存中' : editingPlace ? '儲存修改' : '加入收藏庫'}</Text></Pressable></View>
       </View></View>
     </Modal>
   </View>;

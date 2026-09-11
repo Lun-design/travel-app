@@ -24,6 +24,8 @@ export type CreateTripPlaceInput = Omit<TripPlace, 'id' | 'status' | 'created_at
   status?: TripPlaceStatus;
 };
 
+export type UpdateTripPlaceInput = Partial<Pick<TripPlace, 'title' | 'address' | 'lat' | 'lng' | 'category' | 'notes'>>;
+
 export type ScheduleTripPlaceOptions = {
   dayNumber: number;
   startTime?: string | null;
@@ -98,6 +100,22 @@ export async function createTripPlace(input: CreateTripPlaceInput): Promise<Trip
     created_by: input.created_by,
   };
   const { data, error } = await supabase.from('trip_places').insert(payload).select().single();
+  if (error) throw error;
+  return normalizeTripPlace(data);
+}
+
+export async function updateTripPlace(id: string, input: UpdateTripPlaceInput): Promise<TripPlace> {
+  const title = input.title === undefined ? undefined : input.title.trim();
+  if (title !== undefined && !title) throw new Error('景點名稱不能為空');
+  const payload: UpdateTripPlaceInput = {
+    ...(title === undefined ? {} : { title }),
+    ...(input.address === undefined ? {} : { address: input.address?.trim() || null }),
+    ...(input.lat === undefined ? {} : { lat: input.lat == null || !Number.isFinite(input.lat) ? null : input.lat }),
+    ...(input.lng === undefined ? {} : { lng: input.lng == null || !Number.isFinite(input.lng) ? null : input.lng }),
+    ...(input.category === undefined ? {} : { category: input.category.trim() || 'spot' }),
+    ...(input.notes === undefined ? {} : { notes: input.notes?.trim() || null }),
+  };
+  const { data, error } = await supabase.from('trip_places').update(payload).eq('id', id).select().single();
   if (error) throw error;
   return normalizeTripPlace(data);
 }
