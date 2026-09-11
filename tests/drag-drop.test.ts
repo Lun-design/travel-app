@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDragContainerStyle, createDragPreviewStyle, MOBILE_DRAG_CONFIG, reconcileDraggedItems } from '../lib/drag-drop';
+import { createDragContainerStyle, createDragPreviewStyle, MOBILE_DRAG_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
 
 describe('drag and drop layout safeguards', () => {
   it('keeps a dragging preview full-width and clipped to the timeline bounds', () => {
@@ -12,6 +12,8 @@ describe('drag and drop layout safeguards', () => {
       overflow: 'hidden',
       zIndex: 20,
       pointerEvents: 'none',
+      willChange: 'transform',
+      backfaceVisibility: 'hidden',
     });
   });
 
@@ -32,6 +34,24 @@ describe('drag and drop layout safeguards', () => {
       delayLongPress: 280,
       scrollEnabled: false,
     }));
+    expect(MOBILE_DRAG_CONFIG.animationConfig).toEqual(expect.objectContaining({
+      damping: expect.any(Number),
+      stiffness: expect.any(Number),
+      overshootClamping: true,
+    }));
+  });
+
+  it('skips TimelineCard re-render when data and interaction state are unchanged', () => {
+    const item = { id: 'spot-1', location_name: '景點', category: 'spot', time: '10:00' };
+    const callbacks = {
+      onEdit: () => undefined,
+      onDelete: () => undefined,
+    };
+    const props = { item, active: false, ...callbacks };
+
+    expect(areTimelineCardPropsEqual(props, { ...props, item: { ...item } })).toBe(true);
+    expect(areTimelineCardPropsEqual(props, { ...props, active: true })).toBe(false);
+    expect(areTimelineCardPropsEqual(props, { ...props, item: { ...item, time: '11:00' } })).toBe(false);
   });
 
   it('preserves the local drag order when the parent echoes the same item set', () => {

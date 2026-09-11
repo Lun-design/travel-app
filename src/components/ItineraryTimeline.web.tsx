@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { reorderItineraryItems, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
@@ -14,9 +14,19 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeEstimates = useRouteSegments(localItems, routeModes);
   const segments = useMemo(() => displayRouteSegments(localItems, routeModes, routeEstimates), [localItems, routeEstimates, routeModes]);
+  const segmentsByFromId = useMemo(() => new Map(segments.map((segment) => [segment.fromId, segment])), [segments]);
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
   const scheduleById = useMemo(() => new Map(scheduled.map((entry) => [entry.item.id, entry])), [scheduled]);
   const weatherById = useWeatherByItem(localItems, scheduleContext);
+  const moveItemRef = useRef<(itemId: string, direction: -1 | 1) => void>(() => undefined);
+  const handleRouteModeChange = useCallback((fromId: string, mode: TravelMode) => {
+    setRouteModes((current) => ({ ...current, [fromId]: mode }));
+  }, []);
+  const moveHandlers = useMemo(() => new Map(localItems.map((item) => [item.id, {
+    up: () => { moveItemRef.current(item.id, -1); },
+    down: () => { moveItemRef.current(item.id, 1); },
+  }])), [localItems]);
+  moveItemRef.current = (itemId, direction) => { void moveItem(itemId, direction); };
   useEffect(() => {
     setLocalItems((current) => reconcileDraggedItems(current, items, sortItineraryItemsByStartTime));
   }, [items]);
@@ -55,7 +65,7 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
       {(dropProvided) => <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} style={dropZoneStyle}>
         {localItems.map((item, index) => <Draggable key={item.id} draggableId={item.id} index={index}>
           {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={createDragPreviewStyle(dragProvided.draggableProps.style ?? {}, snapshot.isDragging)}>
-            <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} onRouteModeChange={(fromId, mode) => setRouteModes((current) => ({ ...current, [fromId]: mode }))} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={() => { void moveItem(item.id, -1); }} onMoveDown={() => { void moveItem(item.id, 1); }} canMoveUp={index > 0} canMoveDown={index < localItems.length - 1} />
+            <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={index > 0} canMoveDown={index < localItems.length - 1} />
           </div>}
         </Draggable>)}
         {dropProvided.placeholder as React.ReactNode}

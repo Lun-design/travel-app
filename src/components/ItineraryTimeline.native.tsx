@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 import { reorderItineraryItems, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
@@ -13,9 +13,19 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeEstimates = useRouteSegments(localItems, routeModes);
   const segments = useMemo(() => displayRouteSegments(localItems, routeModes, routeEstimates), [localItems, routeEstimates, routeModes]);
+  const segmentsByFromId = useMemo(() => new Map(segments.map((segment) => [segment.fromId, segment])), [segments]);
   const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
   const scheduleById = useMemo(() => new Map(scheduled.map((entry) => [entry.item.id, entry])), [scheduled]);
   const weatherById = useWeatherByItem(localItems, scheduleContext);
+  const moveItemRef = useRef<(itemId: string, direction: -1 | 1) => void>(() => undefined);
+  const handleRouteModeChange = useCallback((fromId: string, mode: TravelMode) => {
+    setRouteModes((current) => ({ ...current, [fromId]: mode }));
+  }, []);
+  const moveHandlers = useMemo(() => new Map(localItems.map((item) => [item.id, {
+    up: () => { moveItemRef.current(item.id, -1); },
+    down: () => { moveItemRef.current(item.id, 1); },
+  }])), [localItems]);
+  moveItemRef.current = (itemId, direction) => { void moveItem(itemId, direction); };
   useEffect(() => {
     setLocalItems((current) => reconcileDraggedItems(current, items, sortItineraryItemsByStartTime));
   }, [items]);
@@ -55,7 +65,7 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
     contentContainerStyle={{ width: '100%', paddingBottom: 0 }}
     onDragEnd={({ data }) => void finishDrag(data)}
     renderItem={({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => <View>
-      <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segments.find((segment) => segment.fromId === item.id)} onRouteModeChange={(fromId, mode) => setRouteModes((current) => ({ ...current, [fromId]: mode }))} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={() => { void moveItem(item.id, -1); }} onMoveDown={() => { void moveItem(item.id, 1); }} canMoveUp={localItems.findIndex((entry) => entry.id === item.id) > 0} canMoveDown={localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1} />
+      <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={localItems.findIndex((entry) => entry.id === item.id) > 0} canMoveDown={localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1} />
     </View>}
   />;
 }

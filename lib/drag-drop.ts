@@ -14,6 +14,10 @@ export function createDragPreviewStyle(baseStyle: CSSProperties = {}, isDragging
     maxWidth: '100%',
     boxSizing: 'border-box',
     overflow: 'hidden',
+    // Keep the compositor on the transform path while the DnD library moves
+    // the card.  This avoids repeatedly repainting its text and controls.
+    willChange: 'transform',
+    backfaceVisibility: 'hidden',
     zIndex: isDragging ? 20 : baseStyle.zIndex,
     // Route buttons and links must not receive pointer input while the card
     // is being dragged; the handle remains the sole active gesture target.
@@ -42,7 +46,49 @@ export const MOBILE_DRAG_CONFIG = Object.freeze({
   activationDistance: 16,
   delayLongPress: 280,
   scrollEnabled: false,
+  // A responsive, critically damped spring reduces the visible snap/settle
+  // work when neighbouring rows make room for the active card.
+  animationConfig: Object.freeze({
+    damping: 24,
+    mass: 0.18,
+    stiffness: 180,
+    overshootClamping: true,
+    restSpeedThreshold: 0.35,
+    restDisplacementThreshold: 0.35,
+  }),
 });
+
+const timelineItemFields = [
+  'id', 'location_name', 'address', 'latitude', 'longitude', 'category',
+  'notes', 'time', 'start_time', 'duration_minutes', 'position', 'day_number',
+] as const;
+
+function sameTimelineItem(left: { [key: string]: any }, right: { [key: string]: any }) {
+  return timelineItemFields.every((field) => left[field] === right[field]);
+}
+
+/**
+ * Comparator used by React.memo. Parent refreshes commonly create new item
+ * objects even though their rendered fields are unchanged; skipping those
+ * renders keeps drag frames focused on the active row.
+ */
+export function areTimelineCardPropsEqual(previous: any, next: any) {
+  return sameTimelineItem(previous.item, next.item)
+    && previous.segment === next.segment
+    && previous.scheduled === next.scheduled
+    && previous.weather === next.weather
+    && previous.active === next.active
+    && previous.themeMode === next.themeMode
+    && previous.vouchers === next.vouchers
+    && previous.onPreviewVoucher === next.onPreviewVoucher
+    && previous.onEdit === next.onEdit
+    && previous.onDelete === next.onDelete
+    && previous.onMoveUp === next.onMoveUp
+    && previous.onMoveDown === next.onMoveDown
+    && previous.canMoveUp === next.canMoveUp
+    && previous.canMoveDown === next.canMoveDown
+    && previous.onRouteModeChange === next.onRouteModeChange;
+}
 
 /**
  * Reconcile a parent refresh without erasing an in-progress/just-completed

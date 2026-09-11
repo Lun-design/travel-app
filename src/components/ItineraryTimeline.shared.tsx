@@ -11,7 +11,7 @@ import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEst
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { PuppyMascot } from './PuppyMascot';
-import { MOBILE_DRAG_CONFIG } from '@/lib/drag-drop';
+import { areTimelineCardPropsEqual, MOBILE_DRAG_CONFIG } from '@/lib/drag-drop';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
 export type ItineraryTimelineProps = {
@@ -150,7 +150,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, grip, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, grip, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
@@ -200,7 +200,7 @@ export function TimelineCard({ item, segment, scheduled, weather, vouchers, onPr
       </View> : null}
     </View>
   );
-}
+}, areTimelineCardPropsEqual);
 
 function formatTemperature(weather: WeatherSummary) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}–${max}°C`; if (max !== null) return `${max}°C`; if (min !== null) return `${min}°C`; return '溫度未知'; }
 export function EmptyTimeline() { return <View style={styles.empty}><PuppyMascot puppy="-7" size={165} accessibilityLabel="目前沒有景點" /><Text style={styles.emptyText}>目前還沒有景點，新增第一站吧！</Text></View>; }
