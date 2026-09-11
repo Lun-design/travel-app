@@ -3,6 +3,7 @@ import { searchGooglePlacesTextPage } from '../lib/google-places';
 import {
   createRecommendationSessionCache,
   mergeRecommendationResults,
+  paginateRecommendations,
   searchDynamicRecommendationsPage,
 } from '../lib/global-recommendations';
 
@@ -11,6 +12,16 @@ afterEach(() => {
 });
 
 describe('recommendation pagination', () => {
+  it('calculates pages from the provider total instead of capping at three', () => {
+    const firstBatch = Array.from({ length: 6 }, (_, index) => ({ id: String(index) }));
+
+    expect(paginateRecommendations(firstBatch, 1, 6, 60)).toMatchObject({
+      page: 1,
+      totalPages: 10,
+      hasNext: true,
+    });
+  });
+
   it('passes Google Places nextPageToken through to the next request', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({

@@ -86,6 +86,7 @@ describe('global recommendation helpers', () => {
 
   it('exposes a one-click add interaction in the recommendation panel', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    const placesPanel = readFileSync(resolve(process.cwd(), 'src/components/TripPlacesPanel.tsx'), 'utf8');
     expect(source).toContain('searchGlobalPlaces');
     expect(source).toContain('onAddToItinerary');
     expect(source).toContain('一鍵帶入');
@@ -96,6 +97,10 @@ describe('global recommendation helpers', () => {
     expect(source).toContain('選擇推薦地區');
     expect(source).toContain('destinationInput');
     expect(source).toContain('recommendationLoading');
+    expect(source).toContain('onAddedToItinerary');
+    expect(source).toContain('已帶入');
+    expect(placesPanel).toContain('onAddedToItinerary');
+    expect(placesPanel).toContain('await onChanged()');
   });
 
   it('exposes all four theme tabs for zero-input recommendations', () => {

@@ -165,7 +165,6 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
         createdBy: userId,
       });
       if (onTimezoneDetected && payload.timezone) await onTimezoneDetected(payload.timezone);
-      await onChanged();
       await onScheduled(scheduled.item.id, Number(payload.day_number ?? selectedDay));
     } finally {
       setBusy(false);
@@ -173,7 +172,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
   }
 
   return <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-    <RecommendationPanel tripId={tripId} userId={userId} dayNumber={selectedDay} destination={destination} themeMode={themeMode} onAddToItinerary={handleRecommendationAdd} />
+    <RecommendationPanel tripId={tripId} userId={userId} dayNumber={selectedDay} destination={destination} themeMode={themeMode} onAddToItinerary={handleRecommendationAdd} onAddedToItinerary={async () => { await onChanged(); }} />
     <View style={[styles.header, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
       <Text style={[styles.title, { color: theme.colors.text }]}>💡 靈感收藏庫</Text>
       <Text style={[styles.subtitle, { color: theme.colors.muted }]}>先收藏想去的地方，再安排到適合的日期。</Text>

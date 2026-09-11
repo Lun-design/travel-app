@@ -34,11 +34,12 @@ type Props = {
   destination?: string | null;
   themeMode: ThemeMode;
   onAddToItinerary: (place: GlobalPlaceSearchResult, payload: GlobalItineraryPayload) => Promise<void>;
+  onAddedToItinerary?: (place: GlobalPlaceSearchResult, payload: GlobalItineraryPayload) => void | Promise<void>;
 };
 
 const RECOMMENDATION_PAGE_SIZE = 6;
 
-export function RecommendationPanel({ tripId, userId, dayNumber, destination, themeMode, onAddToItinerary }: Props) {
+export function RecommendationPanel({ tripId, userId, dayNumber, destination, themeMode, onAddToItinerary, onAddedToItinerary }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -56,6 +57,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [page, setPage] = useState(1);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
+  const [recommendationTotalItems, setRecommendationTotalItems] = useState<number | null>(null);
+  const [addedIds, setAddedIds] = useState<string[]>([]);
   const [searched, setSearched] = useState(false);
 
   useEffect(() => {
@@ -63,6 +66,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setDestinationInput(nextDestination);
     setSelectedDestination(nextDestination);
     setPage(1);
+    setRecommendationTotalItems(null);
+    setAddedIds([]);
   }, [destination]);
 
   const loadRecommendations = useCallback(async (
@@ -75,6 +80,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       setRecommendations([]);
       setRecommendationSearched(false);
       setNextPageToken(null);
+      setRecommendationTotalItems(0);
       return;
     }
     setRecommendationLoading(true);
@@ -84,9 +90,11 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       const firstPage = await searchDynamicRecommendationsPage(normalized, themeValue, { subcategory: subcategoryValue });
       setRecommendations(firstPage.results);
       setNextPageToken(firstPage.nextPageToken);
+      setRecommendationTotalItems(firstPage.totalItems);
     } catch (error) {
       setRecommendations([]);
       setNextPageToken(null);
+      setRecommendationTotalItems(null);
       setRecommendationError(error instanceof Error ? error.message : '暫時無法取得即時推薦');
     } finally {
       setRecommendationLoading(false);
@@ -111,6 +119,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       });
       setRecommendations((current) => mergeRecommendationResults(current, nextPage.results));
       setNextPageToken(nextPage.nextPageToken);
+      setRecommendationTotalItems((current) => nextPage.totalItems ?? current);
       return nextPage;
     } catch (error) {
       setRecommendationError(error instanceof Error ? error.message : '?急??⊥????單??刻');
@@ -125,12 +134,16 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setDestinationInput(value);
     setSelectedDestination(normalized);
     setPage(1);
+    setRecommendationTotalItems(null);
+    setAddedIds([]);
   }
 
   function handleThemeSelect(nextTheme: RecommendationThemeId) {
     setActiveTheme(nextTheme);
     setActiveSubcategory('all');
     setPage(1);
+    setRecommendationTotalItems(null);
+    setAddedIds([]);
     const typedDestination = destinationInput.trim();
     if (typedDestination !== selectedDestination) setSelectedDestination(typedDestination);
   }
@@ -138,10 +151,14 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   function handleSubcategorySelect(nextSubcategory: RecommendationSubcategoryId) {
     setActiveSubcategory(nextSubcategory);
     setPage(1);
+    setRecommendationTotalItems(null);
+    setAddedIds([]);
   }
 
   async function handleNextPage() {
-    if (recommendationPage.hasNext) {
+    const nextPageStart = page * RECOMMENDATION_PAGE_SIZE;
+    const nextPageAlreadyLoaded = recommendations.length > nextPageStart;
+    if (recommendationPage.hasNext && nextPageAlreadyLoaded) {
       setPage((current) => current + 1);
       return;
     }
@@ -175,8 +192,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
         startTime: '10:00',
       });
       await onAddToItinerary(place, payload);
-      setResults((current) => current.filter((entry) => entry.id !== place.id));
-      setRecommendations((current) => current.filter((entry) => entry.id !== place.id));
+      await onAddedToItinerary?.(place, payload);
+      setAddedIds((current) => current.includes(place.id) ? current : [...current, place.id]);
     } catch (error) {
       Alert.alert('帶入失敗', error instanceof Error ? error.message : '無法加入行程');
     } finally {
@@ -184,7 +201,10 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     }
   }
 
-  const recommendationPage = paginateRecommendations(recommendations, page, RECOMMENDATION_PAGE_SIZE);
+  const recommendationPage = paginateRecommendations(recommendations, page, RECOMMENDATION_PAGE_SIZE, recommendationTotalItems);
+  const nextPageStart = page * RECOMMENDATION_PAGE_SIZE;
+  const nextPageAlreadyLoaded = recommendations.length > nextPageStart;
+  const canLoadNextPage = recommendationPage.hasNext && (nextPageAlreadyLoaded || Boolean(nextPageToken));
   const subcategories = getRecommendationSubcategories(activeTheme);
 
   return (
@@ -327,8 +347,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                       <Text numberOfLines={1} style={[styles.address, { color: theme.colors.muted }]}>{place.address}</Text>
                       <Text style={[styles.meta, { color: theme.colors.muted }]}>{place.category === 'outdoor' ? '戶外' : place.category === 'indoor' ? '室內' : '景點'} · 約 {place.estimatedDurationMinutes} 分鐘</Text>
                     </View>
-                    <Pressable accessibilityRole="button" accessibilityLabel={`將 ${place.title} 帶入行程`} disabled={addingId !== null} onPress={() => void handleAdd(place)} style={[styles.addButton, { borderColor: theme.colors.primary }]}>
-                      {addingId === place.id ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.addText, { color: theme.colors.primary }]}>一鍵帶入</Text>}
+                    <Pressable accessibilityRole="button" accessibilityLabel={`將 ${place.title} 帶入行程`} disabled={addingId !== null || addedIds.includes(place.id)} onPress={() => void handleAdd(place)} style={[styles.addButton, { borderColor: theme.colors.primary, opacity: addedIds.includes(place.id) ? 0.55 : 1 }]}>
+                      {addingId === place.id ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.addText, { color: theme.colors.primary }]}>{addedIds.includes(place.id) ? '已帶入' : '一鍵帶入'}</Text>}
                     </Pressable>
                   </View>
                 ))}
@@ -349,9 +369,9 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="下一頁推薦"
-                    disabled={(!recommendationPage.hasNext && !nextPageToken) || recommendationLoadingMore}
+                    disabled={!canLoadNextPage || recommendationLoadingMore}
                     onPress={() => void handleNextPage()}
-                    style={[styles.paginationButton, { borderColor: theme.colors.border, opacity: recommendationPage.hasNext || nextPageToken ? 1 : 0.45 }]}
+                    style={[styles.paginationButton, { borderColor: theme.colors.border, opacity: canLoadNextPage ? 1 : 0.45 }]}
                   >
                     {recommendationLoadingMore ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.paginationText, { color: theme.colors.text }]}>下一頁</Text>}
                   </Pressable>
@@ -382,8 +402,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                         <Text style={[styles.meta, { color: theme.colors.muted }]}>{place.timezone}</Text>
                       </View>
                     </View>
-                    <Pressable accessibilityRole="button" accessibilityLabel={`將 ${place.title} 帶入行程`} disabled={addingId !== null} onPress={() => void handleAdd(place)} style={[styles.addButton, { borderColor: theme.colors.primary, opacity: addingId && addingId !== place.id ? 0.55 : 1 }]}>
-                      {addingId === place.id ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.addText, { color: theme.colors.primary }]}>一鍵帶入</Text>}
+                    <Pressable accessibilityRole="button" accessibilityLabel={`將 ${place.title} 帶入行程`} disabled={addingId !== null || addedIds.includes(place.id)} onPress={() => void handleAdd(place)} style={[styles.addButton, { borderColor: theme.colors.primary, opacity: addedIds.includes(place.id) ? 0.55 : addingId && addingId !== place.id ? 0.55 : 1 }]}>
+                      {addingId === place.id ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.addText, { color: theme.colors.primary }]}>{addedIds.includes(place.id) ? '已帶入' : '一鍵帶入'}</Text>}
                     </Pressable>
                   </View>
                 ))}

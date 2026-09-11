@@ -25,6 +25,8 @@ export type GlobalPlaceSearchProvider = (query: string) => Promise<GeocodingResu
 export type RecommendationRawPage = {
   results: GeocodingResult[];
   nextPageToken?: string | null;
+  /** Optional provider total; Google may omit this and rely on page tokens. */
+  totalItems?: number | null;
 };
 
 export type RecommendationPageProvider = (query: string, pageToken?: string) => Promise<RecommendationRawPage>;
@@ -32,6 +34,7 @@ export type RecommendationPageProvider = (query: string, pageToken?: string) => 
 export type RecommendationPage = {
   results: GlobalPlaceSearchResult[];
   nextPageToken: string | null;
+  totalItems: number | null;
 };
 
 export type RecommendationPageOptions = {
@@ -200,9 +203,12 @@ export function buildRecommendationQuery(destination: string, theme: Recommendat
   return `${destination.trim()} ${category.keyword}`.trim();
 }
 
-export function paginateRecommendations<T>(items: T[], requestedPage: number, pageSize = 6) {
+export function paginateRecommendations<T>(items: T[], requestedPage: number, pageSize = 6, totalItems?: number | null) {
   const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 6;
-  const totalPages = Math.max(1, Math.ceil(items.length / safeSize));
+  const normalizedTotal = Number.isFinite(totalItems) && (totalItems as number) >= 0
+    ? Math.max(items.length, Math.floor(totalItems as number))
+    : items.length;
+  const totalPages = Math.max(1, Math.ceil(normalizedTotal / safeSize));
   const page = Math.min(totalPages, Math.max(1, Math.floor(requestedPage) || 1));
   return {
     page,
@@ -233,7 +239,7 @@ export async function searchDynamicRecommendationsPage(
   options: RecommendationPageOptions = {},
 ): Promise<RecommendationPage> {
   const normalizedDestination = destination.trim();
-  if (normalizedDestination.length < 2) return { results: [], nextPageToken: null };
+  if (normalizedDestination.length < 2) return { results: [], nextPageToken: null, totalItems: 0 };
   const query = buildRecommendationQuery(normalizedDestination, theme, options.subcategory ?? 'all');
   const pageToken = options.pageToken?.trim() || '';
   const cache = options.cache ?? recommendationSessionCache;
@@ -245,6 +251,7 @@ export async function searchDynamicRecommendationsPage(
         .filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude))
         .map(normalizeGlobalPlace),
       nextPageToken: raw.nextPageToken?.trim() || null,
+      totalItems: Number.isFinite(raw.totalItems) ? Math.max(0, Math.floor(raw.totalItems as number)) : null,
     };
   });
 }
