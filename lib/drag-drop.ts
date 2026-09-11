@@ -36,6 +36,7 @@ export function createDragContainerStyle(): CSSProperties {
     width: '100%',
     maxWidth: '100%',
     overflow: 'hidden',
+    height: 'auto',
     contain: 'paint',
     isolation: 'isolate',
   };
@@ -48,6 +49,22 @@ export function createNativeDragRowStyle() {
     maxWidth: '100%' as const,
     overflow: 'visible' as const,
   };
+}
+
+/** Keep the card body, route connector and action row in one flow context. */
+export function createTimelineCardContainerStyle() {
+  return {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    alignSelf: 'stretch',
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    height: 'auto',
+    boxSizing: 'border-box',
+  } as const;
 }
 
 /** Touch dragging starts only after a deliberate long press and movement. */

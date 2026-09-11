@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDragContainerStyle, createDragPreviewStyle, createNativeDragRowStyle, MOBILE_DRAG_CONFIG, MOBILE_GRIP_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
+import { createDragContainerStyle, createDragPreviewStyle, createNativeDragRowStyle, createTimelineCardContainerStyle, MOBILE_DRAG_CONFIG, MOBILE_GRIP_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
 
 describe('drag and drop layout safeguards', () => {
   it('keeps a dragging preview full-width and clipped to the timeline bounds', () => {
@@ -23,6 +23,7 @@ describe('drag and drop layout safeguards', () => {
       width: '100%',
       maxWidth: '100%',
       overflow: 'hidden',
+      height: 'auto',
       contain: 'paint',
       isolation: 'isolate',
     });
@@ -48,6 +49,20 @@ describe('drag and drop layout safeguards', () => {
       width: '100%',
       maxWidth: '100%',
       overflow: 'visible',
+    }));
+  });
+
+  it('keeps transport and action children in one bounded card flow', () => {
+    expect(createTimelineCardContainerStyle()).toEqual(expect.objectContaining({
+      display: 'flex',
+      flexDirection: 'column',
+      alignSelf: 'stretch',
+      position: 'relative',
+      width: '100%',
+      minWidth: 0,
+      overflow: 'hidden',
+      height: 'auto',
+      boxSizing: 'border-box',
     }));
   });
 
