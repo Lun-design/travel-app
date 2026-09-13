@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { createDragCloneStyle, createDragContainerStyle, createDragPreviewStyle, createNativeDragRowStyle, createTimelineCardContainerStyle, MOBILE_DRAG_CONFIG, MOBILE_GRIP_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
+import { describe, expect, it, vi } from 'vitest';
+import { createDragCloneStyle, createDragContainerStyle, createDragOverlayRootStyle, createDragPreviewStyle, createNativeDragRowStyle, createTimelineCardContainerStyle, getDragOverlayContainer, MOBILE_DRAG_CONFIG, MOBILE_GRIP_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
 
 describe('drag and drop layout safeguards', () => {
   it('keeps a dragging preview full-width and clipped to the timeline bounds', () => {
@@ -37,6 +37,43 @@ describe('drag and drop layout safeguards', () => {
       opacity: 1,
       visibility: 'visible',
     });
+  });
+
+  it('keeps the overlay portal above every application layer', () => {
+    expect(createDragOverlayRootStyle()).toEqual(expect.objectContaining({
+      position: 'fixed',
+      inset: 0,
+      zIndex: 2147483647,
+      pointerEvents: 'none',
+      overflow: 'visible',
+      isolation: 'isolate',
+    }));
+  });
+
+  it('mounts a dedicated portal root lazily under document.body', () => {
+    const body = { appendChild: vi.fn() };
+    const root = { id: '', style: {} } as unknown as HTMLElement;
+    const documentStub = {
+      body,
+      getElementById: vi.fn(() => null),
+      createElement: vi.fn(() => root),
+    } as unknown as Document;
+    vi.stubGlobal('document', documentStub);
+
+    expect(getDragOverlayContainer()).toBe(root);
+    expect(root.id).toBe('itinerary-drag-overlay-root');
+    expect(body.appendChild).toHaveBeenCalledWith(root);
+    expect(root.style).toMatchObject({ position: 'fixed', zIndex: 2147483647, pointerEvents: 'none' });
+
+    vi.unstubAllGlobals();
+  });
+
+  it('preserves the measured card width in the portal clone', () => {
+    const style = createDragCloneStyle({ position: 'fixed', width: '312px', height: '148px' });
+
+    expect(style.width).toBe('312px');
+    expect(style.height).toBe('148px');
+    expect(style.zIndex).toBe(2147483647);
   });
 
   it('never hides the source preview while a drag clone is mounting', () => {

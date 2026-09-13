@@ -1,6 +1,47 @@
 /** Shared safeguards for the web and native itinerary drag interactions. */
 import type { CSSProperties } from 'react';
 
+/** DOM id used by the web DnD clone portal. */
+export const DRAG_OVERLAY_ROOT_ID = 'itinerary-drag-overlay-root';
+const DRAG_OVERLAY_Z_INDEX = 2147483647;
+
+/**
+ * Styles for an independent viewport-level portal. Keeping this root outside
+ * the timeline prevents parent overflow/contain/isolation rules from
+ * clipping the active card while it follows the pointer.
+ */
+export function createDragOverlayRootStyle(): CSSProperties {
+  return {
+    position: 'fixed',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    overflow: 'visible',
+    pointerEvents: 'none',
+    zIndex: DRAG_OVERLAY_Z_INDEX,
+    isolation: 'isolate',
+  };
+}
+
+/**
+ * Lazily creates the web clone host. It is intentionally browser-only: the
+ * callback is invoked by hello-pangea/dnd only when a drag starts, never
+ * during Expo static rendering.
+ */
+export function getDragOverlayContainer(): HTMLElement | null {
+  if (typeof document === 'undefined' || !document.body) return null;
+  const existing = document.getElementById(DRAG_OVERLAY_ROOT_ID);
+  // The id is owned by this helper, so avoid an `instanceof HTMLElement`
+  // check that can fail in embedded WebViews or lightweight test DOMs.
+  if (existing) return existing as HTMLElement;
+
+  const root = document.createElement('div');
+  root.id = DRAG_OVERLAY_ROOT_ID;
+  Object.assign(root.style, createDragOverlayRootStyle());
+  document.body.appendChild(root);
+  return root;
+}
+
 /**
  * Keep the dragged card's layout dimensions stable.  DnD libraries move the
  * active node out of normal flow; explicit width/box sizing prevents its
@@ -10,8 +51,10 @@ import type { CSSProperties } from 'react';
 export function createDragPreviewStyle(baseStyle: CSSProperties = {}, isDragging = false): CSSProperties {
   return {
     ...baseStyle,
-    width: '100%',
-    maxWidth: '100%',
+    // hello-pangea/dnd supplies the measured width while dragging. Preserve
+    // it so the card does not stretch or collapse as it leaves normal flow.
+    width: baseStyle.width ?? '100%',
+    maxWidth: baseStyle.maxWidth ?? '100%',
     boxSizing: 'border-box',
     overflow: 'hidden',
     // Keep the compositor on the transform path while the DnD library moves
@@ -40,8 +83,9 @@ export function createDragCloneStyle(baseStyle: CSSProperties = {}): CSSProperti
     ...baseStyle,
     display: 'flex',
     flexDirection: 'column',
-    width: '100%',
-    maxWidth: '100%',
+    // Preserve DnD's measured dimensions (particularly on narrow phones).
+    width: baseStyle.width ?? '100%',
+    maxWidth: baseStyle.maxWidth ?? '100%',
     minHeight: '80px',
     overflow: 'hidden',
     contain: 'layout paint',
@@ -50,6 +94,7 @@ export function createDragCloneStyle(baseStyle: CSSProperties = {}): CSSProperti
     opacity: 1,
     visibility: 'visible',
     boxSizing: 'border-box',
+    zIndex: DRAG_OVERLAY_Z_INDEX,
   };
 }
 

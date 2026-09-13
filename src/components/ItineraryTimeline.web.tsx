@@ -7,7 +7,7 @@ import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import { displayRouteSegments, EmptyTimeline, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import type { TravelMode } from '@/lib/routes';
-import { createDragCloneStyle, createDragContainerStyle, createDragPreviewStyle, reconcileDraggedItems } from '@/lib/drag-drop';
+import { createDragCloneStyle, createDragContainerStyle, createDragPreviewStyle, getDragOverlayContainer, reconcileDraggedItems } from '@/lib/drag-drop';
 
 export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
@@ -61,7 +61,7 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
 
   if (!localItems.length) return <EmptyTimeline />;
   return <DragDropContext onDragEnd={(result) => void finishDrag(result)}>
-    <Droppable droppableId="itinerary-timeline" renderClone={(dragProvided, _snapshot, rubric) => {
+    <Droppable droppableId="itinerary-timeline" getContainerForClone={getWebDragOverlayContainer} renderClone={(dragProvided, _snapshot, rubric) => {
       const item = localItems[rubric.source.index];
       return <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} {...dragProvided.dragHandleProps} style={createDragCloneStyle(dragProvided.draggableProps.style ?? {})}>
         <span style={dragCloneTimeStyle}>{item?.time ?? item?.start_time ?? '—'}</span>
@@ -81,6 +81,16 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
 }
 
 const dropZoneStyle: React.CSSProperties = { ...createDragContainerStyle(), minHeight: 1 };
+// The clone is rendered in a viewport-level root rather than inside the
+// timeline's clipped/isolated container. This keeps it visible over maps and
+// other panels during the complete pointer gesture.
+function getWebDragOverlayContainer(): HTMLElement {
+  const container = getDragOverlayContainer();
+  if (container) return container;
+  // This callback is browser-only in hello-pangea/dnd, but retain a safe
+  // fallback for embedded WebViews that do not allow a custom root.
+  return document.body;
+}
 const webGripStyle: React.CSSProperties = { width: 32, minHeight: 76, display: 'grid', placeItems: 'center', flexShrink: 0, borderRadius: 8, background: EDITORIAL_COLORS.sand, color: EDITORIAL_COLORS.taupe, fontSize: 25, fontWeight: 900, userSelect: 'none', touchAction: 'none' };
 const dragCloneTimeStyle: React.CSSProperties = { color: EDITORIAL_COLORS.terracotta, fontSize: 14, fontWeight: 800, marginBottom: 8 };
 const dragCloneNameStyle: React.CSSProperties = { color: EDITORIAL_COLORS.charcoal, fontSize: 18, lineHeight: 1.3 };
