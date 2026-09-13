@@ -5,8 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDefaultMapOpen, getTripDetailLayout } from '@/lib/trip-detail-layout';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { loadThemeMode, saveThemeMode } from '@/lib/theme-preference';
-import { tripDayNumbers } from '@/lib/trip-dates';
+import { tripDateForDay, tripDayNumbers } from '@/lib/trip-dates';
 import { saveItineraryItemAndRefresh, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
+import { listItineraryItems, saveItineraryItem } from '@/lib/itinerary-api';
+import { listTrips, updateTrip } from '@/lib/trips';
 import { switchToBackupPlan } from '@/lib/alternate-plans';
 import type { Voucher } from '@/lib/vouchers';
 import { DayTabs } from '@/components/DayTabs';
@@ -27,6 +29,8 @@ import { TripPlacesPanel } from '@/components/TripPlacesPanel';
 import { TripSettingsModal } from '@/components/TripSettingsModal';
 import { UserProfileModal } from '@/components/UserProfileModal';
 import { ShareTripModal } from '@/components/ShareTripModal';
+import { ItineraryImportModal, type ImportResult, type ImportTripOption } from '@/components/ItineraryImportModal';
+import { mapDraftToTargetTrip, mergeImportedItems, type ImportedItineraryPayload, type ImportedTripDraft } from '@/lib/itinerary-import';
 import { useTripDetailData } from '@/hooks/useTripDetailData';
 import { ActiveTripContext } from '@/contexts/ActiveTripContext';
 import { createReminderScheduler, getNotificationPermission, loadReminderPreference, registerNotificationServiceWorker, requestNotificationPermission, saveReminderPreference, showReminderNotification, type NotificationPermissionState } from '@/lib/notifications';
@@ -58,6 +62,8 @@ export default function TripDetailScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
+  const [importVisible, setImportVisible] = useState(false);
+  const [importTrips, setImportTrips] = useState<ImportTripOption[]>([]);
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>(() => getNotificationPermission());
   const [refreshKey, setRefreshKey] = useState(0);
@@ -74,6 +80,16 @@ export default function TripDetailScreen() {
     setRemindersEnabled(loadReminderPreference(tripId));
     setNotificationPermission(getNotificationPermission());
   }, [tripId]);
+  useEffect(() => {
+    if (!importVisible || !tripId) return;
+    let active = true;
+    void listTrips().then((trips) => {
+      if (active) setImportTrips(trips);
+    }).catch(() => {
+      if (active && data.trip) setImportTrips([{ id: data.trip.id, title: data.trip.title, start_date: data.trip.start_date, end_date: data.trip.end_date }]);
+    });
+    return () => { active = false; };
+  }, [data.trip, importVisible, tripId]);
   useEffect(() => { if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true); }, []);
   useEffect(() => { if (!isDayTransitioning) return; const timer = setTimeout(() => setIsDayTransitioning(false), 180); return () => clearTimeout(timer); }, [isDayTransitioning]);
   useEffect(() => { if (!isMapOpen) { setIsMapLoading(false); return; } const timer = setTimeout(() => setIsMapLoading(false), 220); return () => clearTimeout(timer); }, [isMapOpen]);
@@ -181,6 +197,43 @@ export default function TripDetailScreen() {
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
   async function deleteExpense(expense: any) { await data.removeExpense(expense.id); await data.reload(); }
   async function refreshPlaces() { await data.reloadPlaces(); }
+  async function importIntoTrip(draft: ImportedTripDraft, targetTripId: string, dayOffset: number, _previewPayloads: ImportedItineraryPayload[]): Promise<ImportResult> {
+    const target = importTrips.find((entry) => entry.id === targetTripId) ?? (targetTripId === trip.id ? trip : null);
+    if (!target) throw new Error('找不到要匯入的目標行程。');
+    const existing = targetTripId === trip.id ? data.items : await listItineraryItems(targetTripId);
+    // Always remap the complete draft against the selected target. The modal's
+    // preview is based on the currently open trip and must never cause items to
+    // be skipped when the user switches to another destination trip.
+    const mapped = mapDraftToTargetTrip(draft, { startDate: target.start_date, dayOffset });
+    const merged = mergeImportedItems(existing, mapped);
+    const highestImportedDay = merged.added.reduce((highest, item) => Math.max(highest, item.day_number), 0);
+    const targetDayCount = tripDayNumbers(target.start_date, target.end_date).length;
+    if (highestImportedDay > targetDayCount) {
+      const expandedEndDate = tripDateForDay(target.start_date, highestImportedDay);
+      if (expandedEndDate) {
+        if (targetTripId === trip.id) await data.saveTripSettings({ end_date: expandedEndDate });
+        else await updateTrip(targetTripId, { end_date: expandedEndDate });
+      }
+    }
+    let saved = 0;
+    let failed = 0;
+    for (const [index, payload] of merged.added.entries()) {
+      try {
+        const save = targetTripId === trip.id ? data.saveItem : saveItineraryItem;
+        await save({ ...payload, trip_id: targetTripId, created_by: data.userId, position: existing.length + index });
+        saved += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn('[ItineraryImport] item save failed', error);
+      }
+    }
+    if (targetTripId === trip.id) {
+      await data.reload();
+      setRefreshKey((current) => current + 1);
+      setDay(merged.added[0]?.day_number ?? day);
+    }
+    return { targetTripId, saved, skipped: merged.skipped.length, failed };
+  }
   async function handlePlaceScheduled(itemId: string, scheduledDay: number) {
     await data.reload();
     setDay(scheduledDay);
@@ -220,6 +273,7 @@ export default function TripDetailScreen() {
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
     <TripDetailTabs value={tab} onChange={setTab} theme={theme} />
+    {tab === 'timeline' ? <View style={styles.importBar}><Pressable accessibilityRole="button" style={[styles.importButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} onPress={() => setImportVisible(true)}><Text style={{ color: theme.colors.primary, fontWeight: '800' }}>📥 一鍵匯入行程</Text></Pressable></View> : null}
     {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setItemModal(true); }} onDelete={deleteItem} onReorder={data.reorderItems} onApplyRouteOptimization={applyRouteOptimization} onAdd={() => { setEditingItem(null); setItemModal(true); }} />}
     {tab === 'expenses' && <ExpensesPanel tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} refreshToken={data.packingRevision} /></ScrollView></View>}
@@ -234,11 +288,14 @@ export default function TripDetailScreen() {
     <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} remindersEnabled={remindersEnabled} notificationPermission={notificationPermission} onReminderToggle={(enabled) => { void toggleReminders(enabled); }} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); await data.reload(); setRefreshKey((current) => current + 1); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
     <UserProfileModal visible={profileVisible} profile={data.profile} themeMode={themeMode} onClose={() => setProfileVisible(false)} onSaved={(updated) => { data.setProfile(updated); data.setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member)); }} />
     <ShareTripModal visible={shareVisible} tripId={trip.id} userId={data.userId} themeMode={themeMode} onClose={() => setShareVisible(false)} />
+    <ItineraryImportModal visible={importVisible} currentTripId={trip.id} trips={importTrips.length ? importTrips : [{ id: trip.id, title: trip.title, start_date: trip.start_date, end_date: trip.end_date }]} existingItems={data.items} themeMode={themeMode} onClose={() => setImportVisible(false)} onConfirm={importIntoTrip} />
   </View></ActiveTripContext.Provider>;
 }
 
 const styles = StyleSheet.create({
   addSpot: { position: 'absolute', zIndex: 1000, minHeight: 44, justifyContent: 'center', borderRadius: 12 },
+  importBar: { width: '100%', alignItems: 'flex-end', marginBottom: 8 },
+  importButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderWidth: 1, borderRadius: 9 },
   mainScroll: { flex: 1, minHeight: 0, width: '100%' },
   mainContent: { width: '100%', flexGrow: 1, paddingBottom: 100 },
   container: { flex: 1, width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', paddingBottom: 22 },
