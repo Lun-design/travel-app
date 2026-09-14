@@ -100,15 +100,24 @@ function categoryFor(title: string): string {
   return 'spot';
 }
 
+/** Activities without a concrete place should enrich a nearby stop's notes. */
+function isAbstractActivity(title: string): boolean {
+  const value = title.replace(/[\s、，,。；;：:]+/gu, '').trim();
+  return /^(?:早餐|早午餐|午餐|晚餐|吃早餐|吃早午餐|吃午餐|吃晚餐|飯店|酒店|住宿|旅館|休息|補眠|補眠休息|退房|入住|找咖啡廳|找咖啡廳休息|咖啡廳休息|完晚餐)$/u.test(value);
+}
+
 function locationFromLine(value: string, timeEnd: number): string {
   let candidate = value.slice(timeEnd).replace(/^[\s:：|｜、，,。；;]+/, '').trim();
   candidate = candidate.replace(/^(?:預計|安排|早上|上午|中午|下午|傍晚|晚上|凌晨|morning|afternoon|evening|night)\s*/iu, '');
   const action = /^(?:抵達|前往|到|去|參拜|參觀|逛|入住|返回|搭乘|租|吃|看|拍攝|visit(?:\s+to)?|head\s+to|go\s+to)\s*/iu.exec(candidate);
   if (action && candidate.slice(action[0].length).trim() && !/^[、，,。]/.test(candidate.slice(action[0].length))) candidate = candidate.slice(action[0].length);
-  candidate = candidate.split(/[、，,。；;｜|]/u)[0].trim();
-  candidate = candidate.replace(/(?:逛街|互拍|散步|看夕景).*$/u, '').trim();
-  candidate = candidate.replace(/(?:回飯店|回酒店)$/u, '').trim();
-  return candidate;
+  const segments = candidate.split(/[、，,。；;｜|]/u).map((segment) => {
+    const trimmed = segment.trim();
+    const segmentAction = /^(?:抵達|前往|到|去|參拜|參觀|逛|入住|返回|搭乘|租|吃|看|拍攝)\s*/u.exec(trimmed);
+    const withoutAction = segmentAction && trimmed.slice(segmentAction[0].length).trim() ? trimmed.slice(segmentAction[0].length) : trimmed;
+    return withoutAction.replace(/(?:逛街|互拍|散步|看夕景).*$/u, '').replace(/(?:回飯店|回酒店)$/u, '').trim();
+  }).filter(Boolean);
+  return segments.find((segment) => !isAbstractActivity(segment)) ?? segments[0] ?? '';
 }
 
 function parseItemLine(rawLine: string, referenceDate?: string, label?: string, previous?: ImportedItemDraft): ImportedItemDraft | null {
@@ -192,6 +201,7 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
   const days = new Map<number, ImportedDayDraft>();
   let activeDay: ImportedDayDraft | undefined;
   let inPreparationSection = false;
+  let pendingAbstractNote = '';
   const firstLine = lines[0] ?? '';
   const firstIsItem = /^(?:Day\s*\d+|\d{1,2}:|[-•])|\b[A-Z]{2}\d{1,4}\b/i.test(firstLine);
   const title = firstIsItem ? undefined : cleanMarkup(firstLine.split(/[|｜]/u)[0]).replace(/\s*\d+\s*(?:天|日)\s*\d*\s*(?:夜)?\s*$/u, '').trim() || undefined;
@@ -213,6 +223,7 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
     const isHeading = /^\**(?:Day\s*\d+|\d{1,2}\s*[/月]\s*\d{1,2}|\d{4}[/.-]\d{1,2}[/.-]\d{1,2})/iu.test(line) || /^\*\*.+\*\*$/.test(line);
     if (isHeading && (headingDates.length || dayNumberFromLabel)) {
       inPreparationSection = false;
+      pendingAbstractNote = '';
       const dayNumber = dayNumberFromLabel ?? (range.startDate ? Math.max(1, Math.round((Date.parse(`${headingDates[0]}T00:00:00Z`) - Date.parse(`${range.startDate}T00:00:00Z`)) / DAY_MS) + 1) : days.size + 1);
       const inferredDate = headingDates[0] ?? (range.startDate ? addDays(range.startDate, dayNumber - 1) : undefined);
       const label = line.split(/[|｜]/u)[1]?.trim() || heading?.[2]?.trim();
@@ -229,7 +240,19 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
       activeDay = ensureDay(days, 1, range.startDate);
     }
     const item = parseItemLine(line, activeDay.date ?? range.startDate, activeDay.label, activeDay.items.at(-1));
-    if (item && item.title !== title) activeDay.items.push(item);
+    if (item && item.title !== title) {
+      if (isAbstractActivity(item.title)) {
+        const previous = activeDay.items.at(-1);
+        if (previous) previous.notes = `${previous.notes ?? ''}\n${item.notes ?? item.title}`.trim();
+        else pendingAbstractNote = `${pendingAbstractNote}\n${item.notes ?? item.title}`.trim();
+      } else {
+        if (pendingAbstractNote) {
+          item.notes = `${pendingAbstractNote}\n${item.notes ?? ''}`.trim();
+          pendingAbstractNote = '';
+        }
+        activeDay.items.push(item);
+      }
+    }
     else if (!item && activeDay.items.length) activeDay.items[activeDay.items.length - 1].notes += `\n${line}`;
   }
 

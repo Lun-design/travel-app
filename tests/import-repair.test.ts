@@ -42,6 +42,32 @@ describe('import parsing regressions', () => {
     expect(normalizeImportedText('BR178 06:30-10:10 TPE to KIX').days[0].items[0].category).toBe('flight');
     expect(normalizeImportedText('Day 1\n09:00 Museum').days[0].items[0].title).toBe('Museum');
   });
+
+  it('merges abstract actions into a nearby place instead of creating empty map cards', () => {
+    const draft = normalizeImportedText(`大阪｜2026/10/23～10/23
+10/23｜黑門市場、難波、道頓堀
+- 10:00 到黑門市場逛街、吃早午餐。
+- 下午入住飯店、補眠休息。
+- 晚上逛道頓堀、吃晚餐。
+- 找咖啡廳休息。`);
+    const items = draft.days[0].items;
+    expect(items.map(item => item.title)).toEqual(['黑門市場', '道頓堀']);
+    expect(items[0].notes).toContain('吃早午餐');
+    expect(items[1].notes).toContain('吃晚餐');
+    expect(items.some(item => /早餐|晚餐|飯店|咖啡廳/.test(item.title))).toBe(false);
+  });
+
+  it('advances inferred times from the previous stop duration', () => {
+    const draft = normalizeImportedText(`大阪｜2026/10/24～10/24
+10/24｜梅田逛街、空中庭園夜景
+- 10:00 到大丸、LUCUA。
+- 下午找咖啡廳休息。
+- 傍晚到梅田空中庭園，看夕景。`);
+    const items = draft.days[0].items;
+    expect(items.map(item => item.title)).toEqual(['大丸', '梅田空中庭園']);
+    expect(items[1].startTime! > items[0].startTime!).toBe(true);
+    expect(new Set(items.map(item => item.startTime)).size).toBe(items.length);
+  });
 });
 
 const item = { location_name: '海遊館', address: null, latitude: null, longitude: null, day_number: 1, time: '09:00', duration_minutes: 60, category: 'spot', notes: null };

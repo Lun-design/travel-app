@@ -112,11 +112,13 @@ describe('PWA deployment configuration', () => {
     expect(vercel.rewrites?.some((rewrite) => rewrite.destination === '/')).toBe(true);
     expect(packageJson.scripts?.['type-check']).toBe('tsc --noEmit');
     expect(packageJson.scripts?.build).toContain('npm run type-check');
-    expect(packageJson.scripts?.build).toContain('npm run test:ci');
+    expect(packageJson.scripts?.build).not.toContain('npm run test:ci');
+    expect(packageJson.scripts?.['build:full']).toContain('npm run test:ci');
+    expect(packageJson.scripts?.['build:full']).toContain('npm run verify:build');
     expect(packageJson.scripts?.['build:web']).toContain('generate-service-worker.mjs');
     expect(packageJson.scripts?.['build:web']).toContain('clean-build-output.mjs');
     expect(existsSync(projectFile('scripts', 'clean-build-output.mjs'))).toBe(true);
     expect(packageJson.scripts?.['verify:build']).toBe('node scripts/verify-build-output.mjs');
-    expect(packageJson.scripts?.build).toContain('npm run verify:build');
+    expect(packageJson.scripts?.['build:full']).toContain('npm run verify:build');
   });
 });
