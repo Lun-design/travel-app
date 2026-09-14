@@ -27,6 +27,10 @@ async function readyScope(tripId: string) {
 }
 
 const rpc: ImportRpc = (name, args) => supabase.rpc(name, args);
+async function purgeBeforeOverwrite(tripId: string) {
+  const { error } = await supabase.from('itinerary_items').delete().eq('trip_id', tripId);
+  if (error) throw new Error(error.message);
+}
 async function cacheResult(scope: Awaited<ReturnType<typeof readyScope>>, result: ImportWriteResult) {
   try {
     await patchOfflineSnapshot(offlineStore, scope, { itineraryItems: result.items, ...(result.trip ? { trip: result.trip } : {}) });
@@ -36,6 +40,7 @@ async function cacheResult(scope: Awaited<ReturnType<typeof readyScope>>, result
 
 export async function importTripItems(input: Parameters<typeof runItineraryImport>[0]) {
   const scope = await readyScope(input.tripId);
+  if (input.mode === 'overwrite') await purgeBeforeOverwrite(input.tripId);
   return cacheResult(scope, await runItineraryImport(input, { search: searchImportPlaces, rpc }));
 }
 

@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: vi.fn(), auth: { getSession: vi.fn() } } }));
+vi.mock('../lib/supabase', () => ({ supabase: { rpc: vi.fn(), from: vi.fn(), auth: { getSession: vi.fn() } } }));
 vi.mock('../lib/google-places', () => ({ hasGooglePlacesApiKey: () => true, searchGooglePlacesText: vi.fn() }));
 vi.mock('../lib/geocoding', () => ({ searchNominatim: vi.fn(), searchPlaces: vi.fn().mockResolvedValue([{ title: '海遊館', latitude: NaN, longitude: NaN }]) }));
 vi.mock('../lib/offline-store', async (original) => {
@@ -16,6 +16,7 @@ const scope = { userId: 'user', tripId: 'trip' };
 const item = { location_name: '海遊館', address: null, latitude: null, longitude: null, day_number: 1, time: '09:00', duration_minutes: 60, category: 'spot', notes: null };
 beforeEach(async () => {
   vi.clearAllMocks(); await offlineStore.clearAll();
+  vi.mocked(supabase.from).mockReturnValue({ delete: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never);
   vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: { user: { id: 'user' } } } } as never);
   vi.mocked(searchGooglePlacesText).mockResolvedValue([{ id: 'p', title: '海遊館', displayName: '大阪海岸通', latitude: 34.65, longitude: 135.42 }]);
 });

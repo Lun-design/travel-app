@@ -37,9 +37,16 @@ begin
   select * into v_trip from public.trips where id = p_trip_id;
   if not found then raise exception 'Trip not found'; end if;
 
-  if p_mode in ('overwrite', 'clear') then
+  if p_mode = 'overwrite' then
     delete from public.itinerary_items where trip_id = p_trip_id;
     get diagnostics v_removed = row_count;
+  end if;
+
+  if p_mode in ('overwrite', 'clear') then
+    if p_mode = 'clear' then
+      delete from public.itinerary_items where trip_id = p_trip_id;
+      get diagnostics v_removed = row_count;
+    end if;
   end if;
 
   if p_mode <> 'clear' then
