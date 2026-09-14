@@ -14,7 +14,9 @@
     "type-check": "tsc --noEmit",
     "build:web": "node scripts/clean-build-output.mjs && expo export --platform web && node scripts/generate-service-worker.mjs",
     "verify:build": "node scripts/verify-build-output.mjs",
-    "build": "npm run type-check && npm run test:ci && npm run build:web && npm run verify:build"
+    "build": "npm run type-check && npm run build:web",
+    "build:full": "npm run type-check && npm run test:ci && npm run build:web && npm run verify:build",
+    "ci": "npm run build:full"
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.12",
