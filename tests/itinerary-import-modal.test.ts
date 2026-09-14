@@ -31,6 +31,7 @@ describe('itinerary import modal contract', () => {
     expect(tripPageSource).toContain('<ItineraryImportModal');
     expect(tripPageSource).toContain('onConfirm={importIntoTrip}');
     expect(tripPageSource).toContain('const mapped = previewPayloads.length ? previewPayloads : mapDraftToTargetTrip');
+    expect(tripPageSource).toContain('data.setItems(importedItems);');
     expect(tripPageSource).toContain('await data.reload()');
     expect(tripPageSource).toContain('📥 一鍵匯入行程');
   });

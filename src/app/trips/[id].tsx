@@ -208,9 +208,13 @@ export default function TripDetailScreen() {
     const dayCount = mapped.reduce((max, item) => Math.max(max, item.day_number), 1);
     const result = await importTripItems({ tripId: targetTripId, mode, items: mapped, destination: destination || draft.destination || target.destination || '', dayCount });
     if (targetTripId === trip.id) {
-      data.setItems(sortItineraryItemsByStartTime(result.items));
+      const importedItems = sortItineraryItemsByStartTime(result.items);
+      data.setItems(importedItems);
       if (result.trip) data.setTrip(result.trip);
-      await data.reload();
+      // Reload for server truth, then re-apply the successful RPC response so
+      // a stale cache response cannot overwrite the visible itinerary.
+      try { await data.reload(); } catch (error) { console.warn('[TripDetail] import reload failed; retaining RPC result', error); }
+      data.setItems(importedItems);
       setRefreshKey(current => current + 1);
       setDay(mapped[0]?.day_number ?? 1);
     }
