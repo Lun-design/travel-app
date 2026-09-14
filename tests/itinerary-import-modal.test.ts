@@ -24,7 +24,7 @@ describe('itinerary import modal contract', () => {
     expect(source).toContain("stage === 'saving'");
     expect(source).toContain('匯入失敗，請稍後再試。');
     expect(source).toContain('onConfirm(draft, selectedTrip.id');
-    expect(source).toContain('mergeImportedItems(existingItems, parsedPayloads)');
+    expect(source).toContain("mergeImportedItems(mode === 'overwrite' ? [] : targetItems, parsedPayloads)");
   });
 
   it('is connected to the trip page and reloads the current itinerary after import', () => {

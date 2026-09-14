@@ -3,13 +3,15 @@ import type { ImportedDayDraft, ImportedItemDraft, ImportedTripDraft } from './i
 
 const DAY_MS = 86_400_000;
 const DATE_TOKEN = /(?:(\d{4})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{1,2})|(\d{1,2})\s*(?:\/|月)\s*(\d{1,2}))/g;
-const TIME_TOKEN = /(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?:(?::|：|點|點鐘|時)(\d{1,2})?)?/g;
-const TIME_RANGE = /(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?:(?::|：|點|點鐘|時)(\d{1,2})?)?\s*(?:～|~|至|到|-)\s*(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?:(?::|：|點|點鐘|時)(\d{1,2})?)?/u;
+const TIME_TOKEN = /(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?::|：|點鐘|點|時)(\d{1,2})?/g;
+const TIME_RANGE = /(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?::|：|點鐘|點|時)(\d{1,2})?\s*(?:～|~|至|到|-)\s*(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?::|：|點鐘|點|時)(\d{1,2})?/u;
 
 function cleanMarkup(value: string): string {
   return value
     .replace(/\\([\\`*_{}\[\]()#+.!|>~-])/g, '$1')
-    .replace(/[*_`~]/g, '')
+    .replace(/[*_`]/g, '')
+    .replace(/&#x20;|&nbsp;/gi, ' ')
+    .replace(/^#{1,6}\s*/, '')
     .replace(/\u200b/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -54,7 +56,7 @@ function parseRange(input: string, fallbackYear: number): { startDate?: string; 
 
 function periodHour(hour: number, period?: string): number {
   if (!period) return hour;
-  if (period === '中午' && hour < 12) return hour + 12;
+  if (period === '中午' && hour < 6) return hour + 12;
   if ((period === '下午' || period === '傍晚' || period === '晚上') && hour < 12) return hour + 12;
   return hour === 12 && (period === '凌晨' || period === '早上' || period === '上午') ? 0 : hour;
 }
@@ -102,15 +104,16 @@ function locationFromLine(value: string, timeEnd: number): string {
   let candidate = value.slice(timeEnd).replace(/^[\s:：|｜、，,。；;]+/, '').trim();
   candidate = candidate.replace(/^(?:預計|安排|早上|上午|中午|下午|傍晚|晚上|凌晨|morning|afternoon|evening|night)\s*/iu, '');
   const action = /^(?:抵達|前往|到|去|參拜|參觀|逛|入住|返回|搭乘|租|吃|看|拍攝|visit(?:\s+to)?|head\s+to|go\s+to)\s*/iu.exec(candidate);
-  if (action) candidate = candidate.slice(action[0].length);
-  candidate = candidate.split(/[，,。；;｜|]/u)[0].trim();
+  if (action && candidate.slice(action[0].length).trim() && !/^[、，,。]/.test(candidate.slice(action[0].length))) candidate = candidate.slice(action[0].length);
+  candidate = candidate.split(/[、，,。；;｜|]/u)[0].trim();
+  candidate = candidate.replace(/(?:逛街|互拍|散步|看夕景).*$/u, '').trim();
   candidate = candidate.replace(/(?:回飯店|回酒店)$/u, '').trim();
   return candidate;
 }
 
-function parseItemLine(rawLine: string, referenceDate?: string): ImportedItemDraft | null {
+function parseItemLine(rawLine: string, referenceDate?: string, label?: string, previous?: ImportedItemDraft): ImportedItemDraft | null {
   const line = cleanMarkup(rawLine.replace(/^[\-•●▪︎]\s*/, ''));
-  if (!line || /^行前準備|^備註|^注意事項/u.test(line)) return null;
+  if (!line || /^(?:行前準備|備註|注意事項|預估時間|預留約|依購買|出發前確認|確認|當天不安排)|可考慮加購|不安排遠程|門票須另外|除航班時間外|以實際.*為準/u.test(line)) return null;
 
   const flight = parseFlightText(line, { referenceDate });
   if (flight) {
@@ -126,15 +129,46 @@ function parseItemLine(rawLine: string, referenceDate?: string): ImportedItemDra
 
   const parsed = extractTimes(line);
   const note = parseItineraryNote(line, { referenceDate });
-  const title = locationFromLine(line, parsed.startIndex) || note?.locationName || line;
+  let title = locationFromLine(line, parsed.startIndex) || note?.locationName || line;
+  const contextPlaces = (label ?? '').split(/[、，,｜|]/).map(part => part.replace(/(?:互拍|夜景|逛街|散步).*$/, '').trim());
+  if (/^(?:參拜|兩人互拍|拍照)$/.test(title)) {
+    title = contextPlaces.find(part => /寺|大社|神社|神宮|教堂|古蹟/.test(part)) || previous?.title || '';
+  } else if (/園區|整天留給/.test(title)) {
+    title = contextPlaces.find(part => /園|影城|USJ|Disney/i.test(part)) || title;
+  }
+  title = title.replace(/^[\s、，,：:。]+/, '').trim();
   if (!title) return null;
+  const duration = /(?:預留|停留|約)\s*(\d+(?:\.\d+)?)\s*(?:[～~至-]\s*(\d+(?:\.\d+)?))?\s*(小時|分鐘)/.exec(line);
   return {
     title,
     startTime: parsed.startTime,
-    durationMinutes: parsed.durationMinutes,
+    durationMinutes: parsed.durationMinutes ?? (duration ? Number(duration[2] ?? duration[1]) * (duration[3] === '小時' ? 60 : 1) : undefined),
     category: categoryFor(title),
     notes: line,
   };
+}
+
+/** Fill only missing clocks in source order, bounded by the next explicit clock. */
+function assignSuggestedTimes(day: ImportedDayDraft, warnings: string[]) {
+  let cursor = 9 * 60;
+  for (let index = 0; index < day.items.length; index += 1) {
+    const item = day.items[index];
+    if (item.startTime) { cursor = minutes(item.startTime) + (item.durationMinutes ?? 60); continue; }
+    const nextIndex = day.items.findIndex((entry, i) => i > index && !!entry.startTime);
+    const next = nextIndex >= 0 ? minutes(day.items[nextIndex].startTime!) : 24 * 60;
+    const remaining = (nextIndex < 0 ? day.items.length : nextIndex) - index;
+    const period = item.notes ?? '';
+    const preferred = /早餐|早上|morning/i.test(period) ? 8 * 60 : /上午/.test(period) ? 9 * 60 : /中午|午餐/.test(period) ? 12 * 60 : /下午|afternoon/i.test(period) ? 14 * 60 : /傍晚/.test(period) ? 17 * 60 : /晚上|晚餐|evening/i.test(period) ? 19 * 60 : cursor;
+    const previous = index ? minutes(day.items[index - 1].startTime!) : 0;
+    const latest = next - remaining;
+    if (latest < previous) { warnings.push(`Day ${day.dayNumber} 的時間安排過密，請確認「${item.title}」與固定時間。`); }
+    const start = Math.max(0, Math.min(Math.max(index ? cursor : 0, preferred), Math.max(previous, next - remaining * 60)));
+    const duration = Math.max(1, Math.min(item.durationMinutes ?? 60, Math.max(1, Math.floor((next - start) / remaining))));
+    item.startTime = `${pad(Math.floor(Math.min(start, 1439) / 60))}:${pad(Math.min(start, 1439) % 60)}`;
+    item.durationMinutes = duration;
+    item.notes = `${item.notes ?? ''}\n建議時間 ${item.startTime}（自動安排，請確認）`;
+    cursor = start + duration;
+  }
 }
 
 function ensureDay(days: Map<number, ImportedDayDraft>, dayNumber: number, date?: string, label?: string): ImportedDayDraft {
@@ -159,13 +193,15 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
   let activeDay: ImportedDayDraft | undefined;
   let inPreparationSection = false;
   const firstLine = lines[0] ?? '';
-  const title = cleanMarkup(firstLine.split(/[|｜]/u)[0]).replace(/\s*\d+\s*(?:天|日)\s*\d*\s*(?:夜)?\s*$/u, '').trim() || undefined;
+  const firstIsItem = /^(?:Day\s*\d+|\d{1,2}:|[-•])|\b[A-Z]{2}\d{1,4}\b/i.test(firstLine);
+  const title = firstIsItem ? undefined : cleanMarkup(firstLine.split(/[|｜]/u)[0]).replace(/\s*\d+\s*(?:天|日)\s*\d*\s*(?:夜)?\s*$/u, '').trim() || undefined;
   const destination = title?.split(/\s+/u)[0] || undefined;
 
   for (const line of lines) {
     // The first heading/range describes the trip itself, not an itinerary
     // item. Keeping this structural check generic avoids city-specific rules.
-    if (line === firstLine || line === rangeLine) continue;
+    if ((!firstIsItem && line === firstLine) || line === rangeLine) continue;
+    if (/^(?:去程|回程|住宿)[：:]/.test(line)) continue;
     if (/^(?:行前準備|備註|注意事項|packing|notes)/iu.test(line)) {
       inPreparationSection = true;
       activeDay = undefined;
@@ -192,8 +228,9 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
     if (!activeDay) {
       activeDay = ensureDay(days, 1, range.startDate);
     }
-    const item = parseItemLine(line, activeDay.date ?? range.startDate);
+    const item = parseItemLine(line, activeDay.date ?? range.startDate, activeDay.label, activeDay.items.at(-1));
     if (item && item.title !== title) activeDay.items.push(item);
+    else if (!item && activeDay.items.length) activeDay.items[activeDay.items.length - 1].notes += `\n${line}`;
   }
 
   if (range.startDate && range.endDate) {
@@ -208,6 +245,8 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
   }
   if (!days.size) ensureDay(days, 1, range.startDate);
   const sortedDays = [...days.values()].sort((left, right) => left.dayNumber - right.dayNumber);
+  const warnings: string[] = [];
+  sortedDays.forEach(day => assignSuggestedTimes(day, warnings));
   const firstDate = sortedDays.find((day) => day.date)?.date ?? range.startDate;
   const lastDate = [...sortedDays].reverse().find((day) => day.date)?.date ?? range.endDate ?? firstDate;
   return {
@@ -216,7 +255,7 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
     startDate: firstDate,
     endDate: lastDate,
     days: sortedDays,
-    warnings: sortedDays.every((day) => day.items.length === 0) ? ['找不到可匯入的景點或活動，請確認文字格式。'] : [],
+    warnings: sortedDays.every((day) => day.items.length === 0) ? ['找不到可匯入的景點或活動，請確認文字格式。'] : warnings,
   };
 }
 
