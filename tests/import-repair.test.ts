@@ -94,6 +94,15 @@ describe('import parsing regressions', () => {
     expect(draft.days[1].date).toBe('2026-11-02');
     expect(draft.days[1].items[0].title).toBe('teamLab');
   });
+
+  it('merges adjacent repeats of the same place after inferred activities are removed', () => {
+    const draft = normalizeImportedText(`大阪｜2026/10/25～10/25
+10/25（日）｜住吉大社
+- 12:00 午餐、前往住吉大社。
+- 13:30～15:30：參拜、兩人互拍。`);
+    expect(draft.days[0].items.map(item => item.title)).toEqual(['住吉大社']);
+    expect(draft.days[0].items[0].durationMinutes).toBeGreaterThanOrEqual(210);
+  });
 });
 
 const item = { location_name: '海遊館', address: null, latitude: null, longitude: null, day_number: 1, time: '09:00', duration_minutes: 60, category: 'spot', notes: null };

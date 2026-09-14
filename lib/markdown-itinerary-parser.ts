@@ -184,6 +184,24 @@ function assignSuggestedTimes(day: ImportedDayDraft, warnings: string[]) {
   }
 }
 
+function mergeAdjacentPlaces(day: ImportedDayDraft) {
+  const normalized = (value: string) => value.toLocaleLowerCase().replace(/[\s\p{P}]+/gu, '');
+  for (let index = 1; index < day.items.length;) {
+    const previous = day.items[index - 1];
+    const current = day.items[index];
+    if (normalized(previous.title) !== normalized(current.title)) { index += 1; continue; }
+    const start = previous.startTime && current.startTime ? Math.min(minutes(previous.startTime), minutes(current.startTime)) : undefined;
+    const previousEnd = previous.startTime ? minutes(previous.startTime) + (previous.durationMinutes ?? 60) : 0;
+    const currentEnd = current.startTime ? minutes(current.startTime) + (current.durationMinutes ?? 60) : 0;
+    if (start !== undefined) {
+      previous.startTime = `${pad(Math.floor((start % 1440) / 60))}:${pad(start % 60)}`;
+      previous.durationMinutes = Math.max(1, Math.max(previousEnd, currentEnd) - start);
+    }
+    previous.notes = [previous.notes, current.notes].filter(Boolean).join('\n');
+    day.items.splice(index, 1);
+  }
+}
+
 function ensureDay(days: Map<number, ImportedDayDraft>, dayNumber: number, date?: string, label?: string): ImportedDayDraft {
   const existing = days.get(dayNumber);
   if (existing) {
@@ -275,7 +293,7 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
   if (!days.size) ensureDay(days, 1, range.startDate);
   const sortedDays = [...days.values()].sort((left, right) => left.dayNumber - right.dayNumber);
   const warnings: string[] = [];
-  sortedDays.forEach(day => assignSuggestedTimes(day, warnings));
+  sortedDays.forEach(day => { assignSuggestedTimes(day, warnings); mergeAdjacentPlaces(day); });
   const firstDate = sortedDays.find((day) => day.date)?.date ?? range.startDate;
   const lastDate = [...sortedDays].reverse().find((day) => day.date)?.date ?? range.endDate ?? firstDate;
   return {

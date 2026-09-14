@@ -53,6 +53,19 @@ describe('itinerary import contract', () => {
     expect(draft.days[5].items[0]).toMatchObject({ startTime: '15:30' });
   });
 
+  it('keeps preview day numbers unchanged when converting to database payloads', () => {
+    const draft = normalizeImportedText([
+      '大阪｜2026/10/23～2026/10/25',
+      '10/23（五）｜黑門市場', '- 10:00 黑門市場',
+      '10/24（六）｜梅田', '- 10:00 梅田',
+      '10/25（日）｜住吉大社', '- 10:00 住吉大社',
+    ].join('\n'));
+    const payloads = mapDraftToTargetTrip(draft, { startDate: '2026-10-23', dayOffset: 0 });
+    expect(payloads.map((item) => [item.day_number, item.location_name])).toEqual([
+      [1, '黑門市場'], [2, '梅田'], [3, '住吉大社'],
+    ]);
+  });
+
   it('maps date-less items from a selected target day', () => {
     const mapped = mapDraftToTargetTrip(
       { days: [{ dayNumber: 1, items: [{ title: 'Museum' }] }], warnings: [] },

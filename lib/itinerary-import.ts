@@ -102,7 +102,7 @@ export function mapDraftToTargetTrip(draft: ImportedTripDraft, target: ImportTar
     const dayNumber = Math.max(1, Math.round(relativeDay + target.dayOffset));
     return day.items
       .map((item): ImportedItineraryPayload | null => {
-        const title = cleanText(item.title);
+        const title = cleanText(item.title).replace(/\s*[（(]?建議時間.*$/u, '').trim();
         if (!title) return null;
         return {
           location_name: title,

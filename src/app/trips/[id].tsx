@@ -199,11 +199,14 @@ export default function TripDetailScreen() {
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
   async function deleteExpense(expense: any) { await data.removeExpense(expense.id); await data.reload(); }
   async function refreshPlaces() { await data.reloadPlaces(); }
-  async function importIntoTrip(draft: ImportedTripDraft, targetTripId: string, dayOffset: number, _previewPayloads: ImportedItineraryPayload[], mode: ImportMode = 'merge', destination = ''): Promise<ImportResult> {
+  async function importIntoTrip(draft: ImportedTripDraft, targetTripId: string, dayOffset: number, previewPayloads: ImportedItineraryPayload[], mode: ImportMode = 'merge', destination = ''): Promise<ImportResult> {
     const target = importTrips.find(entry => entry.id === targetTripId) ?? (targetTripId === trip.id ? trip : null);
     if (!target) throw new Error('找不到要匯入的目標行程。');
-    const mapped = mapDraftToTargetTrip(draft, { startDate: target.start_date, dayOffset });
-    const result = await importTripItems({ tripId: targetTripId, mode, items: mapped, destination: destination || draft.destination || target.destination || '', dayCount: Math.max(...draft.days.map(entry => entry.dayNumber), 1) + dayOffset });
+    // Persist exactly what the preview displayed. Re-mapping the draft here
+    // can shift day numbers when the target trip dates differ.
+    const mapped = previewPayloads.length ? previewPayloads : mapDraftToTargetTrip(draft, { startDate: target.start_date, dayOffset });
+    const dayCount = mapped.reduce((max, item) => Math.max(max, item.day_number), 1);
+    const result = await importTripItems({ tripId: targetTripId, mode, items: mapped, destination: destination || draft.destination || target.destination || '', dayCount });
     if (targetTripId === trip.id) {
       data.setItems(sortItineraryItemsByStartTime(result.items));
       if (result.trip) data.setTrip(result.trip);
