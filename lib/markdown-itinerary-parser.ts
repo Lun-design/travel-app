@@ -121,12 +121,16 @@ function locationFromLine(value: string, timeEnd: number): string {
     const withoutAction = segmentAction && trimmed.slice(segmentAction[0].length).trim() ? trimmed.slice(segmentAction[0].length) : trimmed;
     return withoutAction.replace(/(?:逛街|互拍|散步|看夕景).*$/u, '').replace(/(?:回飯店|回酒店)$/u, '').trim();
   }).filter(Boolean);
-  return segments.find((segment) => !isAbstractActivity(segment)) ?? segments[0] ?? '';
+  return (segments.find((segment) => !isAbstractActivity(segment)) ?? segments[0] ?? '')
+    .replace(/(?:吃(?:早餐|早午餐|午餐|晚餐|飯)|晚餐|午餐|早餐|找咖啡廳休息|補眠休息).*$/u, '')
+    .trim();
 }
 
 function parseItemLine(rawLine: string, referenceDate?: string, label?: string, previous?: ImportedItemDraft): ImportedItemDraft | null {
   const line = cleanMarkup(rawLine.replace(/^[\-•●▪︎]\s*/, ''));
-  if (!line || /^(?:行前準備|備註|注意事項|預估時間|預留約|依購買|出發前確認|確認|當天不安排)|可考慮加購|不安排遠程|門票須另外|除航班時間外|以實際.*為準/u.test(line)) return null;
+  const actionLine = line.replace(/^(?:(?:凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?\d{1,2}:\d{2}\s*/u, '');
+  const normalizedActionLine = actionLine.replace(/^(?:凌晨|早上|上午|中午|下午|傍晚|晚上)\s*/u, '');
+  if (!line || /^(?:行前準備|備註|注意事項|預估時間|預留約|依購買|出發前確認|確認|當天不安排|起床|辦理入住|入住飯店|寄放行李|飯店寄放行李|退房|補眠|休息|整理行李|報到|安檢|購買(?:交通)?票券|找咖啡廳休息|咖啡廳休息)|可考慮加購|不安排遠程|門票須另外|除航班時間外|以實際.*為準|從.+搭(?:車|乘).*(?:前往|到)|搭(?:車|乘).*(?:前往|到|回)/u.test(normalizedActionLine)) return null;
 
   const flight = parseFlightText(line, { referenceDate });
   if (flight) {

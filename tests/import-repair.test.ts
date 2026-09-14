@@ -103,6 +103,21 @@ describe('import parsing regressions', () => {
     expect(draft.days[0].items.map(item => item.title)).toEqual(['住吉大社']);
     expect(draft.days[0].items[0].durationMinutes).toBeGreaterThanOrEqual(210);
   });
+
+  it('filters transition actions and keeps only navigable place entities', () => {
+    const draft = normalizeImportedText(`大阪｜2026/10/23～10/23
+10/23｜難波、梅田、道頓堀
+- 起床、整理行李。
+- 06:30 飯店寄放行李，購買交通票券。
+- 從難波搭車前往梅田。
+- 10:00 梅田大丸逛街。
+- 14:00 道頓堀吃晚餐。
+- 晚上搭車回飯店休息。`);
+    const titles = draft.days[0].items.map(item => item.title);
+    expect(titles).toEqual(['梅田大丸', '道頓堀']);
+    expect(titles.some(title => /起床|行李|搭車|飯店|票券|休息/.test(title))).toBe(false);
+    expect(draft.days[0].items[1].notes).toContain('吃晚餐');
+  });
 });
 
 const item = { location_name: '海遊館', address: null, latitude: null, longitude: null, day_number: 1, time: '09:00', duration_minutes: 60, category: 'spot', notes: null };
