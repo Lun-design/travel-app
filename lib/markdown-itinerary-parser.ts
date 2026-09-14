@@ -3,6 +3,10 @@ import type { ImportedDayDraft, ImportedItemDraft, ImportedTripDraft } from './i
 
 const DAY_MS = 86_400_000;
 const DATE_TOKEN = /(?:(\d{4})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{1,2})|(\d{1,2})\s*(?:\/|月)\s*(\d{1,2}))/g;
+// A date heading is structural only when the date is followed by a weekday
+// and/or a visible separator. This prevents ordinary dated notes from
+// accidentally switching the active day.
+const DATE_HEADER = /^\s*\d{1,2}\s*[/.\-月]\s*\d{1,2}\s*(?:[（(][^）)]{1,4}[）)])?\s*(?:[|｜]|[-–—]\s+)(?:.*)?$/u;
 const TIME_TOKEN = /(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?::|：|點鐘|點|時)(\d{1,2})?/g;
 const TIME_RANGE = /(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?::|：|點鐘|點|時)(\d{1,2})?\s*(?:～|~|至|到|-)\s*(?:(凌晨|早上|上午|中午|下午|傍晚|晚上)\s*)?(\d{1,2})(?::|：|點鐘|點|時)(\d{1,2})?/u;
 
@@ -220,7 +224,9 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
     const heading = /^\**(?:Day\s*)(\d+)\s*(?:[：:|｜-]\s*)?([^\n]*)\**$/iu.exec(line);
     const headingDates = parseDateTokens(line, Number(range.startDate?.slice(0, 4)) || fallbackYear);
     const dayNumberFromLabel = heading?.[1] ? Number(heading[1]) : undefined;
-    const isHeading = /^\**(?:Day\s*\d+|\d{1,2}\s*[/月]\s*\d{1,2}|\d{4}[/.-]\d{1,2}[/.-]\d{1,2})/iu.test(line) || /^\*\*.+\*\*$/.test(line);
+    const isHeading = /^\**(?:Day\s*\d+|\d{1,2}\s*[/月.]\s*\d{1,2}|\d{4}[/.-]\d{1,2}[/.-]\d{1,2})/iu.test(line)
+      || DATE_HEADER.test(line)
+      || /^\*\*.+\*\*$/.test(line);
     if (isHeading && (headingDates.length || dayNumberFromLabel)) {
       inPreparationSection = false;
       pendingAbstractNote = '';

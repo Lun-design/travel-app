@@ -68,6 +68,32 @@ describe('import parsing regressions', () => {
     expect(items[1].startTime! > items[0].startTime!).toBe(true);
     expect(new Set(items.map(item => item.startTime)).size).toBe(items.length);
   });
+
+  it('recognizes month-day headers with weekday and full-width pipe as separate days', () => {
+    const draft = normalizeImportedText(`大阪 6 天 5 夜｜2026/10/23～10/28
+**10/23（五）｜黑門市場、難波、道頓堀**
+- 06:00 抵達關西機場，入境後前往市區。
+**10/24（六）｜梅田逛街、空中庭園夜景**
+- 上午吃早餐，前往梅田。
+**10/25（日）｜租和服、住吉大社互拍**
+- 10:30～12:00：心齋橋租和服。`);
+    expect(draft.days.map(day => day.items.length)).toEqual([1, 1, 1, 0, 0, 0]);
+    expect(draft.days[0].date).toBe('2026-10-23');
+    expect(draft.days[1].date).toBe('2026-10-24');
+    expect(draft.days[2].date).toBe('2026-10-25');
+    expect(draft.days[1].items[0].title).toContain('梅田');
+  });
+
+  it('also recognizes ASCII pipe date headings', () => {
+    const draft = normalizeImportedText(`東京｜2026/11/01～11/02
+11/01 (日) | 淺草
+- 09:00 淺草寺
+11/02 | 台場
+- 10:00 teamLab`);
+    expect(draft.days[0].date).toBe('2026-11-01');
+    expect(draft.days[1].date).toBe('2026-11-02');
+    expect(draft.days[1].items[0].title).toBe('teamLab');
+  });
 });
 
 const item = { location_name: '海遊館', address: null, latitude: null, longitude: null, day_number: 1, time: '09:00', duration_minutes: 60, category: 'spot', notes: null };
