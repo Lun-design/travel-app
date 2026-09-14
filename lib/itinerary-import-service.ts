@@ -1,4 +1,5 @@
 import type { ImportedItineraryPayload } from './itinerary-import';
+import { filterNoiseItems } from './itinerary-import';
 import type { ItineraryItem } from './itinerary';
 import type { Trip } from './trips';
 
@@ -8,15 +9,9 @@ export type ImportSearch = (query: string) => Promise<ImportPlace[]>;
 export type ImportRpc = (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 export type ImportWriteResult = { items: ItineraryItem[]; trip?: Trip; saved: number; skipped: number; removed: number; unresolved: string[] };
 
-function isTransitionOnlyTitle(value: string) {
-  const title = value.trim();
-  return /^(?:起床|辦理入住|入住飯店|寄放行李|飯店寄放行李|退房|補眠|休息|整理行李|報到|安檢|購買(?:交通)?票券|找咖啡廳休息|咖啡廳休息)$/u.test(title)
-    || /^從.+搭(?:車|乘).*(?:前往|到)|^搭(?:車|乘).*(?:前往|到|回)/u.test(title);
-}
-
 /** Last line of defence: transition-only text never reaches the database. */
 export function sanitizeImportItems(items: readonly ImportedItineraryPayload[]) {
-  return items.filter((item) => item.location_name.trim() && !isTransitionOnlyTitle(item.location_name));
+  return filterNoiseItems(items);
 }
 
 function coordinates(item: { latitude: number | null; longitude: number | null }) {

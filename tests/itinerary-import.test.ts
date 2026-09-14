@@ -66,6 +66,34 @@ describe('itinerary import contract', () => {
     ]);
   });
 
+  it('allocates a realistic six-day itinerary to Day 1 through Day 6 without transition cards', () => {
+    const draft = normalizeImportedText(`大阪 6 天 5 夜｜2026/10/23～10/28
+**10/23（五）｜黑門市場、難波、道頓堀**
+- 06:00 抵達關西機場，寄放行李。
+- 約 10:00 到黑門市場逛街、吃早午餐。
+- 下午入住飯店、補眠休息。
+- 晚上逛道頓堀、吃晚餐。
+**10/24（六）｜梅田逛街、空中庭園夜景**
+- 上午吃早餐，前往梅田。
+- 大丸、LUCUA、Grand Front 挑喜歡的逛。
+- 傍晚到梅田空中庭園，看夕景。
+**10/25（日）｜租和服、住吉大社互拍**
+- 10:30～12:00：心齋橋租和服。
+- 13:30～15:30：參拜、兩人互拍。
+**10/26（一）｜環球影城 USJ**
+- 提早到園區，整天留給環球影城。
+**10/27（二）｜海遊館、天保山**
+- 上午逛海遊館。
+- 下午搭天保山摩天輪、港邊散步。
+**10/28（三）｜返回台灣**
+- 早餐、退房，前往關西機場。
+- 15:30 起飛，返回桃園。`);
+    const payloads = mapDraftToTargetTrip(draft, { startDate: '2026-10-23', dayOffset: 0 });
+    expect(new Set(payloads.map(item => item.day_number))).toEqual(new Set([1, 2, 3, 4, 5, 6]));
+    expect(payloads.filter(item => item.day_number === 6).length).toBeGreaterThan(0);
+    expect(payloads.every(item => !/飯店補眠|寄放行李|搭車|起床|購買交通票券/.test(item.location_name))).toBe(true);
+  });
+
   it('maps date-less items from a selected target day', () => {
     const mapped = mapDraftToTargetTrip(
       { days: [{ dayNumber: 1, items: [{ title: 'Museum' }] }], warnings: [] },

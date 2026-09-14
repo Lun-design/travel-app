@@ -120,6 +120,15 @@ export function mapDraftToTargetTrip(draft: ImportedTripDraft, target: ImportTar
   });
 }
 
+/** Remove non-place actions at the final preview/payload boundary. */
+export function filterNoiseItems(items: readonly ImportedItineraryPayload[]) {
+  return items.filter((item) => {
+    const title = item.location_name.trim();
+    return title && !/^(?:起床|辦理入住|入住飯店|寄放行李|飯店.*(?:行李|補眠|休息)|退房|補眠|休息|整理行李|報到|安檢|購買(?:交通)?票券|找咖啡廳休息|咖啡廳休息)$/u.test(title)
+      && !/^從.+搭(?:車|乘).*(?:前往|到)|^搭(?:車|乘).*(?:前往|到|回)/u.test(title);
+  });
+}
+
 type ExistingImportItem = { id?: string; day_number: number; location_name: string; time?: string | null };
 type IncomingImportItem = { day_number: number; location_name: string; time?: string | null };
 

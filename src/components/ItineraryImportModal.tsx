@@ -1,7 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
-import { mapDraftToTargetTrip, mergeImportedItems, parseImportSource, type ImportedItineraryPayload, type ImportedTripDraft, type ImportSource } from '@/lib/itinerary-import';
+import { filterNoiseItems, mapDraftToTargetTrip, mergeImportedItems, parseImportSource, type ImportedItineraryPayload, type ImportedTripDraft, type ImportSource } from '@/lib/itinerary-import';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { listItineraryItems } from '@/lib/itinerary-api';
 import type { ImportMode } from '@/lib/itinerary-import-service';
@@ -60,7 +60,7 @@ export function ItineraryImportModal({ visible, currentTripId, trips, existingIt
   }, [visible, targetTripId, currentTripId, existingItems]);
 
   const selectedTrip = useMemo(() => trips.find((trip) => trip.id === targetTripId), [targetTripId, trips]);
-  const parsedPayloads = useMemo(() => draft && selectedTrip ? mapDraftToTargetTrip(draft, { startDate: selectedTrip.start_date, dayOffset: Number(dayOffset) || 0 }) : [], [draft, selectedTrip, dayOffset]);
+  const parsedPayloads = useMemo(() => draft && selectedTrip ? filterNoiseItems(mapDraftToTargetTrip(draft, { startDate: selectedTrip.start_date, dayOffset: Number(dayOffset) || 0 })) : [], [draft, selectedTrip, dayOffset]);
   const mergePreview = useMemo(() => mergeImportedItems(mode === 'overwrite' ? [] : targetItems, parsedPayloads), [mode, targetItems, parsedPayloads]);
   const canConfirm = !targetLoading && !targetError && Number.isInteger(Number(dayOffset)) && Number(dayOffset) >= 0 && Number(dayOffset) <= 3659 && mergePreview.added.length > 0 && (mode !== 'overwrite' || confirmation === selectedTrip?.title);
   function close() { if (!submitting.current) onClose(); }
