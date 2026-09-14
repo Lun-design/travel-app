@@ -110,6 +110,15 @@ function isAbstractActivity(title: string): boolean {
   return /^(?:早餐|早午餐|午餐|晚餐|吃早餐|吃早午餐|吃午餐|吃晚餐|飯店|酒店|住宿|旅館|休息|補眠|補眠休息|退房|入住|找咖啡廳|找咖啡廳休息|咖啡廳休息|完晚餐)$/u.test(value);
 }
 
+/** Parser-level guard: preview consumers must never receive transition cards. */
+export function filterNoiseItems<T extends { title: string }>(items: readonly T[]): T[] {
+  return items.filter((item) => {
+    const title = item.title.trim();
+    return title && !/^(?:起床|辦理入住|入住飯店|飯店(?:補眠|休息|寄放行李)?|寄放行李|退房|補眠|休息|整理行李|報到|安檢|購買(?:交通)?票券|找咖啡廳休息|咖啡廳休息)$/u.test(title)
+      && !/^從.+搭(?:車|乘).*(?:前往|到)|^搭(?:車|乘).*(?:前往|到|回)/u.test(title);
+  });
+}
+
 function locationFromLine(value: string, timeEnd: number): string {
   let candidate = value.slice(timeEnd).replace(/^[\s:：|｜、，,。；;]+/, '').trim();
   candidate = candidate.replace(/^(?:預計|安排|早上|上午|中午|下午|傍晚|晚上|凌晨|morning|afternoon|evening|night)\s*/iu, '');
@@ -297,7 +306,12 @@ export function parseMarkdownItinerary(input: string, referenceDate?: string): I
   if (!days.size) ensureDay(days, 1, range.startDate);
   const sortedDays = [...days.values()].sort((left, right) => left.dayNumber - right.dayNumber);
   const warnings: string[] = [];
-  sortedDays.forEach(day => { assignSuggestedTimes(day, warnings); mergeAdjacentPlaces(day); });
+  sortedDays.forEach(day => {
+    day.items = filterNoiseItems(day.items);
+    assignSuggestedTimes(day, warnings);
+    mergeAdjacentPlaces(day);
+    day.items = filterNoiseItems(day.items);
+  });
   const firstDate = sortedDays.find((day) => day.date)?.date ?? range.startDate;
   const lastDate = [...sortedDays].reverse().find((day) => day.date)?.date ?? range.endDate ?? firstDate;
   return {

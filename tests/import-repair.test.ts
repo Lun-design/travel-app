@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { normalizeImportedText } from '../lib/itinerary-import';
+import { parseMarkdownItinerary } from '../lib/markdown-itinerary-parser';
 import { enrichImportedItems, runItineraryImport, clearImportedItinerary, sanitizeImportItems } from '../lib/itinerary-import-service';
 
 describe('import parsing regressions', () => {
+  it('returns a clean draft directly from the parser boundary', () => {
+    const draft = parseMarkdownItinerary(`大阪｜2026/10/23～10/23
+10/23（五）｜難波
+- 飯店補眠、購買交通票券。
+- 10:00 道頓堀吃晚餐。`);
+    expect(draft.days[0].items.map(item => item.title)).toEqual(['道頓堀']);
+  });
   it('uses heading context for unnamed activities and keeps duration prose out of clocks', () => {
     const draft = normalizeImportedText(`大阪｜2026/10/25～10/26
 10/25｜租和服、住吉大社互拍
