@@ -26,6 +26,17 @@ it('uses Text Search coordinates rather than coordinate-less Autocomplete predic
   expect(supabase.rpc).toHaveBeenCalledWith('import_itinerary_items', expect.objectContaining({ p_items: [expect.objectContaining({ latitude: 34.65, longitude: 135.42 })] }));
   expect((await offlineStore.getSnapshot(scope))?.itineraryItems[0]).toMatchObject({ id: 'saved' });
 });
+it('replaces the old itinerary cache with the complete overwrite response', async () => {
+  const old = { ...item, id: 'old-day-2', day_number: 2, location_name: '大丸' };
+  await offlineStore.putSnapshot(scope, { trip: null, members: [], itineraryItems: [old], packingItems: [], expenses: [], vouchers: [], savedAt: '' });
+  const fresh = Array.from({ length: 6 }, (_, index) => ({ ...item, id: `new-${index}`, day_number: index + 1, location_name: `Day ${index + 1}` }));
+  vi.mocked(supabase.rpc).mockResolvedValue({ data: { items: fresh, saved: 6, skipped: 0, removed: 1 }, error: null } as never);
+  const result = await importTripItems({ tripId: 'trip', mode: 'overwrite', items: fresh, destination: '大阪', dayCount: 6 });
+  expect(supabase.rpc).toHaveBeenCalledWith('import_itinerary_items', expect.objectContaining({ p_mode: 'overwrite', p_day_count: 6 }));
+  expect(result.items).toHaveLength(6);
+  expect((await offlineStore.getSnapshot(scope))?.itineraryItems).toEqual(fresh);
+  expect((await offlineStore.getSnapshot(scope))?.itineraryItems).not.toContainEqual(old);
+});
 it('updates only itinerary cache after successful clear and preserves it on RPC failure', async () => {
   const snapshot = { trip: null, members: [], itineraryItems: [item], packingItems: ['packing'], expenses: ['expense'], vouchers: [], savedAt: '' };
   await offlineStore.putSnapshot(scope, snapshot);
