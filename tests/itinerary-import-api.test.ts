@@ -34,6 +34,12 @@ it('replaces the old itinerary cache with the complete overwrite response', asyn
   vi.mocked(supabase.rpc).mockResolvedValue({ data: { items: fresh, saved: 6, skipped: 0, removed: 1 }, error: null } as never);
   const result = await importTripItems({ tripId: 'trip', mode: 'overwrite', items: fresh, destination: '大阪', dayCount: 6 });
   expect(supabase.rpc).toHaveBeenCalledWith('import_itinerary_items', expect.objectContaining({ p_mode: 'overwrite', p_day_count: 6 }));
+  expect(vi.mocked(supabase.rpc).mock.calls.at(-1)?.[1]).toMatchObject({
+    p_items: expect.arrayContaining([
+      expect.objectContaining({ location_name: 'Day 2', day_number: 2 }),
+      expect.objectContaining({ location_name: 'Day 6', day_number: 6 }),
+    ]),
+  });
   expect(result.items).toHaveLength(6);
   expect((await offlineStore.getSnapshot(scope))?.itineraryItems).toEqual(fresh);
   expect((await offlineStore.getSnapshot(scope))?.itineraryItems).not.toContainEqual(old);
