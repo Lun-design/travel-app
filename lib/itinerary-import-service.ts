@@ -8,6 +8,17 @@ export type ImportSearch = (query: string) => Promise<ImportPlace[]>;
 export type ImportRpc = (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 export type ImportWriteResult = { items: ItineraryItem[]; trip?: Trip; saved: number; skipped: number; removed: number; unresolved: string[] };
 
+function isTransitionOnlyTitle(value: string) {
+  const title = value.trim();
+  return /^(?:起床|辦理入住|入住飯店|寄放行李|飯店寄放行李|退房|補眠|休息|整理行李|報到|安檢|購買(?:交通)?票券|找咖啡廳休息|咖啡廳休息)$/u.test(title)
+    || /^從.+搭(?:車|乘).*(?:前往|到)|^搭(?:車|乘).*(?:前往|到|回)/u.test(title);
+}
+
+/** Last line of defence: transition-only text never reaches the database. */
+export function sanitizeImportItems(items: readonly ImportedItineraryPayload[]) {
+  return items.filter((item) => item.location_name.trim() && !isTransitionOnlyTitle(item.location_name));
+}
+
 function coordinates(item: { latitude: number | null; longitude: number | null }) {
   return typeof item.latitude === 'number' && Number.isFinite(item.latitude) && Math.abs(item.latitude) <= 90
     && typeof item.longitude === 'number' && Number.isFinite(item.longitude) && Math.abs(item.longitude) <= 180;
@@ -50,8 +61,9 @@ async function write(tripId: string, mode: ImportMode | 'clear', items: Imported
 }
 
 export async function runItineraryImport(input: { tripId: string; mode: ImportMode; items: ImportedItineraryPayload[]; destination: string; dayCount: number }, deps: { search: ImportSearch; rpc: ImportRpc }) {
-  if (!input.items.length || input.items.some(item => !item.location_name.trim())) throw new Error('沒有可匯入的景點，既有行程未變更。');
-  const enriched = await enrichImportedItems(input.items, input.destination, deps.search);
+  const cleanItems = sanitizeImportItems(input.items);
+  if (!cleanItems.length || cleanItems.some(item => !item.location_name.trim())) throw new Error('沒有可匯入的景點，既有行程未變更。');
+  const enriched = await enrichImportedItems(cleanItems, input.destination, deps.search);
   const result = await write(input.tripId, input.mode, enriched.items, input.dayCount, deps.rpc);
   return { ...result, unresolved: enriched.unresolved };
 }

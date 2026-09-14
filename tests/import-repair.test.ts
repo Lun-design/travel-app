@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { normalizeImportedText } from '../lib/itinerary-import';
-import { enrichImportedItems, runItineraryImport, clearImportedItinerary } from '../lib/itinerary-import-service';
+import { enrichImportedItems, runItineraryImport, clearImportedItinerary, sanitizeImportItems } from '../lib/itinerary-import-service';
 
 describe('import parsing regressions', () => {
   it('uses heading context for unnamed activities and keeps duration prose out of clocks', () => {
@@ -124,6 +124,13 @@ const item = { location_name: '海遊館', address: null, latitude: null, longit
 const place = { title: '海遊館', displayName: '日本大阪市港區海岸通', latitude: 34.65, longitude: 135.42 };
 
 describe('import enrichment and mutations', () => {
+  it('sanitizes transition-only payloads before any RPC write', () => {
+    expect(sanitizeImportItems([
+      { ...item, location_name: '購買交通票券' },
+      { ...item, location_name: '梅田大丸' },
+      { ...item, location_name: '從難波搭車前往梅田' },
+    ]).map(entry => entry.location_name)).toEqual(['梅田大丸']);
+  });
   it('enriches with destination context, caches repeated places, and preserves coordinates', async () => {
     const search = vi.fn().mockResolvedValue([place]);
     const input = [item, { ...item, day_number: 2 }, { ...item, latitude: 0, longitude: 0 }];
