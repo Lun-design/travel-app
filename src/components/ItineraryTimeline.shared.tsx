@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, Share, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Alert, Image, Linking, Modal, Pressable, Share, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { buildRouteSegments, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
@@ -12,6 +12,7 @@ import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { PuppyMascot } from './PuppyMascot';
 import { areTimelineCardPropsEqual, createTimelineCardContainerStyle, MOBILE_GRIP_CONFIG } from '@/lib/drag-drop';
+// Theme badge fallback remains available via theme.colors.surfaceMuted.
 import { reservationTagLabels } from '@/lib/reservation-tags';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
@@ -165,16 +166,17 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
     <View style={timelineCardContainerStyle}>
       <View style={styles.row}>
         <View style={styles.rail}><View style={[styles.line, { width: 3 }]} /><View style={styles.dot} /></View>
-        <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, padding: 8, borderRadius: 10 }, active && styles.cardActive]}>
+        <View style={[styles.card, { backgroundColor: '#F1ECE4', borderWidth: 0, borderColor: 'transparent', padding: 8, borderRadius: 20, shadowColor: '#000000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, active && styles.cardActive]}>
           {(scheduled?.openingWarning || scheduled?.overlapWarning) ? <View style={styles.warningStack}>
             {scheduled.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
             {scheduled.overlapWarning ? <Text style={styles.overlapWarning}>🚨 時間衝突</Text> : null}
           </View> : null}
           <View style={styles.cardBody}>
             {grip}
+            {item.image_url ? <Image source={{ uri: item.image_url }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge]}><Text style={cardVisualStyles.icon}>{icons[item.category] ?? '📍'}</Text></View>}
             <View style={styles.content}>
               <View style={styles.cardHeader}>
-                <Text style={[styles.time, { color: theme.colors.primary, backgroundColor: theme.colors.surfaceMuted }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>
+                <Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>
                 <View style={styles.categoryWrap}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View>
               </View>
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
@@ -210,7 +212,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
 
 function formatTemperature(weather: WeatherSummary) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}–${max}°C`; if (max !== null) return `${max}°C`; if (min !== null) return `${min}°C`; return '溫度未知'; }
 export function EmptyTimeline() { return <View style={styles.empty}><PuppyMascot puppy="-7" size={165} accessibilityLabel="目前沒有景點" /><Text style={styles.emptyText}>目前還沒有景點，新增第一站吧！</Text></View>; }
-export function InsertSpotButton({ position, onPress }: { position: number; onPress: (position: number) => void }) { return <Pressable accessibilityRole="button" accessibilityLabel="在這裡插入景點" style={[styles.insertButton, { borderWidth: 0, borderTopWidth: 1, borderStyle: 'dashed', borderRadius: 0, paddingHorizontal: 0, minHeight: 28, width: '100%', marginTop: 0, marginBottom: 4, opacity: 0.3 }]} onPress={() => onPress(position)}><Text style={[styles.insertButtonText, { fontSize: 16 }]}>＋</Text></Pressable>; }
+export function InsertSpotButton({ position, onPress }: { position: number; onPress: (position: number) => void }) { return <Pressable accessibilityRole="button" accessibilityLabel="在這裡插入景點" style={[styles.insertButton, { borderWidth: 0, borderTopWidth: 1, borderStyle: 'dashed', borderRadius: 0, paddingHorizontal: 0, minHeight: 28, width: '100%', marginTop: 0, marginBottom: 4, opacity: 0.15 }]} onPress={() => onPress(position)}><Text style={[styles.insertButtonText, { fontSize: 16 }]}>＋</Text></Pressable>; }
 // Legacy accessibility copy: ＋ 在這裡插入景點
 export function NativeGripHandle({ label, onLongPress }: { label: string; onLongPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} style={[styles.grip, { backgroundColor: 'transparent' }]} onLongPress={onLongPress} delayLongPress={MOBILE_GRIP_CONFIG.delayLongPress} pressRetentionOffset={MOBILE_GRIP_CONFIG.pressRetentionOffset} hitSlop={MOBILE_GRIP_CONFIG.hitSlop}><Text style={styles.gripText}>⋮⋮</Text></Pressable>; }
 const reservationTagStyles = StyleSheet.create({
@@ -228,6 +230,11 @@ const cardMenuStyles = StyleSheet.create({
   triggerText: { color: EDITORIAL_COLORS.taupe, fontSize: 22, fontWeight: '900' },
 });
 const compactStyles = StyleSheet.create({ hidden: { display: 'none' } });
+const cardVisualStyles = StyleSheet.create({
+  thumbnail: { width: 56, height: 56, borderRadius: 16, flexShrink: 0 },
+  iconBadge: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#E9E1D5' },
+  icon: { fontSize: 22 },
+});
 function formatDistance(distanceKm: number) { return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`; }
 const timelineCardContainerStyle = createTimelineCardContainerStyle();
 

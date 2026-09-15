@@ -91,6 +91,6 @@ function getWebDragOverlayContainer(): HTMLElement {
   // fallback for embedded WebViews that do not allow a custom root.
   return document.body;
 }
-const webGripStyle: React.CSSProperties = { width: 32, minHeight: 76, display: 'grid', placeItems: 'center', flexShrink: 0, borderRadius: 8, background: EDITORIAL_COLORS.sand, color: EDITORIAL_COLORS.taupe, fontSize: 25, fontWeight: 900, userSelect: 'none', touchAction: 'none' };
+const webGripStyle: React.CSSProperties = { width: 24, minHeight: 44, display: 'grid', placeItems: 'center', flexShrink: 0, borderRadius: 0, background: 'transparent', color: EDITORIAL_COLORS.taupe, opacity: 0.4, fontSize: 20, fontWeight: 900, userSelect: 'none', touchAction: 'none' };
 const dragCloneTimeStyle: React.CSSProperties = { color: EDITORIAL_COLORS.terracotta, fontSize: 14, fontWeight: 800, marginBottom: 8 };
 const dragCloneNameStyle: React.CSSProperties = { color: EDITORIAL_COLORS.charcoal, fontSize: 18, lineHeight: 1.3 };

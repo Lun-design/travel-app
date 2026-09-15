@@ -14,7 +14,10 @@ export function calculateTimelineMetrics(items: Array<Pick<ItineraryItem, 'latit
     const longitude = Number(item.longitude);
     const valid = Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
     if (valid && previous) {
-      transportMinutes += calculateFallbackTravelMinutes(haversineDistanceKm(previous, { latitude, longitude }), 'DRIVING');
+      const estimate = calculateFallbackTravelMinutes(haversineDistanceKm(previous, { latitude, longitude }), 'DRIVING');
+      // Metrics are a same-day summary; ignore malformed/long-haul jumps and
+      // use a conservative local-transfer estimate instead of exploding the bar.
+      transportMinutes += estimate > 120 ? 15 : estimate;
     }
     if (valid) previous = { latitude, longitude };
   }

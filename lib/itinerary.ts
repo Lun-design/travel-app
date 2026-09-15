@@ -17,6 +17,7 @@ export type ItineraryItem = {
   /** Legacy/API alias used by some clients; `time` remains canonical. */
   start_time?: string | null;
   reservation_tags?: string[];
+  image_url?: string | null;
 };
 
 /**
