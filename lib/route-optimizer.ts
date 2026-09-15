@@ -150,7 +150,7 @@ export function optimizeRoute<T extends OptimizableStop>(
   options: { fixFirstDestination?: boolean } = {},
 ): RouteOptimizationResult<T> {
   const original = items as T[];
-  if (items.length < 3) {
+  if (items.length < 2) {
     const legs = items.length > 1 ? buildLegs(items) : [];
     const totalDistanceKm = legs.reduce((sum, leg) => sum + leg.distanceKm, 0);
     const totalDurationMinutes = legs.reduce((sum, leg) => sum + leg.durationMinutes, 0);

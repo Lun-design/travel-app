@@ -39,12 +39,8 @@ describe('route optimization', () => {
     expect(result.totalDistanceKm).toBeLessThan(120);
   });
 
-  it('returns zero, one, or two stops without route optimization work', () => {
-    for (const stops of [
-      [],
-      [stop('only', 25, 121)],
-      [stop('a', 25, 121), stop('b', 25.01, 121.01)],
-    ]) {
+  it('returns zero or one stop without route optimization work', () => {
+    for (const stops of [[], [stop('only', 25, 121)]]) {
       const result = optimizeRoute(stops);
       expect(result.items).toBe(stops);
       expect(result.optimized).toBe(false);
@@ -52,12 +48,26 @@ describe('route optimization', () => {
     }
   });
 
+  it('supports a two-stop route so the button does not silently do nothing', () => {
+    const stops = [stop('a', 25, 121), stop('b', 25.01, 121.01)];
+    const result = optimizeRoute(stops);
+    expect(result.strategy).toBe('exact');
+    expect(result.legs).toHaveLength(1);
+    expect(result.totalDistanceKm).toBeGreaterThan(0);
+  });
+
+  it('returns an explicit missing-coordinates reason for the UI alert', () => {
+    const result = optimizeRoute([stop('a', 25, 121), { id: 'b', latitude: null, longitude: null }]);
+    expect(result.strategy).toBe('none');
+    expect(result.reason).toBe('missing-coordinates');
+  });
+
   it('keeps the real distance and travel leg for a two-stop route', () => {
     const stops = [stop('origin', 25.03, 121.46), stop('destination', 24.15, 120.68)];
 
     const result = optimizeRoute(stops);
 
-    expect(result.items).toBe(stops);
+    expect(result.items).toEqual(stops);
     expect(result.originalDistanceKm).toBeGreaterThan(100);
     expect(result.totalDistanceKm).toBeCloseTo(result.originalDistanceKm, 8);
     expect(result.legs).toHaveLength(1);

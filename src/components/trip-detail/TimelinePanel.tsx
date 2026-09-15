@@ -89,7 +89,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     if (optimizationBusy) return;
     const result = optimizeRoute(visibleItems);
     if (result.strategy === 'none') {
-      Alert.alert('無法最佳化路線', result.reason === 'missing-coordinates' ? '請先補齊所有景點的經緯度座標。' : '至少需要 3 個景點才能進行路線最佳化。');
+      Alert.alert('無法最佳化路線', result.reason === 'missing-coordinates' ? '請先補齊所有景點的經緯度座標。' : '至少需要 2 個景點才能進行路線最佳化。');
       return;
     }
     setOptimizationBusy(true);

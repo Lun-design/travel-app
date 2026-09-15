@@ -206,6 +206,7 @@ export default function TripDetailScreen() {
     // can shift day numbers when the target trip dates differ.
     const mapped = previewPayloads.length ? previewPayloads : mapDraftToTargetTrip(draft, { startDate: target.start_date, dayOffset });
     const dayCount = mapped.reduce((max, item) => Math.max(max, item.day_number), 1);
+    console.debug('[TripDetail] final import payload', mapped.map(item => ({ title: item.location_name, day_number: item.day_number })));
     const result = await importTripItems({ tripId: targetTripId, mode, items: mapped, destination: destination || draft.destination || target.destination || '', dayCount });
     if (targetTripId === trip.id) {
       const importedItems = sortItineraryItemsByStartTime(result.items);
