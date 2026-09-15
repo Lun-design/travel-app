@@ -12,7 +12,6 @@ import { DayTabs } from '@/components/DayTabs';
 import { TripMap } from '@/components/TripMap';
 import { ItineraryTimeline } from '@/components/ItineraryTimeline';
 import { SkeletonCard } from '@/components/SkeletonCard';
-import { TodayFocusCard } from '@/components/TodayFocusCard';
 import type { ThemeMode } from '@/lib/theme';
 import type { getTripDetailLayout } from '@/lib/trip-detail-layout';
 import { EDITORIAL_COLORS } from '@/lib/theme';
@@ -167,11 +166,11 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     ? getRouteOptimizationStatus(optimizationPreview.result.originalDistanceKm, optimizationPreview.result.totalDistanceKm)
     : null;
   return <>
-    <View style={[styles.dayHeader, { backgroundColor: '#D8CFC8', borderRadius: 28, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 10, alignItems: 'center' }]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 26, letterSpacing: 1.5, color: '#3D3936' }]}>DAY {day}</Text><Text style={{ color: '#6F6660', fontSize: 12, fontWeight: '700', marginTop: 2 }}>{trip.destination}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={styles.moreButton} onPress={() => setMoreVisible(true)}><Text style={styles.moreButtonText}>···</Text></Pressable></View></View>
+    <View style={[styles.dayHeader, { backgroundColor: '#A3938B', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 10, alignItems: 'center' }]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 12, letterSpacing: 1.4, color: '#F8F6F0' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '900', marginTop: 3 }}>{trip.destination}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={[styles.moreButton, { backgroundColor: 'rgba(255,255,255,.18)', borderColor: 'rgba(255,255,255,.35)' }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
     <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>{optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線'}</Text></Pressable>
     <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} />
     <DashboardMetricsBar metrics={metrics} themeMode={themeMode} />
-    <TodayFocusCard schedule={scheduled} items={items} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} onSwitchToBackupPlan={onSwitchToBackupPlan} persistedWeather={persistedWeather} compact={layout.compact} />
+    {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
     <Pressable style={[styles.mapToggle, { alignSelf: 'flex-start', width: 'auto', minHeight: 38, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, marginVertical: 8 }]} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
     <TimelineViewport width={width} height={height}>
