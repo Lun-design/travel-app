@@ -32,6 +32,10 @@ export const EDITORIAL_COLORS = {
   dangerText: '#944B3C',
 } as const;
 
+// A deeper coffee accent keeps compact mobile controls readable without the
+// yellow cast of the legacy terracotta color.
+export const MOBILE_EARTH = '#6F5846' as const;
+
 const lightTheme: AppTheme = {
   isDark: false,
   colors: {

@@ -137,6 +137,16 @@ export function createTimelineCardContainerStyle() {
     overflow: 'hidden',
     height: 'auto',
     boxSizing: 'border-box',
+    // Keep each draggable row visually separated without a heavy frame.
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   } as const;
 }
 

@@ -62,7 +62,7 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
     keyExtractor={(item) => item.id}
     {...MOBILE_DRAG_CONFIG}
     containerStyle={{ width: '100%', flexGrow: 0 }}
-    contentContainerStyle={{ width: '100%', paddingBottom: 0 }}
+    contentContainerStyle={{ width: '100%', paddingBottom: 144 }}
     onDragEnd={({ data }) => void finishDrag(data)}
     renderItem={({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => <View collapsable={false} style={nativeDragRowStyle}>
       <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={localItems.findIndex((entry) => entry.id === item.id) > 0} canMoveDown={localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1} />

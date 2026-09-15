@@ -45,8 +45,8 @@ describe('trip detail responsive layout', () => {
 
   it('keeps the web safe-area chrome aligned with the itinerary background', () => {
     const html = readFileSync(projectFile('src', 'app', '+html.tsx'), 'utf8');
-    expect(html).toContain('<meta name="theme-color" content="#FAFAFA" />');
-    expect(html).toContain("<body style={{ margin: 0, backgroundColor: '#FAFAFA' }}>{children}</body>");
+    expect(html).toContain('<meta name="theme-color" content="#F8FAFC" />');
+    expect(html).toContain("<body style={{ margin: 0, backgroundColor: '#F8FAFC' }}>{children}</body>");
   });
 
   it('protects mobile timeline header controls from the card edge', () => {
@@ -56,11 +56,45 @@ describe('trip detail responsive layout', () => {
     expect(timeline).toContain('mobileCategoryWrap: { marginLeft: \'auto\', marginRight: 4');
   });
 
+  it('uses a clean mobile palette and soft card surfaces', () => {
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const drag = readFileSync(projectFile('lib', 'drag-drop.ts'), 'utf8');
+    const theme = readFileSync(projectFile('lib', 'theme.ts'), 'utf8');
+
+    expect(detail).toContain("backgroundColor: theme.isDark ? theme.colors.background : '#F8FAFC'");
+    expect(timeline).toContain("backgroundColor: '#FFFFFF'");
+    expect(drag).toContain("borderColor: '#F1F5F9'");
+    expect(drag).toContain('shadowOpacity: 0.04');
+    expect(theme).toContain("export const MOBILE_EARTH = '#6F5846'");
+    const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
+    expect(panel).toContain('accentColor={MOBILE_EARTH}');
+    expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_EARTH : theme.colors.primary');
+  });
+
+  it('keeps transport and drag affordances visually lightweight on mobile', () => {
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    expect(timeline).toContain("transition: { alignSelf: 'center', width: '100%', gap: 4");
+    expect(timeline).toContain("backgroundColor: '#F1F5F9', borderWidth: 0");
+    expect(timeline).toContain("transitionText: { color: '#475569', fontSize: 11");
+    expect(timeline).toContain("gripText: { color: '#CBD5E1'");
+    expect(timeline).toContain('marginHorizontal: 8');
+    expect(timeline).toContain('triggerRow: { position: \'absolute\', top: 3, right: 8');
+    expect(timeline).toContain('gap: 8 }');
+    const web = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.web.tsx'), 'utf8');
+    expect(web).toContain("marginLeft: 8, marginRight: 8");
+    expect(web).toContain("color: '#CBD5E1'");
+  });
+
   it('keeps a bottom scroll inset for the floating add-spot action', () => {
     const viewport = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelineViewport.tsx'), 'utf8');
     const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
-    expect(viewport).toContain('paddingBottom: 100');
-    expect(detail).toContain('mainContent: { width: \'100%\', flexGrow: 1, paddingBottom: 100 }');
+    expect(viewport).toContain('paddingBottom: 144');
+    expect(detail).toContain('mainContent: { width: \'100%\', flexGrow: 1, paddingBottom: 144 }');
+    const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
+    expect(panel).toContain('paneContent: { width: \'100%\', paddingBottom: 144');
+    const native = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.native.tsx'), 'utf8');
+    expect(native).toContain('contentContainerStyle={{ width: \'100%\', paddingBottom: 144 }}');
   });
 
   it('keeps the roomy desktop spacing above the compact breakpoint', async () => {

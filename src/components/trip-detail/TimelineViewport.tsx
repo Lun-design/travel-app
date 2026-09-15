@@ -6,6 +6,6 @@ export function TimelineViewport({ width, height, children }: { width: number; h
   return <View testID="timeline-viewport" style={{
     width: '100%', flexGrow: 1, flexShrink: 0, flexBasis: 'auto',
     minHeight: width >= 768 ? Math.max(320, Math.round(height / 2)) : 0,
-    paddingTop: 12, paddingBottom: 100,
+    paddingTop: 12, paddingBottom: 144,
   }}>{children}</View>;
 }

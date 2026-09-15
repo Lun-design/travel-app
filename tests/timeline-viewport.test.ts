@@ -15,7 +15,7 @@ describe('timeline viewport rendering', () => {
     expect(html).toContain('景點 20');
     expect(html).toContain('flex-shrink:0');
     expect(html).toContain(`min-height:${Math.max(320, height / 2)}px`);
-    expect(html).toContain('padding-bottom:100px');
+    expect(html).toContain('padding-bottom:144px');
     expect(html).not.toContain('overflow:hidden');
   });
   it('lets mobile content determine height', () => {
