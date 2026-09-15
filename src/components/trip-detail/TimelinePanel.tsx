@@ -127,6 +127,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
       if (onApplyRouteOptimization) await onApplyRouteOptimization(optimizationPreview.scheduledItems);
       else await onReorder(optimizationPreview.scheduledItems.map((item, position) => ({ id: item.id, position })));
       setOptimizationPreview(null);
+      Alert.alert('路線最佳化完成', '今日景點順序與預計時間已更新。');
     } catch (error) {
       Alert.alert('套用最佳化失敗', error instanceof Error ? error.message : '請稍後再試。');
     } finally {

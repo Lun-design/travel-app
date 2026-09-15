@@ -182,6 +182,20 @@ export function optimizeRoute<T extends OptimizableStop>(
   };
 }
 
+/** Replace the affected route as one immutable state transition in optimized order. */
+export function replaceOptimizedRouteItems<T extends { id: string }>(currentItems: readonly T[], optimizedItems: readonly T[]): T[] {
+  if (!optimizedItems.length) return [...currentItems];
+  const optimizedIds = new Set(optimizedItems.map((item) => item.id));
+  const firstAffectedIndex = currentItems.findIndex((item) => optimizedIds.has(item.id));
+  const insertionIndex = firstAffectedIndex < 0 ? currentItems.length : currentItems.slice(0, firstAffectedIndex).filter((item) => !optimizedIds.has(item.id)).length;
+  const remaining = currentItems.filter((item) => !optimizedIds.has(item.id));
+  return [
+    ...remaining.slice(0, insertionIndex),
+    ...optimizedItems.map((item) => ({ ...item })),
+    ...remaining.slice(insertionIndex),
+  ];
+}
+
 function parseClock(value: string | null | undefined, fallback: number): number {
   const match = /^(\d{1,2}):(\d{2})/.exec(value?.trim() ?? '');
   if (!match) return fallback;

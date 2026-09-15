@@ -26,4 +26,12 @@ describe('route optimization UI callback chain', () => {
     expect(timeline).toContain("Alert.alert('無法最佳化路線'");
     expect(timeline).toContain('需至少 2 個具備經緯度的景點才能進行路線最佳化');
   });
+
+  it('optimistically replaces route state and confirms a successful apply', () => {
+    const detail = tripDetailSource();
+    const timeline = timelineSource();
+
+    expect(detail).toContain('replaceOptimizedRouteItems(currentItems, optimizedItems)');
+    expect(timeline).toContain("Alert.alert('路線最佳化完成'");
+  });
 });

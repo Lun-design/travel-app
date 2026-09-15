@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyOptimizedSchedule, optimizeRoute, type OptimizableStop } from '../lib/route-optimizer';
+import { applyOptimizedSchedule, optimizeRoute, replaceOptimizedRouteItems, type OptimizableStop } from '../lib/route-optimizer';
 
 function stop(id: string, latitude: number, longitude: number): OptimizableStop {
   return { id, latitude, longitude };
@@ -115,5 +115,24 @@ describe('route optimization', () => {
 
     expect(scheduled.map((item) => item.time)).toEqual(['09:00', '09:43', '10:41']);
     expect(scheduled.map((item) => item.position)).toEqual([0, 1, 2]);
+  });
+
+  it('replaces route state with the optimized order and a new array reference', () => {
+    const current = [
+      { id: 'a', position: 0 },
+      { id: 'b', position: 1 },
+      { id: 'c', position: 2 },
+    ];
+    const optimized = [
+      { id: 'a', position: 0 },
+      { id: 'c', position: 1 },
+      { id: 'b', position: 2 },
+    ];
+
+    const next = replaceOptimizedRouteItems(current, optimized);
+
+    expect(next).not.toBe(current);
+    expect(next.map((item) => item.id)).toEqual(['a', 'c', 'b']);
+    expect(next[1]).not.toBe(optimized[1]);
   });
 });

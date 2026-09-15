@@ -366,6 +366,16 @@ export function normalizeWeatherDateRange(startDate: string, endDate: string): {
     : { startDate: endDate, endDate: startDate };
 }
 
+const OPEN_METEO_FORECAST_DAYS_AHEAD = 16;
+
+function forecastWindowFor(date: string, nowMs: number): { startDate: string; endDate: string } | null {
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  const latestForecastDate = addDays(today, OPEN_METEO_FORECAST_DAYS_AHEAD);
+  if (date.localeCompare(latestForecastDate) > 0) return null;
+  const requestedEndDate = addDays(date, 6);
+  return normalizeWeatherDateRange(date, requestedEndDate.localeCompare(latestForecastDate) > 0 ? latestForecastDate : requestedEndDate);
+}
+
 type WeatherStorage = { getItem: (key: string) => string | null; setItem: (key: string, value: string) => void };
 type WeatherCacheEnvelope = { weather: WeatherSummary; cachedAt: string };
 
@@ -494,7 +504,7 @@ export function parseOpenMeteoForecast(payload: OpenMeteoPayload, source: 'live'
 }
 
 export type WeatherFetcher = typeof fetch;
-export type WeatherServiceOptions = { ttlMs?: number; now?: () => number };
+export type WeatherServiceOptions = { ttlMs?: number; now?: () => number; today?: () => string };
 export type WeatherService = {
   getForecast: (latitude: number, longitude: number, date: string, timezone?: string | null, targetTime?: string | null) => Promise<WeatherSummary | null>;
 };
@@ -504,10 +514,13 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
   const cache = new Map<string, { expiresAt: number; value: Promise<WeatherSummary | null> }>();
   const ttlMs = options.ttlMs ?? 30 * 60 * 1000;
   const now = options.now ?? Date.now;
+  const today = options.today ?? (() => new Date().toISOString().slice(0, 10));
 
   function loadForecast(latitude: number, longitude: number, date: string, timezone: string | null = 'auto', targetTime: string | null = null, bypassCache = false): Promise<WeatherSummary | null> {
     if (!date) return Promise.resolve(null);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(createMockWeatherSummary(date));
+    const dateRange = forecastWindowFor(date, Date.parse(`${today()}T00:00:00Z`));
+    if (!dateRange) return Promise.resolve(createMockWeatherSummary(date));
     const key = `${WEATHER_CACHE_VERSION}:${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
     const cached = cache.get(key);
     if (!bypassCache && cached && cached.expiresAt > now()) {
@@ -520,8 +533,6 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
       });
     }
     if (cached) cache.delete(key);
-
-    const dateRange = normalizeWeatherDateRange(date, addDays(date, 6));
 
     const params = [
       `latitude=${encodeURIComponent(latitude.toFixed(5))}`,

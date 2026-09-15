@@ -167,17 +167,26 @@ describe('weather helpers', () => {
     expect(warning).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
   });
 
-  it('keeps the default weather singleton offline in the test environment', async () => {
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  it('does not request Open-Meteo for a date beyond the 16-day forecast window', async () => {
+    const fetchMock = vi.fn();
+    const service = createWeatherService(fetchMock, { today: () => '2026-09-15' });
 
+    await expect(service.getForecast(34.69, 135.50, '2026-10-28', 'Asia/Tokyo')).resolves.toMatchObject({
+      date: '2026-10-28',
+      source: 'mock',
+      isSimulated: true,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the default weather singleton offline for an out-of-range future date', async () => {
     await expect(fetchWeatherForecast(24.12345, 121.54321, '2099-01-01')).resolves.toMatchObject({
       date: '2099-01-01',
       temperatureMinC: 24,
       temperatureMaxC: 24,
       precipitationProbability: 10,
     });
-    expect(blockedNetworkFetch).toHaveBeenCalledTimes(1);
-    expect(warning).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
+    expect(blockedNetworkFetch).not.toHaveBeenCalled();
   });
 
   it('returns a seven-day forecast and requests a seven-day date window', async () => {
@@ -207,7 +216,7 @@ describe('weather helpers', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       daily: { time: ['2026-10-28'], precipitation_probability_max: [0], weather_code: [1] },
     }), { status: 200 }));
-    const service = createWeatherService(fetchMock);
+    const service = createWeatherService(fetchMock, { today: () => '2026-10-20' });
 
     await service.getForecast(25.03, 121.56, '2026-10-28', 'Asia/Taipei');
 

@@ -35,6 +35,7 @@ import { mapDraftToTargetTrip, type ImportedItineraryPayload, type ImportedTripD
 import { useTripDetailData } from '@/hooks/useTripDetailData';
 import { ActiveTripContext } from '@/contexts/ActiveTripContext';
 import { createReminderScheduler, getNotificationPermission, loadReminderPreference, registerNotificationServiceWorker, requestNotificationPermission, saveReminderPreference, showReminderNotification, type NotificationPermissionState } from '@/lib/notifications';
+import { replaceOptimizedRouteItems } from '@/lib/route-optimizer';
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -183,17 +184,25 @@ export default function TripDetailScreen() {
   }
   async function applyRouteOptimization(optimizedItems: ItineraryItem[]) {
     if (!tripId) throw new Error('找不到行程 ID。');
-    const savedItems = await Promise.all(optimizedItems.map((item) => data.saveItem({
-      ...item,
-      trip_id: tripId,
-      created_by: item.created_by || data.userId,
-    })));
-    const savedById = new Map(savedItems.map((item) => [item.id, item]));
-    data.setItems((currentItems) => sortItineraryItemsByStartTime(currentItems.map((item) => savedById.get(item.id) ?? item)));
-    await data.reload();
-    data.setItems((currentItems) => sortItineraryItemsByStartTime(currentItems.map((item) => savedById.get(item.id) ?? item)));
-    setRefreshKey((current) => current + 1);
-    setDay(optimizedItems[0]?.day_number ?? day);
+    const previousItems = data.items;
+    data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, optimizedItems));
+    try {
+      const savedItems = await Promise.all(optimizedItems.map((item) => data.saveItem({
+        ...item,
+        trip_id: tripId,
+        created_by: item.created_by || data.userId,
+      })));
+      data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, savedItems));
+      await data.reload();
+      // A Realtime or replicated GET response may briefly contain the old order.
+      // Re-apply the confirmed server rows as one immutable transition.
+      data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, savedItems));
+      setRefreshKey((current) => current + 1);
+      setDay(savedItems[0]?.day_number ?? day);
+    } catch (error) {
+      data.setItems([...previousItems]);
+      throw error;
+    }
   }
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
