@@ -173,7 +173,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
           </View> : null}
           <View style={styles.cardBody}>
             {grip}
-            {item.image_url ? <Image source={{ uri: item.image_url }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge]}><Text style={cardVisualStyles.icon}>{icons[item.category] ?? '📍'}</Text></View>}
+            {item.image_url ? <Image source={{ uri: item.image_url }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><Text style={cardVisualStyles.icon}>{icons[item.category] ?? '📍'}</Text></View>}
             <View style={styles.content}>
               <View style={styles.cardHeader}>
                 <Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>
@@ -231,10 +231,17 @@ const cardMenuStyles = StyleSheet.create({
 });
 const compactStyles = StyleSheet.create({ hidden: { display: 'none' } });
 const cardVisualStyles = StyleSheet.create({
-  thumbnail: { width: 56, height: 56, borderRadius: 16, flexShrink: 0 },
+  thumbnail: { width: 64, height: 64, borderRadius: 16, flexShrink: 0 },
   iconBadge: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#E9E1D5' },
   icon: { fontSize: 22 },
 });
+function categoryTint(category: string): string {
+  if (category === 'food') return '#F3DCCB';
+  if (category === 'hotel') return '#DDE9E2';
+  if (category === 'flight') return '#DCE5F2';
+  if (category === 'trail' || category === 'outdoor') return '#E1EAD7';
+  return '#E9E1D5';
+}
 function formatDistance(distanceKm: number) { return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`; }
 const timelineCardContainerStyle = createTimelineCardContainerStyle();
 
