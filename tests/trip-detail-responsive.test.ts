@@ -182,6 +182,19 @@ describe('trip detail responsive layout', () => {
     expect(dayTabs).toContain('marginTop: 6');
   });
 
+  it('renders day chips with weekday/date and supports insertion between stops', () => {
+    const dayTabs = readFileSync(projectFile('src', 'components', 'DayTabs.tsx'), 'utf8');
+    const timeline = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
+    const shared = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+
+    expect(dayTabs).toContain('startDate?: string');
+    expect(dayTabs).toContain('weekday');
+    expect(dayTabs).toContain('dateLabel');
+    expect(timeline).toContain('onAddAtPosition');
+    expect(shared).toContain('onInsertAtPosition');
+    expect(shared).toContain('＋ 在這裡插入景點');
+  });
+
   it('keeps weather alerts compact while preserving contrast', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
 

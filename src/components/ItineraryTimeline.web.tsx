@@ -4,12 +4,12 @@ import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-p
 import { reorderItineraryItems, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
-import { displayRouteSegments, EmptyTimeline, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
+import { displayRouteSegments, EmptyTimeline, InsertSpotButton, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import type { TravelMode } from '@/lib/routes';
 import { createDragCloneStyle, createDragContainerStyle, createDragPreviewStyle, getDragOverlayContainer, reconcileDraggedItems } from '@/lib/drag-drop';
 
-export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
+export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId, onInsertAtPosition }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeEstimates = useRouteSegments(localItems, routeModes);
@@ -69,11 +69,11 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
       </div>;
     }}>
       {(dropProvided) => <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} style={dropZoneStyle}>
-        {localItems.map((item, index) => <Draggable key={item.id} draggableId={item.id} index={index}>
+        {localItems.map((item, index) => <React.Fragment key={item.id}><Draggable draggableId={item.id} index={index}>
           {(dragProvided, snapshot) => <div id={`itinerary-item-${item.id}`} ref={dragProvided.innerRef} {...dragProvided.draggableProps} style={createDragPreviewStyle(dragProvided.draggableProps.style ?? {}, snapshot.isDragging)}>
             <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} grip={<div {...dragProvided.dragHandleProps} role="button" aria-label={`拖曳 ${item.location_name} 重新排序`} style={{ ...webGripStyle, cursor: snapshot.isDragging ? 'grabbing' : 'grab' }}>⠿</div>} active={snapshot.isDragging || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={index > 0} canMoveDown={index < localItems.length - 1} />
           </div>}
-        </Draggable>)}
+        </Draggable>{index < localItems.length - 1 && onInsertAtPosition ? <InsertSpotButton position={index + 1} onPress={onInsertAtPosition} /> : null}</React.Fragment>)}
         {dropProvided.placeholder as React.ReactNode}
       </div>}
     </Droppable>

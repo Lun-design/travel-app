@@ -22,6 +22,7 @@ type Props = {
   item?: ItineraryItem | null;
   day?: number | null;
   dayIndex?: number | null;
+  insertPosition?: number | null;
   tripStartDate?: string;
   tripEndDate?: string;
   tripId?: string;
@@ -33,7 +34,7 @@ type Props = {
   onDelete?: () => Promise<void>;
 };
 
-export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onRefresh, onDelete }: Props) {
+export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, insertPosition, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onRefresh, onDelete }: Props) {
   const route = useLocalSearchParams<{ id?: string | string[]; tripId?: string | string[] }>();
   const activeTripId = useActiveTripId();
   const contextInput = { tripId, itemTripId: item?.trip_id, routeId: route.id, routeTripId: route.tripId, activeTripId, day: dayProp, dayIndex };
@@ -205,6 +206,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, trip
       trip_id: resolveItineraryContext(contextInput).tripId,
       created_by: item?.created_by || userId || '',
       day_number: safeDay,
+      position: insertPosition ?? item?.position ?? undefined,
       location_name: name.trim(),
       address: address.trim() || null,
       time: formatTimeHHmm(time) ?? (time.trim() || null),

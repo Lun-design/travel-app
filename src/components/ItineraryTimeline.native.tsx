@@ -4,11 +4,11 @@ import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable
 import { reorderItineraryItems, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
-import { displayRouteSegments, EmptyTimeline, NativeGripHandle, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
+import { displayRouteSegments, EmptyTimeline, InsertSpotButton, NativeGripHandle, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
 import type { TravelMode } from '@/lib/routes';
 import { createNativeDragRowStyle, MOBILE_DRAG_CONFIG, reconcileDraggedItems } from '@/lib/drag-drop';
 
-export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId }: ItineraryTimelineProps) {
+export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId, onInsertAtPosition }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeEstimates = useRouteSegments(localItems, routeModes);
@@ -66,6 +66,7 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
     onDragEnd={({ data }) => void finishDrag(data)}
     renderItem={({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => <View collapsable={false} style={nativeDragRowStyle}>
       <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={localItems.findIndex((entry) => entry.id === item.id) > 0} canMoveDown={localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1} />
+      {localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1 && onInsertAtPosition ? <InsertSpotButton position={localItems.findIndex((entry) => entry.id === item.id) + 1} onPress={onInsertAtPosition} /> : null}
     </View>}
   />;
 }

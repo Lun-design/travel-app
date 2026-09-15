@@ -49,6 +49,7 @@ type Props = {
   onDelete: (item: ItineraryItem) => Promise<void>;
   onReorder: (order: { id: string; position: number }[]) => Promise<void>;
   onApplyRouteOptimization?: (items: ItineraryItem[]) => Promise<void>;
+  onAddAtPosition?: (position: number) => void;
   onAdd: () => void;
 };
 
@@ -66,7 +67,7 @@ function toRoutePoint(item: ItineraryItem): RoutePoint {
   };
 }
 
-export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onReorder, onApplyRouteOptimization, onAdd }: Props) {
+export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onReorder, onApplyRouteOptimization, onAddAtPosition, onAdd }: Props) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
   const [optimizationBusy, setOptimizationBusy] = useState(false);
@@ -162,12 +163,12 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   return <>
     <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable><Pressable style={styles.exportButton} onPress={() => setExportVisible(true)}><Text style={styles.exportButtonText}>🖼️ 匯出行程圖卡</Text></Pressable><Pressable style={styles.shareButton} onPress={() => void shareDayItinerary()}><Text style={styles.shareText}>↗ 分享今日行程</Text></Pressable></View></View>
     <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>{optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線'}</Text></Pressable>
-    <DayTabs days={days} selected={day} onChange={onDayChange} themeMode={themeMode} />
+    <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} />
     <TodayFocusCard schedule={scheduled} items={items} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} onSwitchToBackupPlan={onSwitchToBackupPlan} persistedWeather={persistedWeather} compact={layout.compact} />
     <Pressable style={styles.mapToggle} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
     <TimelineViewport width={width} height={height}>
-      {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onReorder={onReorder} />}
+      {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onReorder={onReorder} onInsertAtPosition={onAddAtPosition} />}
     </TimelineViewport>
     <Modal visible={Boolean(optimizationPreview)} transparent animationType="fade" onRequestClose={() => { if (!optimizationBusy) setOptimizationPreview(null); }}>
       <View style={styles.modalBackdrop}><View style={styles.modalCard}>
