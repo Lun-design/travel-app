@@ -18,6 +18,12 @@ export type ItineraryItem = {
   start_time?: string | null;
   reservation_tags?: string[];
   image_url?: string | null;
+  photo_reference?: string | null;
+  /** CamelCase alias used by Google Places responses before persistence. */
+  photoReference?: string | null;
+  placeId?: string | null;
+  googlePlaceId?: string | null;
+  google_place_id?: string | null;
 };
 
 /**
@@ -165,6 +171,11 @@ export function normalizeItineraryItemPayload(item: ItineraryItemSaveInput): Iti
   if ('latitude' in item) payload.latitude = normalizeCoordinateValue(item.latitude, -90, 90);
   if ('longitude' in item) payload.longitude = normalizeCoordinateValue(item.longitude, -180, 180);
   if ('opening_hours' in item) payload.opening_hours = normalizeOpeningHoursValue(item.opening_hours);
+  if ('photo_reference' in item || 'photoReference' in item) {
+    const photoReference = normalizeOptionalText(item.photo_reference ?? item.photoReference);
+    payload.photo_reference = photoReference;
+    delete (payload as ItineraryItemSaveInput & { photoReference?: unknown }).photoReference;
+  }
   const rawItem = item as ItineraryItemSaveInput & { spot_type?: unknown };
   if ('category' in item || 'spot_type' in rawItem) {
     // Some older clients send both fields and leave category as an empty

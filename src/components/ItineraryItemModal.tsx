@@ -55,6 +55,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   const [reservationTags, setReservationTags] = useState<ReservationTag[]>([]);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+  const [photoReference, setPhotoReference] = useState<string | null>(null);
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
@@ -87,6 +88,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setReservationTags(normalizeReservationTags(item?.reservation_tags));
     setLat(item?.latitude ?? null);
     setLng(item?.longitude ?? null);
+    setPhotoReference(item?.photo_reference ?? item?.photoReference ?? null);
     setResults([]);
     setSearchMessage('');
     setShowMore(false);
@@ -165,6 +167,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setAddress(selectedResult.displayName);
     setLat(Number.isFinite(selectedResult.latitude) ? selectedResult.latitude : null);
     setLng(Number.isFinite(selectedResult.longitude) ? selectedResult.longitude : null);
+    setPhotoReference(selectedResult.photoReference ?? null);
     setOpeningHours(selectedResult.openingHours ?? null);
     setAutoHoursStatus(selectedResult.openingHours ? 'found' : 'idle');
     setResults([]);
@@ -220,6 +223,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       notes: notes.trim() || null,
       latitude: lat,
       longitude: lng,
+      photo_reference: photoReference,
       reservation_tags: reservationTags,
     };
 

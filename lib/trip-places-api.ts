@@ -18,13 +18,14 @@ export type TripPlace = {
   created_at: string;
   updated_at?: string | null;
   updated_by?: string | null;
+  photo_reference?: string | null;
 };
 
 export type CreateTripPlaceInput = Omit<TripPlace, 'id' | 'status' | 'created_at'> & {
   status?: TripPlaceStatus;
 };
 
-export type UpdateTripPlaceInput = Partial<Pick<TripPlace, 'title' | 'address' | 'lat' | 'lng' | 'category' | 'notes'>>;
+export type UpdateTripPlaceInput = Partial<Pick<TripPlace, 'title' | 'address' | 'lat' | 'lng' | 'category' | 'notes' | 'photo_reference'>>;
 
 export type ScheduleTripPlaceOptions = {
   dayNumber: number;
@@ -51,6 +52,7 @@ export function normalizeTripPlace(row: unknown): TripPlace {
   };
   if ('updated_at' in value) normalized.updated_at = value.updated_at == null ? null : String(value.updated_at);
   if ('updated_by' in value) normalized.updated_by = value.updated_by == null ? null : String(value.updated_by);
+  if ('photo_reference' in value) normalized.photo_reference = value.photo_reference == null ? null : String(value.photo_reference);
   return normalized;
 }
 
@@ -68,6 +70,7 @@ export function buildItineraryItemFromPlace(place: TripPlace, options: ScheduleT
     category: place.category || 'spot',
     duration_minutes: options.durationMinutes == null ? null : Math.max(1, Math.round(options.durationMinutes)),
     created_by: options.createdBy,
+    ...(place.photo_reference ? { photo_reference: place.photo_reference } : {}),
   };
 }
 
@@ -98,6 +101,7 @@ export async function createTripPlace(input: CreateTripPlaceInput): Promise<Trip
     notes: input.notes?.trim() || null,
     status: input.status ?? 'saved',
     created_by: input.created_by,
+    ...(input.photo_reference ? { photo_reference: input.photo_reference } : {}),
   };
   const { data, error } = await supabase.from('trip_places').insert(payload).select().single();
   if (error) throw error;
@@ -114,6 +118,7 @@ export async function updateTripPlace(id: string, input: UpdateTripPlaceInput): 
     ...(input.lng === undefined ? {} : { lng: input.lng == null || !Number.isFinite(input.lng) ? null : input.lng }),
     ...(input.category === undefined ? {} : { category: input.category.trim() || 'spot' }),
     ...(input.notes === undefined ? {} : { notes: input.notes?.trim() || null }),
+    ...(input.photo_reference === undefined ? {} : { photo_reference: input.photo_reference?.trim() || null }),
   };
   const { data, error } = await supabase.from('trip_places').update(payload).eq('id', id).select().single();
   if (error) throw error;

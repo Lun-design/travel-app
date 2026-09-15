@@ -5,6 +5,7 @@ import {
   getSpotImageFallback,
   getSpotImageTags,
   getSpotImageUrl,
+  resolveSpotImage,
   SPOT_IMAGE_FALLBACK_VARIANTS,
   SPOT_IMAGE_FALLBACKS,
 } from '../lib/spot-image';
@@ -19,13 +20,13 @@ describe('spot image resolver', () => {
     expect(getSpotImageUrl({ location_name: '清水寺', image_url: 'https://cdn.example/legacy.jpg' })).toBe('https://cdn.example/legacy.jpg');
   });
 
-  it('uses the Google Places Photo endpoint with the public key and a 300px width', () => {
+  it('uses the Google Places Photo endpoint with the public key and a 400px width', () => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
     expect(getGooglePhotoUrl('photo-ref')).toBe(
-      'https://maps.googleapis.com/maps/api/place/photo?maxwidth=300&photo_reference=photo-ref&key=test-key',
+      'https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=photo-ref&key=test-key',
     );
     expect(getSpotImageUrl({ name: '東京鐵塔', photoReference: 'photo-ref' })).toBe(
-      'https://maps.googleapis.com/maps/api/place/photo?maxwidth=300&photo_reference=photo-ref&key=test-key',
+      'https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=photo-ref&key=test-key',
     );
   });
 
@@ -62,6 +63,32 @@ describe('spot image resolver', () => {
     expect(SPOT_IMAGE_FALLBACK_VARIANTS.hotel).toContain(
       getSpotImageUrl({ name: '未知景點', photoReference: 'photo-ref', category: 'hotel' }),
     );
+  });
+
+  it('dynamically resolves a missing photo reference from Places Text Search', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        places: [{
+          id: 'places/ChIJdynamic',
+          displayName: { text: '自訂景點' },
+          formattedAddress: '大阪府大阪市',
+          location: { latitude: 34.7, longitude: 135.5 },
+          photos: [{ name: 'places/ChIJdynamic/photos/dynamic-photo-ref' }],
+        }],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveSpotImage({ name: '自訂景點', address: '大阪府大阪市', category: 'spot' });
+
+    expect(resolved).toMatchObject({
+      photoReference: 'dynamic-photo-ref',
+      url: 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=dynamic-photo-ref&key=test-key',
+    });
+    await resolveSpotImage({ name: '自訂景點', address: '大阪府大阪市', category: 'spot' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('maps common destination keywords to stable image tags', () => {

@@ -7,9 +7,12 @@ export function formatPlaceAddress(address: string | null | undefined): string |
 // helpers while the implementation remains independently testable.
 export {
   EXACT_SPOT_MAP,
+  clearSpotImageResolutionCache,
   getGooglePhotoUrl,
   getSpotImageFallback,
   getSpotImageUrl,
+  resolveSpotImage,
+  resolveSpotImageUrl,
   SPOT_IMAGE_FALLBACK_VARIANTS,
   SPOT_IMAGE_FALLBACKS,
 } from './spot-image';

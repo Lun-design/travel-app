@@ -14,7 +14,7 @@ import { PuppyMascot } from './PuppyMascot';
 import { areTimelineCardPropsEqual, createTimelineCardContainerStyle, MOBILE_GRIP_CONFIG } from '@/lib/drag-drop';
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
 import { reservationTagLabels } from '@/lib/reservation-tags';
-import { getSpotImageUrl } from '@/lib/spot-image';
+import { getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
 export type ItineraryTimelineProps = {
@@ -162,12 +162,22 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
   const navigationUrl = getGoogleMapsDirectionsUrl(item.latitude, item.longitude);
   const placeAddress = formatPlaceAddress(item.address);
-  const resolvedImageUrl = getSpotImageUrl(item);
+  const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));
   const [favorite, setFavorite] = useState(false);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [routeModesVisible, setRouteModesVisible] = useState(false);
-  useEffect(() => setImageLoadFailed(false), [item.id, item.image_url]);
+  useEffect(() => {
+    let cancelled = false;
+    setImageLoadFailed(false);
+    setResolvedImageUrl(getSpotImageUrl(item));
+    void resolveSpotImage(item).then((resolved) => {
+      if (!cancelled) setResolvedImageUrl(resolved.url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, item.image_url, item.photo_reference, item.photoReference, item.address, item.location_name, item.placeId, item.googlePlaceId, item.google_place_id]);
   return (
     <View style={timelineCardContainerStyle}>
       <View style={styles.row}>

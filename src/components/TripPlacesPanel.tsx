@@ -107,6 +107,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
         category: 'spot',
         notes: null,
         created_by: userId,
+        ...((details.photoReference ?? result.photoReference) ? { photo_reference: details.photoReference ?? result.photoReference } : {}),
       });
       setResults((current) => current.filter((entry) => entry.id !== result.id));
       await onChanged();
@@ -162,6 +163,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
         category: place.category,
         notes: null,
         created_by: userId,
+        ...(place.source.photoReference ? { photo_reference: place.source.photoReference } : {}),
       });
       const scheduled = await scheduleTripPlace(created.id, {
         dayNumber: Number(payload.day_number ?? selectedDay),

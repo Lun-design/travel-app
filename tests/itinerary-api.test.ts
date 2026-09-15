@@ -28,6 +28,19 @@ describe('normalizeItineraryItemPayload', () => {
     });
   });
 
+  it('preserves a Google Places photo reference at the submission boundary', () => {
+    const payload = normalizeItineraryItemPayload({
+      trip_id: 'trip-1',
+      created_by: 'user-1',
+      location_name: '大阪城',
+      category: 'spot',
+      photoReference: 'photo-reference-1',
+    });
+
+    expect(payload).toMatchObject({ photo_reference: 'photo-reference-1' });
+    expect((payload as Record<string, unknown>).photoReference).toBeUndefined();
+  });
+
   it('keeps omitted optional fields omitted for partial updates', () => {
     const payload = normalizeItineraryItemPayload({
       trip_id: 'trip-1',

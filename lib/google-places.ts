@@ -12,6 +12,15 @@ export type GoogleOpeningHoursPayload = {
   weekdayDescriptions?: string[];
 };
 
+export type GooglePlacePhotoPayload = {
+  /** Legacy Places API response field. */
+  photo_reference?: string;
+  /** Some proxy/adapters expose the camelCase equivalent. */
+  photoReference?: string;
+  /** Places API (New) resource name, e.g. places/…/photos/… . */
+  name?: string;
+};
+
 export type GooglePlaceDetailsPayload = {
   id?: string;
   name?: string;
@@ -19,6 +28,7 @@ export type GooglePlaceDetailsPayload = {
   formattedAddress?: string;
   location?: { latitude?: number; longitude?: number };
   regularOpeningHours?: GoogleOpeningHoursPayload;
+  photos?: GooglePlacePhotoPayload[];
 };
 
 type GoogleAutocompletePayload = {
@@ -40,6 +50,7 @@ type GoogleTextSearchPayload = {
     displayName?: { text?: string };
     formattedAddress?: string;
     location?: { latitude?: number; longitude?: number };
+    photos?: GooglePlacePhotoPayload[];
   }>;
   nextPageToken?: string;
 };
@@ -168,7 +179,12 @@ export function parseGoogleOpeningHours(value: GoogleOpeningHoursPayload | null 
 }
 
 function getGoogleApiKey(apiKey?: string) {
-  return (apiKey ?? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '').trim();
+  return (
+    apiKey
+    ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    ?? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+    ?? ''
+  ).trim();
 }
 
 export function hasGooglePlacesApiKey() {
@@ -177,6 +193,19 @@ export function hasGooglePlacesApiKey() {
 
 function normalizePlaceId(value: string) {
   return value.replace(/^places\//, '');
+}
+
+/**
+ * Convert either legacy `photo_reference` or Places (New) photo resource
+ * names to the reference accepted by the Maps Photo endpoint.
+ */
+export function extractGooglePhotoReference(photos?: GooglePlacePhotoPayload[] | null): string | undefined {
+  const first = photos?.find((photo) => photo && typeof photo === 'object');
+  if (!first) return undefined;
+  const value = first.photo_reference?.trim() || first.photoReference?.trim() || first.name?.trim();
+  if (!value) return undefined;
+  const resourceMatch = /\/photos\/([^/]+)/u.exec(value);
+  return resourceMatch?.[1] || value;
 }
 
 async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {
@@ -220,6 +249,7 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[
     if (!placeId || !title) return [];
     const latitude = Number(place.location?.latitude);
     const longitude = Number(place.location?.longitude);
+    const photoReference = extractGooglePhotoReference(place.photos);
     return [{
       id: `google:${placeId}`,
       googlePlaceId: placeId,
@@ -228,6 +258,7 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[
       displayName: place.formattedAddress?.trim() || title,
       latitude: Number.isFinite(latitude) ? latitude : Number.NaN,
       longitude: Number.isFinite(longitude) ? longitude : Number.NaN,
+      ...(photoReference ? { photoReference } : {}),
     }];
   });
 }
@@ -241,7 +272,7 @@ export async function searchGooglePlacesTextPage(query: string, apiKey?: string,
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,nextPageToken',
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos,nextPageToken',
     },
     body: JSON.stringify({
       textQuery: normalizedQuery,
@@ -281,7 +312,7 @@ export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string):
   const response = await fetch(`${GOOGLE_DETAILS_ENDPOINT}/${encodeURIComponent(normalizedId)}?languageCode=zh-TW`, {
     headers: {
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,regularOpeningHours',
+      'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,regularOpeningHours,photos',
     },
   });
   if (!response.ok) throw new Error(`Google Place 詳細資料取得失敗 (${response.status})`);
@@ -308,6 +339,7 @@ export function parseGooglePlaceDetails(payload: GooglePlaceDetailsPayload): Geo
   const latitude = Number(payload.location?.latitude);
   const longitude = Number(payload.location?.longitude);
   const openingHours = parseGoogleOpeningHours(payload.regularOpeningHours);
+  const photoReference = extractGooglePhotoReference(payload.photos);
   return {
     id: `google:${placeId}`,
     googlePlaceId: placeId,
@@ -317,5 +349,6 @@ export function parseGooglePlaceDetails(payload: GooglePlaceDetailsPayload): Geo
     latitude,
     longitude,
     ...(openingHours ? { openingHours } : {}),
+    ...(photoReference ? { photoReference } : {}),
   };
 }

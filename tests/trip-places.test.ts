@@ -98,6 +98,39 @@ describe('trip places API', () => {
     expect(buildScheduledPlacePatch()).toEqual({ status: 'scheduled' });
   });
 
+  it('保留 Google Places photo reference 到收藏與行程資料', () => {
+    const placeWithPhoto = { ...place, photo_reference: 'kuromon-photo-ref' };
+    expect(buildItineraryItemFromPlace(placeWithPhoto, {
+      dayNumber: 1,
+      startTime: '09:00',
+      durationMinutes: 60,
+      createdBy: 'user-1',
+    })).toMatchObject({ photo_reference: 'kuromon-photo-ref' });
+  });
+
+  it('新增收藏景點時將 photo reference 寫入 Supabase payload', async () => {
+    const insertQuery = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { ...place, photo_reference: 'photo-ref-1' }, error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValueOnce(insertQuery as never);
+
+    await createTripPlace({
+      trip_id: place.trip_id,
+      title: place.title,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+      category: place.category,
+      notes: place.notes,
+      created_by: place.created_by,
+      photo_reference: 'photo-ref-1',
+    });
+
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({ photo_reference: 'photo-ref-1' }));
+  });
+
   it('更新收藏景點後回傳最新資料，並將空字串正規化為 null', async () => {
     const updateQuery = {
       update: vi.fn().mockReturnThis(),

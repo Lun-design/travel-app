@@ -26,6 +26,7 @@ function optimisticItineraryItem(payload: ItineraryItemSaveInput, existing: Itin
     duration_minutes: payload.duration_minutes ?? existing?.duration_minutes ?? null,
     difficulty: payload.difficulty ?? existing?.difficulty ?? null,
     opening_hours: payload.opening_hours ?? existing?.opening_hours ?? null,
+    photo_reference: payload.photo_reference ?? existing?.photo_reference ?? null,
     is_backup: payload.is_backup ?? existing?.is_backup ?? false,
     backup_for_id: payload.backup_for_id ?? existing?.backup_for_id ?? null,
     reservation_tags: payload.reservation_tags ?? existing?.reservation_tags ?? [],

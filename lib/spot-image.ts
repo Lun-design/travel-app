@@ -4,11 +4,16 @@
  * The resolver is intentionally side-effect free: cards can calculate a URL
  * during render without making a network request or depending on browser APIs.
  */
+import { fetchGooglePlaceDetails, searchGooglePlacesText } from './google-places';
+
 export type SpotImageCategory = 'food' | 'hotel' | 'flight' | 'spot' | 'trail' | 'outdoor' | string;
 
 export type SpotImageInput = {
   id?: string | number | null;
   index?: number | null;
+  placeId?: string | null;
+  googlePlaceId?: string | null;
+  google_place_id?: string | null;
   name?: string | null;
   location_name?: string | null;
   address?: string | null;
@@ -168,15 +173,18 @@ export function getSpotImageTags(spot: Pick<SpotImageInput, 'name' | 'location_n
 }
 
 /** Build a Google Places Photo URL when a reference and public API key exist. */
-export function getGooglePhotoUrl(reference: string): string | null {
-  const key =
-    typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
-      : undefined;
+function getGooglePhotoApiKey(apiKey?: string): string | null {
+  const configuredKey = typeof process !== 'undefined'
+    ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+    : undefined;
+  return nonEmpty(apiKey) ?? nonEmpty(configuredKey);
+}
+
+export function getGooglePhotoUrl(reference: string, apiKey?: string): string | null {
+  const key = getGooglePhotoApiKey(apiKey);
   const cleanReference = nonEmpty(reference);
-  const cleanKey = nonEmpty(key);
-  if (!cleanReference || !cleanKey) return null;
-  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=300&photo_reference=${encodeURIComponent(cleanReference)}&key=${encodeURIComponent(cleanKey)}`;
+  if (!cleanReference || !key) return null;
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${encodeURIComponent(cleanReference)}&key=${encodeURIComponent(key)}`;
 }
 
 function normalizeSpotText(value: string): string {
@@ -222,6 +230,68 @@ function getHashedFallback(spot: SpotImageInput): string {
   if (!seed || variants.length <= 1) return variants[0] ?? getSpotImageFallback(category);
   const index = typeof spot.index === 'number' && Number.isFinite(spot.index) ? spot.index : 0;
   return variants[hashSpotSeed(seed, index) % variants.length] ?? variants[0] ?? getSpotImageFallback(category);
+}
+
+export type SpotImageResolution = {
+  url: string;
+  photoReference: string | null;
+};
+
+const dynamicPhotoCache = new Map<string, Promise<SpotImageResolution | null>>();
+
+export function clearSpotImageResolutionCache() {
+  dynamicPhotoCache.clear();
+}
+
+function dynamicPhotoKey(spot: SpotImageInput): string | null {
+  const placeId = nonEmpty(spot.placeId) ?? nonEmpty(spot.googlePlaceId) ?? nonEmpty(spot.google_place_id);
+  if (placeId) return `id:${placeId}`;
+  // Address-based lookup is intentionally opt-in: querying every free-form
+  // title would spend Places quota for entries that have no useful location.
+  const address = nonEmpty(spot.address);
+  if (!address) return null;
+  const query = [nonEmpty(spot.name), nonEmpty(spot.location_name), address].filter(Boolean).join(' ');
+  return query ? `query:${query.toLocaleLowerCase('zh-Hant')}` : null;
+}
+
+/**
+ * Resolve a photo for existing rows that only have a place id/address. The
+ * request is cached per place/query to avoid one API call per re-render.
+ */
+export async function resolveSpotImage(spot: SpotImageInput | null | undefined, apiKey?: string): Promise<SpotImageResolution> {
+  const fallback = { url: getSpotImageUrl(spot), photoReference: null } satisfies SpotImageResolution;
+  if (!spot) return fallback;
+  const reference = nonEmpty(spot.photoReference) ?? nonEmpty(spot.photo_reference);
+  const directUrl = reference ? getGooglePhotoUrl(reference, apiKey) : null;
+  if (directUrl) return { url: directUrl, photoReference: reference };
+
+  const key = getGooglePhotoApiKey(apiKey);
+  const cacheKey = dynamicPhotoKey(spot);
+  if (!key || !cacheKey) return fallback;
+  const cached = dynamicPhotoCache.get(cacheKey);
+  if (cached) return (await cached) ?? fallback;
+
+  const request = (async (): Promise<SpotImageResolution | null> => {
+    try {
+      const placeId = nonEmpty(spot.placeId) ?? nonEmpty(spot.googlePlaceId) ?? nonEmpty(spot.google_place_id);
+      const place = placeId
+        ? await fetchGooglePlaceDetails(placeId, key)
+        : (await searchGooglePlacesText([nonEmpty(spot.name), nonEmpty(spot.location_name), nonEmpty(spot.address)].filter(Boolean).join(' '), key))[0];
+      const resolvedReference = place?.photoReference;
+      const url = resolvedReference ? getGooglePhotoUrl(resolvedReference, key) : null;
+      return url ? { url, photoReference: resolvedReference ?? null } : null;
+    } catch (error) {
+      console.warn('[SpotImage] dynamic photo lookup failed', error);
+      return null;
+    }
+  })();
+  dynamicPhotoCache.set(cacheKey, request);
+  const resolved = await request;
+  return resolved ?? fallback;
+}
+
+export async function resolveSpotImageUrl(spot: SpotImageInput | null | undefined, apiKey?: string): Promise<string> {
+  return (await resolveSpotImage(spot, apiKey)).url;
 }
 
 /**

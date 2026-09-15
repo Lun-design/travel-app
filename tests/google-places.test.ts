@@ -86,7 +86,12 @@ describe('Google Places API mapping', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://places.googleapis.com/v1/places/ChIJdetails?languageCode=zh-TW',
-      expect.objectContaining({ headers: expect.objectContaining({ 'X-Goog-Api-Key': 'test-key' }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Goog-Api-Key': 'test-key',
+          'X-Goog-FieldMask': expect.stringContaining('photos'),
+        }),
+      }),
     );
     expect(pickPreferredPlaceAddress(details.displayName, '大阪市此花區櫻島 2-1-33')).toBe('大阪市此花區櫻島 2-1-33');
   });
@@ -112,6 +117,16 @@ describe('Google Places API mapping', () => {
         monday: { closed: false, periods: [{ open: '09:00', close: '17:00' }] },
       },
     });
+  });
+
+  it('preserves the first Google photo reference from Place Details', () => {
+    expect(parseGooglePlaceDetails({
+      id: 'ChIJphoto',
+      displayName: { text: '景點' },
+      formattedAddress: '大阪市',
+      location: { latitude: 34.7, longitude: 135.5 },
+      photos: [{ name: 'places/ChIJphoto/photos/photo-reference-123' }],
+    })).toMatchObject({ photoReference: 'photo-reference-123' });
   });
 
   it('posts Autocomplete (New) input and maps place predictions', async () => {
@@ -159,6 +174,7 @@ describe('Google Places search fallback', () => {
             displayName: { text: 'Universal Studios Japan' },
             formattedAddress: '大阪府大阪市此花區櫻島 2-1-33',
             location: { latitude: 34.6654, longitude: 135.4323 },
+            photos: [{ name: 'places/ChIJusjapan/photos/usj-photo-1' }],
           }],
         }),
       });
@@ -173,6 +189,7 @@ describe('Google Places search fallback', () => {
       displayName: '大阪府大阪市此花區櫻島 2-1-33',
       latitude: 34.6654,
       longitude: 135.4323,
+      photoReference: 'usj-photo-1',
     }]);
     expect(fetchMock.mock.calls[1][0]).toBe('https://places.googleapis.com/v1/places:searchText');
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toMatchObject({ textQuery: '日本大阪環球', languageCode: 'zh-TW' });
