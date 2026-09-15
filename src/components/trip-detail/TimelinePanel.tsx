@@ -165,12 +165,13 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const optimizationStatus = optimizationPreview
     ? getRouteOptimizationStatus(optimizationPreview.result.originalDistanceKm, optimizationPreview.result.totalDistanceKm)
     : null;
+  const heroLabel = visibleItems[0]?.address?.split(/[，,]/)[0]?.trim() || trip.destination || `Day ${day} 行程`;
   return <>
-    <View style={[styles.dayHeader, { backgroundColor: '#8C827A', borderRadius: 16, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 10, alignItems: 'center' }]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#FFF8F2', fontSize: 14, fontWeight: '700', marginTop: 3 }}>{trip.destination} · 行程</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={[styles.moreButton, { backgroundColor: 'rgba(255,255,255,.18)', borderColor: 'rgba(255,255,255,.35)' }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
-    <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>{optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線'}</Text></Pressable>
+    <View style={[styles.dayHeader, { backgroundColor: '#8C827A', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, marginBottom: 10, alignItems: 'center' }]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#FFF8F2', fontSize: 14, fontWeight: '700', marginTop: 3 }}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={[styles.moreButton, { backgroundColor: 'rgba(255,255,255,.18)', borderColor: 'rgba(255,255,255,.35)' }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
     <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} />
-    <DashboardMetricsBar metrics={metrics} themeMode={themeMode} />
+    <DashboardMetricsBar metrics={metrics} themeMode={themeMode} action={<Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={styles.optimizeInlineButton} onPress={openOptimizationPreview}><Text style={styles.optimizeInlineText}>{optimizationBusy ? '計算中…' : '🧭 最佳化'}</Text></Pressable>} />
     {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
+    {/* optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線' */}
     <Pressable style={[styles.mapToggle, { alignSelf: 'flex-start', width: 'auto', minHeight: 38, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, marginVertical: 8 }]} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: Math.min(layout.mapMinHeight, 220), maxHeight: 220 }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
     <TimelineViewport width={width} height={height}>
@@ -230,6 +231,8 @@ const styles = StyleSheet.create({
   dayTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
   optimizeButton: { width: '100%', minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 10 },
+  optimizeInlineText: { color: EDITORIAL_COLORS.terracotta, fontSize: 11, fontWeight: '800' },
   calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
   calendarText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   exportButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
