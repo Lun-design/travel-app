@@ -18,7 +18,9 @@ export function calculateTimelineMetrics(items: Array<Pick<ItineraryItem, 'latit
     }
     if (valid) previous = { latitude, longitude };
   }
-  return { spotCount: items.length, stayMinutes, transportMinutes };
+  // A single day cannot reasonably contain more than 24 hours of transfers;
+  // cap malformed persisted coordinates/durations before formatting the bar.
+  return { spotCount: items.length, stayMinutes, transportMinutes: Math.min(1440, transportMinutes) };
 }
 
 export function formatMetricDuration(minutes: number): string {

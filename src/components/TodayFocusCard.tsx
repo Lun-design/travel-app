@@ -133,11 +133,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
 
       {focusItem && focus.scheduled ? <>
         <Text numberOfLines={2} style={[styles.name, { color: theme.colors.text }]}>{focusItem.location_name}</Text>
-        <View style={styles.timeRow}>
-          <View style={styles.timeBlock}><Text style={[styles.timeLabel, { color: theme.colors.muted }]}>預計抵達</Text><Text style={[styles.timeValue, { color: theme.colors.text }]}>{focus.scheduled.arrivalTime}</Text></View>
-          <View style={styles.timeBlock}><Text style={[styles.timeLabel, { color: theme.colors.muted }]}>建議離開</Text><Text style={[styles.timeValue, { color: theme.colors.text }]}>{focus.scheduled.departureTime}</Text></View>
-          <View style={styles.timeBlock}><Text style={[styles.timeLabel, { color: theme.colors.muted }]}>{focus.mode === 'active' ? '停留倒數' : '距離出發'}</Text><Text style={[styles.timeValue, { color: theme.colors.primary }]}>{formatMinutes(focus.mode === 'active' ? focus.minutesRemaining : focus.minutesUntil)}</Text></View>
-        </View>
+        <Text style={[styles.timeCapsule, { color: theme.colors.primary }]}>⏱️ {focus.scheduled.arrivalTime} 抵達 · {focus.scheduled.departureTime} 離開 · {formatMinutes(focus.mode === 'active' ? focus.minutesRemaining : focus.minutesUntil)}</Text>
         {weather ? <View style={styles.weatherRow}><Text style={[styles.weather, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={[styles.rain, { color: weather.precipitationWarning ? theme.colors.warningText : theme.colors.primary }]}>☔ {Math.round(weather.precipitationProbability)}%{isWeatherAlert(weather) ? ' 預警' : ''}</Text> : null}</View> : <Text style={[styles.muted, { color: theme.colors.muted }]}>正在載入天氣…</Text>}
         <View style={styles.metaRow}>{distanceKm !== null ? <Text style={[styles.meta, { color: theme.colors.muted }]}>距離上一站約 {formatDistance(distanceKm)}</Text> : null}{focusItem.address ? <Text numberOfLines={1} style={[styles.meta, styles.address, { color: theme.colors.muted }]}>{focusItem.address}</Text> : null}</View>
         {weather?.currentTemperatureC != null ? <Text style={[styles.muted, { color: theme.colors.text }]}>目前氣溫 {Math.round(weather.currentTemperatureC)}°C</Text> : null}
@@ -177,18 +173,19 @@ const styles = StyleSheet.create({
   compactBanner: { minHeight: 48, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10 },
   compactBannerText: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800' },
   compactBannerAction: { fontSize: 13, fontWeight: '900' },
-  card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 12, gap: 12 },
+  card: { width: '100%', maxWidth: '100%', maxHeight: 120, overflow: 'hidden', boxSizing: 'border-box', borderWidth: 1, borderRadius: 12, padding: 10, marginBottom: 8, gap: 6 },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   headerCopy: { flex: 1, minWidth: 0 },
   eyebrow: { fontSize: 12, fontWeight: '900', letterSpacing: 1.8 },
   mode: { fontSize: 16, fontWeight: '800', marginTop: 3 },
   category: { fontSize: 14, fontWeight: '800', flexShrink: 0 },
   name: { fontSize: 28, lineHeight: 34, fontWeight: '900' },
+  timeCapsule: { fontSize: 13, fontWeight: '800', paddingVertical: 5 },
   timeRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   timeBlock: { minWidth: 90, flex: 1, padding: 10, borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand },
   timeLabel: { fontSize: 12, fontWeight: '700' },
   timeValue: { fontSize: 23, lineHeight: 29, fontWeight: '900', marginTop: 3 },
-  weatherRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  weatherRow: { display: 'none', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
   forecastHidden: { display: 'none' },
   forecastRow: { flexDirection: 'row', gap: 6, paddingVertical: 2 },
   forecastCell: { minWidth: 58, alignItems: 'center', borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand, paddingHorizontal: 6, paddingVertical: 5 },
