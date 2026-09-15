@@ -66,10 +66,10 @@ describe('trip detail responsive layout', () => {
     expect(timeline).toContain("backgroundColor: '#FFFFFF'");
     expect(drag).toContain("borderColor: '#F1F5F9'");
     expect(drag).toContain('shadowOpacity: 0.04');
-    expect(theme).toContain("export const MOBILE_EARTH = '#6F5846'");
+    expect(theme).toContain("export const MOBILE_ACCENT_ORANGE = '#E05D38'");
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
-    expect(panel).toContain('accentColor={MOBILE_EARTH}');
-    expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_EARTH : theme.colors.primary');
+    expect(panel).toContain('accentColor={MOBILE_ACCENT_ORANGE}');
+    expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_ORANGE : theme.colors.primary');
   });
 
   it('keeps transport and drag affordances visually lightweight on mobile', () => {

@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, useColorScheme, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDefaultMapOpen, getTripDetailLayout } from '@/lib/trip-detail-layout';
-import { getThemeForMode, MOBILE_EARTH, type ThemeMode } from '@/lib/theme';
+import { getThemeForMode, MOBILE_ACCENT_ORANGE, type ThemeMode } from '@/lib/theme';
 import { loadThemeMode, saveThemeMode } from '@/lib/theme-preference';
 import { tripDayNumbers } from '@/lib/trip-dates';
 import { saveItineraryItemAndRefresh, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
@@ -286,7 +286,7 @@ export default function TripDetailScreen() {
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} onChanged={data.reload} /></View>}
     {tab === 'places' && <TripPlacesPanel tripId={tripId!} userId={data.userId} places={data.places} days={days} destination={trip.destination} themeMode={themeMode} onChanged={refreshPlaces} onScheduled={handlePlaceScheduled} onTimezoneDetected={async (timezone) => { if (timezone !== trip.timezone) { await data.saveTripSettings({ timezone }); await data.reload(); } }} />}
     </MainScroll>
-    {tab === 'timeline' && <Pressable accessibilityRole="button" style={[styles.addSpot, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth, backgroundColor: layout.compact ? MOBILE_EARTH : theme.colors.primary }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={{ color: '#ffffff', fontWeight: '800', fontSize: layout.fabFontSize }}>＋ 新增景點／活動</Text></Pressable>}
+    {tab === 'timeline' && <Pressable accessibilityRole="button" style={[styles.addSpot, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth, backgroundColor: layout.compact ? MOBILE_ACCENT_ORANGE : theme.colors.primary }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={{ color: '#ffffff', fontWeight: '800', fontSize: layout.fabFontSize }}>＋ 新增景點／活動</Text></Pressable>}
     <ItineraryItemModal visible={itemModal} item={editingItem} day={day} insertPosition={insertPosition} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onRefresh={refreshAfterItemSave} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); await data.reload(); setItemModal(false); } : undefined} />
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />

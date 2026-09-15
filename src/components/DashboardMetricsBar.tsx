@@ -8,15 +8,15 @@ export function DashboardMetricsBar({ metrics, themeMode = 'system', action }: {
   const { width } = useWindowDimensions();
   const compact = width < 480;
   return <View accessibilityLabel="當天行程摘要" style={[styles.container, compact && styles.containerCompact]}>
-    <Metric icon="📍" label={`${metrics.spotCount} 個景點`} theme={theme} />
-    <Metric icon="⏱️" label={`停留 ${formatMetricDuration(metrics.stayMinutes)}`} theme={theme} />
-    {metrics.transportMinutes > 0 ? <Metric icon="🚗" label={`交通 ${formatMetricDuration(metrics.transportMinutes)}`} theme={theme} /> : null}
+    <Metric icon="📍" iconColor="#DC4A3D" label={`${metrics.spotCount} 個景點`} theme={theme} />
+    <Metric icon="⏱️" iconColor="#2563EB" label={`停留 ${formatMetricDuration(metrics.stayMinutes)}`} theme={theme} />
+    {metrics.transportMinutes > 0 ? <Metric icon="🚗" iconColor="#16A34A" label={`交通 ${formatMetricDuration(metrics.transportMinutes)}`} theme={theme} /> : null}
     {action ? <View style={[styles.action, compact && styles.actionCompact]}>{action}</View> : null}
   </View>;
 }
 
-function Metric({ icon, label, theme }: { icon: string; label: string; theme: ReturnType<typeof getThemeForMode> }) {
-  return <View style={styles.metric}><Text style={styles.icon}>{icon}</Text><Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text></View>;
+function Metric({ icon, iconColor, label, theme }: { icon: string; iconColor: string; label: string; theme: ReturnType<typeof getThemeForMode> }) {
+  return <View style={styles.metric}><Text style={[styles.icon, { color: iconColor }]}>{icon}</Text><Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text></View>;
 }
 
 const styles = StyleSheet.create({

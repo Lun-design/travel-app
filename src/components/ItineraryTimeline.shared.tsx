@@ -15,6 +15,7 @@ import { areTimelineCardPropsEqual, createTimelineCardContainerStyle, MOBILE_GRI
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
 import { reservationTagLabels } from '@/lib/reservation-tags';
 import { getSpotImageFallbackUrl, getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
+import { getCategoryBadgePalette } from '@/lib/visual-styles';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
 export type ItineraryTimelineProps = {
@@ -184,6 +185,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   }, [item.id, item.image_url, item.photo_reference, item.photoReference, item.address, item.location_name, item.placeId, item.googlePlaceId, item.google_place_id]);
   return (
     <View style={timelineCardContainerStyle}>
+      <CategoryBadge category={item.category} compact={isMobile} />
       <View style={styles.row}>
         <View style={styles.rail}><View style={[styles.line, { width: 3 }]} /><View style={styles.dot} /></View>
         <View style={[styles.card, { backgroundColor: '#FFFFFF', borderWidth: 0, borderColor: 'transparent', padding: 18, borderRadius: 16, marginBottom: 16, shadowColor: '#000000', shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, active && styles.cardActive]}>
@@ -280,6 +282,13 @@ function categoryTint(category: string): string {
   if (category === 'trail' || category === 'outdoor') return '#E1EAD7';
   return '#E9E1D5';
 }
+
+function CategoryBadge({ category, compact }: { category: string; compact: boolean }) {
+  const palette = getCategoryBadgePalette(category);
+  return <View pointerEvents="none" style={[styles.categoryBadge, compact && styles.categoryBadgeCompact, { backgroundColor: palette.backgroundColor, borderColor: palette.borderColor }]}>
+    <Text numberOfLines={1} style={[styles.categoryBadgeText, { color: palette.color }]}>{icons[category] ?? '📌'} {category}</Text>
+  </View>;
+}
 function formatDistance(distanceKm: number) { return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`; }
 const timelineCardContainerStyle = createTimelineCardContainerStyle();
 
@@ -292,6 +301,12 @@ const styles = {
   transitionMain: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 } as const,
   transitionText: { color: '#475569', fontSize: 11, fontWeight: '600', flexShrink: 1 } as const,
   gripText: { color: '#CBD5E1', fontSize: 23, fontWeight: '800', marginHorizontal: 8 } as const,
+  // The category is rendered once as an outer, position-safe badge. The
+  // legacy inline wrapper remains hidden to avoid duplicate labels.
+  categoryWrap: { display: 'none' } as const,
+  categoryBadge: { position: 'absolute', top: 8, right: 48, zIndex: 4, maxWidth: '42%', flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, minHeight: 24 } as const,
+  categoryBadgeCompact: { right: 48, maxWidth: '46%' } as const,
+  categoryBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3, flexShrink: 1 } as const,
 };
 
 // Compatibility markers retained for previous UI checks: ??銝宏 / ??銝宏 / ?妣 ?? Google Maps 撠

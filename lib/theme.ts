@@ -32,9 +32,11 @@ export const EDITORIAL_COLORS = {
   dangerText: '#944B3C',
 } as const;
 
-// A deeper coffee accent keeps compact mobile controls readable without the
-// yellow cast of the legacy terracotta color.
-export const MOBILE_EARTH = '#6F5846' as const;
+// Vivid but warm enough to fit the editorial palette. Used for selected day
+// tabs and the primary mobile FAB so active controls remain easy to spot.
+export const MOBILE_ACCENT_ORANGE = '#E05D38' as const;
+// Backwards-compatible alias for callers that still use the previous token.
+export const MOBILE_EARTH = MOBILE_ACCENT_ORANGE;
 
 const lightTheme: AppTheme = {
   isDark: false,
