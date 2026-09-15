@@ -10,7 +10,7 @@ export type GeocodingResult = {
   openingHours?: OpeningHours | null;
   provider?: 'osm' | 'google';
   googlePlaceId?: string;
-  /** Google Places photo resource converted to a legacy photo reference. */
+  /** Google Places legacy reference or Places API (New) resource name. */
   photoReference?: string;
   osmType?: 'node' | 'way' | 'relation';
   osmId?: number;

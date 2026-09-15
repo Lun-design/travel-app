@@ -4,7 +4,7 @@
  * The resolver is intentionally side-effect free: cards can calculate a URL
  * during render without making a network request or depending on browser APIs.
  */
-import { fetchGooglePlaceDetails, searchGooglePlacesText } from './google-places';
+import { fetchGooglePlaceDetails, isGooglePhotoResourceName, searchGooglePlacesText } from './google-places';
 
 export type SpotImageCategory = 'food' | 'hotel' | 'flight' | 'spot' | 'trail' | 'outdoor' | string;
 
@@ -202,10 +202,21 @@ function getGooglePhotoApiKey(apiKey?: string): string | null {
   return nonEmpty(apiKey) ?? nonEmpty(configuredKey);
 }
 
-export function getGooglePhotoUrl(reference: string, apiKey?: string): string | null {
+const LEGACY_PHOTO_REFERENCE_PATTERN = /^[A-Za-z0-9._~:-]+$/u;
+
+export function getGooglePhotoUrl(reference: unknown, apiKey?: string): string | null {
   const key = getGooglePhotoApiKey(apiKey);
   const cleanReference = nonEmpty(reference);
   if (!cleanReference || !key) return null;
+  if (/^(?:undefined|null|\[object object\])$/iu.test(cleanReference)) return null;
+
+  if (isGooglePhotoResourceName(cleanReference)) {
+    return `https://places.googleapis.com/v1/${cleanReference}/media?maxWidthPx=400&key=${encodeURIComponent(key)}`;
+  }
+
+  // Legacy references are opaque URL-safe tokens. Reject paths, query
+  // strings, and arbitrary objects before they can produce a guaranteed 400.
+  if (!LEGACY_PHOTO_REFERENCE_PATTERN.test(cleanReference)) return null;
   return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${encodeURIComponent(cleanReference)}&key=${encodeURIComponent(key)}`;
 }
 

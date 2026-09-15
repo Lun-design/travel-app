@@ -31,6 +31,21 @@ describe('spot image resolver', () => {
     );
   });
 
+  it('uses the Places API (New) media endpoint for photo resource names', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    expect(getGooglePhotoUrl('places/ChIJphoto/photos/photo-reference-123')).toBe(
+      'https://places.googleapis.com/v1/places/ChIJphoto/photos/photo-reference-123/media?maxWidthPx=400&key=test-key',
+    );
+  });
+
+  it('rejects invalid photo references before constructing a request URL', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    for (const reference of [null, undefined, { name: 'photo' }, '[object Object]', 'null', 'undefined', 'places/invalid']) {
+      expect(getGooglePhotoUrl(reference)).toBeNull();
+    }
+    expect(getSpotImageUrl({ name: 'Unknown place', photoReference: '[object Object]', category: 'spot' })).not.toContain('googleapis.com');
+  });
+
   it('falls back to a curated exact spot image before category defaults', () => {
     expect(getSpotImageUrl({ name: '關西國際機場', category: 'flight' })).toBe(EXACT_SPOT_MAP['關西國際機場']);
     expect(getSpotImageUrl({ name: '黑門市場', category: 'spot' })).toBe(EXACT_SPOT_MAP['黑門市場']);
@@ -93,8 +108,8 @@ describe('spot image resolver', () => {
     const resolved = await resolveSpotImage({ name: '自訂景點', address: '大阪府大阪市', category: 'spot' });
 
     expect(resolved).toMatchObject({
-      photoReference: 'dynamic-photo-ref',
-      url: 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=dynamic-photo-ref&key=test-key',
+      photoReference: 'places/ChIJdynamic/photos/dynamic-photo-ref',
+      url: 'https://places.googleapis.com/v1/places/ChIJdynamic/photos/dynamic-photo-ref/media?maxWidthPx=400&key=test-key',
     });
     await resolveSpotImage({ name: '自訂景點', address: '大阪府大阪市', category: 'spot' });
     expect(fetchMock).toHaveBeenCalledTimes(1);

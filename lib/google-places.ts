@@ -195,17 +195,37 @@ function normalizePlaceId(value: string) {
   return value.replace(/^places\//, '');
 }
 
+const GOOGLE_PHOTO_RESOURCE_PATTERN = /^places\/[A-Za-z0-9._~-]+\/photos\/[A-Za-z0-9._~-]+$/u;
+const LEGACY_PHOTO_REFERENCE_PATTERN = /^[A-Za-z0-9._~:-]+$/u;
+
+function normalizePhotoValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  if (!normalized || /^(?:undefined|null|\[object object\])$/iu.test(normalized)) return undefined;
+  return normalized;
+}
+
+/** True for the resource name returned by Places API (New). */
+export function isGooglePhotoResourceName(value: unknown): value is string {
+  return typeof value === 'string' && GOOGLE_PHOTO_RESOURCE_PATTERN.test(value.trim());
+}
+
 /**
- * Convert either legacy `photo_reference` or Places (New) photo resource
- * names to the reference accepted by the Maps Photo endpoint.
+ * Convert a Google photo payload into a safe value for our data model. Legacy
+ * references remain opaque tokens; Places API (New) names are intentionally
+ * preserved in full so callers can use the `/media` endpoint rather than the
+ * incompatible legacy Maps Photo endpoint.
  */
 export function extractGooglePhotoReference(photos?: GooglePlacePhotoPayload[] | null): string | undefined {
   const first = photos?.find((photo) => photo && typeof photo === 'object');
   if (!first) return undefined;
-  const value = first.photo_reference?.trim() || first.photoReference?.trim() || first.name?.trim();
-  if (!value) return undefined;
-  const resourceMatch = /\/photos\/([^/]+)/u.exec(value);
-  return resourceMatch?.[1] || value;
+
+  const reference = normalizePhotoValue(first.photo_reference ?? first.photoReference);
+  if (reference && isGooglePhotoResourceName(reference)) return reference;
+  if (reference && LEGACY_PHOTO_REFERENCE_PATTERN.test(reference)) return reference;
+
+  const resourceName = normalizePhotoValue(first.name);
+  return resourceName && isGooglePhotoResourceName(resourceName) ? resourceName : undefined;
 }
 
 async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {
