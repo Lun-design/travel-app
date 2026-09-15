@@ -29,6 +29,14 @@ export const SPOT_IMAGE_FALLBACKS: Record<string, string> = {
 
 const DEFAULT_FALLBACK = SPOT_IMAGE_FALLBACKS.spot;
 
+const KEYWORD_TAGS: Array<{ pattern: RegExp; tags: string[] }> = [
+  { pattern: /機場|airport|terminal|kix|tpe/i, tags: ['airport'] },
+  { pattern: /市場|餐館|餐廳|美食|食堂|拉麵|燒肉|火鍋|居酒屋|道頓堀|黑門/i, tags: ['japan', 'food'] },
+  { pattern: /飯店|酒店|住宿|旅館|hotel|inn/i, tags: ['hotel'] },
+  { pattern: /公園|步道|海邊|沙灘|農場|露營|自然|山|湖|park|trail|beach|nature/i, tags: ['japan', 'nature'] },
+  { pattern: /塔|城|寺|神社|古蹟|展覽|博物館|地標|tower|temple|museum|landmark/i, tags: ['japan', 'landmark'] },
+];
+
 function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -43,6 +51,19 @@ export function getSpotImageFallback(category?: SpotImageCategory | null): strin
   return SPOT_IMAGE_FALLBACKS[categoryKey(category)] ?? DEFAULT_FALLBACK;
 }
 
+/** Convert free-form spot text into a small set of stable LoremFlickr tags. */
+export function getSpotImageTags(spot: Pick<SpotImageInput, 'name' | 'location_name' | 'address' | 'category'>): string[] {
+  const text = [spot.name, spot.location_name, spot.address].filter(Boolean).join(' ');
+  const match = KEYWORD_TAGS.find(({ pattern }) => pattern.test(text));
+  if (match) return match.tags;
+  const category = categoryKey(spot.category);
+  if (category === 'food') return ['japan', 'food'];
+  if (category === 'hotel') return ['hotel'];
+  if (category === 'flight') return ['airport'];
+  if (category === 'trail' || category === 'outdoor') return ['japan', 'nature'];
+  return ['travel'];
+}
+
 function getGooglePhotoUrl(reference: string): string | null {
   const key = typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY : undefined;
   if (!key) return null;
@@ -54,7 +75,7 @@ function getGooglePhotoUrl(reference: string): string | null {
  *
  * Existing uploads/API values always win. For a Google Places photo reference
  * we use the Places Photo endpoint when a public key is configured; otherwise
- * a deterministic Unsplash Source query gives the card a useful image without
+ * a deterministic LoremFlickr query gives the card a useful image without
  * requiring another API call. The UI should still handle an image load error
  * and show its local category icon.
  */
@@ -75,7 +96,6 @@ export function getSpotImageUrl(spot: SpotImageInput | null | undefined): string
   const category = categoryKey(spot.category);
   // A category alone is too broad for a useful destination image; use the
   // curated category asset until a spot name/address is available.
-  const query = [name, address, name || address ? category : null].filter(Boolean).join(' ');
-  if (query) return `https://source.unsplash.com/featured/300x300/?${encodeURIComponent(query)}`;
+  if (name || address) return `https://loremflickr.com/300/300/${getSpotImageTags({ name, address, category }).join(',')}`;
   return getSpotImageFallback(category);
 }
