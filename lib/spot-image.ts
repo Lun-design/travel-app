@@ -7,6 +7,8 @@
 export type SpotImageCategory = 'food' | 'hotel' | 'flight' | 'spot' | 'trail' | 'outdoor' | string;
 
 export type SpotImageInput = {
+  id?: string | number | null;
+  index?: number | null;
   name?: string | null;
   location_name?: string | null;
   address?: string | null;
@@ -27,6 +29,51 @@ export const SPOT_IMAGE_FALLBACKS: Record<string, string> = {
   outdoor: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=300&h=300&fit=crop&auto=format',
 };
 
+const curatedUnsplash = (photoId: string) =>
+  `https://images.unsplash.com/${photoId}?w=300&h=300&fit=crop&auto=format`;
+
+/** Stable variants used to avoid repeating one generic image for every spot. */
+export const SPOT_IMAGE_FALLBACK_VARIANTS: Record<string, string[]> = {
+  food: [
+    SPOT_IMAGE_FALLBACKS.food,
+    curatedUnsplash('photo-1517248135467-4c7edcad34c4'),
+    curatedUnsplash('photo-1547592180-85f173990554'),
+  ],
+  hotel: [
+    SPOT_IMAGE_FALLBACKS.hotel,
+    curatedUnsplash('photo-1564501049412-61c2a3083791'),
+    curatedUnsplash('photo-1582719478250-c89cae4dc85b'),
+  ],
+  flight: [
+    SPOT_IMAGE_FALLBACKS.flight,
+    curatedUnsplash('photo-1529070538774-1843cb3265df'),
+    curatedUnsplash('photo-1542296332-2e4473faf563'),
+  ],
+  spot: [
+    SPOT_IMAGE_FALLBACKS.spot,
+    curatedUnsplash('photo-1476514525535-07fb3b4ae5f1'),
+    curatedUnsplash('photo-1522083165195-3424ed129620'),
+  ],
+  trail: [
+    SPOT_IMAGE_FALLBACKS.trail,
+    curatedUnsplash('photo-1441974231531-c6227db76b6e'),
+    curatedUnsplash('photo-1501854140801-50d01698950b'),
+  ],
+  outdoor: [
+    SPOT_IMAGE_FALLBACKS.outdoor,
+    curatedUnsplash('photo-1511497584788-876760111969'),
+    curatedUnsplash('photo-1473445361085-b9a07f55608b'),
+  ],
+};
+
+const EXACT_SPOT_IMAGES = {
+  market: curatedUnsplash('photo-1504674900247-0877df9cc836'),
+  dotonbori: curatedUnsplash('photo-1493976040374-85c8e12f0c0e'),
+  umeda: curatedUnsplash('photo-1519501025264-65ba15a82390'),
+  city: curatedUnsplash('photo-1540959733332-eab4deabeeaf'),
+  coffee: curatedUnsplash('photo-1495474472287-4d71bcdd2085'),
+};
+
 const DEFAULT_FALLBACK = SPOT_IMAGE_FALLBACKS.spot;
 
 /**
@@ -39,15 +86,20 @@ export const EXACT_SPOT_MAP: Record<string, string> = {
   關西國際機場: SPOT_IMAGE_FALLBACKS.flight,
   関西国際空港: SPOT_IMAGE_FALLBACKS.flight,
   'kansai international airport': SPOT_IMAGE_FALLBACKS.flight,
-  黑門市場: SPOT_IMAGE_FALLBACKS.food,
-  黒門市場: SPOT_IMAGE_FALLBACKS.food,
-  'kuromon market': SPOT_IMAGE_FALLBACKS.food,
-  難波: SPOT_IMAGE_FALLBACKS.spot,
-  namba: SPOT_IMAGE_FALLBACKS.spot,
-  道頓堀: SPOT_IMAGE_FALLBACKS.food,
-  dotonbori: SPOT_IMAGE_FALLBACKS.food,
-  梅田: SPOT_IMAGE_FALLBACKS.spot,
-  umeda: SPOT_IMAGE_FALLBACKS.spot,
+  黑門市場: EXACT_SPOT_IMAGES.market,
+  黒門市場: EXACT_SPOT_IMAGES.market,
+  'kuromon market': EXACT_SPOT_IMAGES.market,
+  '黑門市場海鮮': EXACT_SPOT_IMAGES.market,
+  難波: EXACT_SPOT_IMAGES.city,
+  namba: EXACT_SPOT_IMAGES.city,
+  道頓堀: EXACT_SPOT_IMAGES.dotonbori,
+  dotonbori: EXACT_SPOT_IMAGES.dotonbori,
+  固力果: EXACT_SPOT_IMAGES.dotonbori,
+  戎橋: EXACT_SPOT_IMAGES.dotonbori,
+  梅田: EXACT_SPOT_IMAGES.umeda,
+  umeda: EXACT_SPOT_IMAGES.umeda,
+  lucua: EXACT_SPOT_IMAGES.umeda,
+  'grand front': EXACT_SPOT_IMAGES.umeda,
   心齋橋: SPOT_IMAGE_FALLBACKS.spot,
   心斎橋: SPOT_IMAGE_FALLBACKS.spot,
   shinsaibashi: SPOT_IMAGE_FALLBACKS.spot,
@@ -69,6 +121,15 @@ export const EXACT_SPOT_MAP: Record<string, string> = {
   住吉大社: SPOT_IMAGE_FALLBACKS.spot,
   大丸: SPOT_IMAGE_FALLBACKS.spot,
   'lucua osaka': SPOT_IMAGE_FALLBACKS.spot,
+  飯店: SPOT_IMAGE_FALLBACKS.hotel,
+  辦理入住: SPOT_IMAGE_FALLBACKS.hotel,
+  退房: SPOT_IMAGE_FALLBACKS.hotel,
+  hotel: SPOT_IMAGE_FALLBACKS.hotel,
+  咖啡廳: EXACT_SPOT_IMAGES.coffee,
+  咖啡店: EXACT_SPOT_IMAGES.coffee,
+  咖啡: EXACT_SPOT_IMAGES.coffee,
+  cafe: EXACT_SPOT_IMAGES.coffee,
+  休息: EXACT_SPOT_IMAGES.coffee,
 };
 
 const KEYWORD_TAGS: Array<{ pattern: RegExp; tags: string[] }> = [
@@ -140,6 +201,29 @@ function getExactSpotImage(spot: SpotImageInput): string | null {
   return null;
 }
 
+function spotSeed(spot: SpotImageInput): string | null {
+  if (typeof spot.id === 'number' && Number.isFinite(spot.id)) return String(spot.id);
+  return nonEmpty(spot.id) ?? nonEmpty(spot.name) ?? nonEmpty(spot.location_name) ?? nonEmpty(spot.address);
+}
+
+/** A small deterministic hash; unlike Math.random it remains stable per spot. */
+function hashSpotSeed(seed: string, index: number): number {
+  let hash = 0;
+  for (const character of `${seed}:${index}`) {
+    hash = (hash * 31 + character.codePointAt(0)!) >>> 0;
+  }
+  return hash;
+}
+
+function getHashedFallback(spot: SpotImageInput): string {
+  const category = categoryKey(spot.category);
+  const variants = SPOT_IMAGE_FALLBACK_VARIANTS[category] ?? SPOT_IMAGE_FALLBACK_VARIANTS.spot;
+  const seed = spotSeed(spot);
+  if (!seed || variants.length <= 1) return variants[0] ?? getSpotImageFallback(category);
+  const index = typeof spot.index === 'number' && Number.isFinite(spot.index) ? spot.index : 0;
+  return variants[hashSpotSeed(seed, index) % variants.length] ?? variants[0] ?? getSpotImageFallback(category);
+}
+
 /**
  * Resolve an itinerary spot to an image URL.
  *
@@ -164,5 +248,5 @@ export function getSpotImageUrl(spot: SpotImageInput | null | undefined): string
   const exactImage = getExactSpotImage(spot);
   if (exactImage) return exactImage;
 
-  return getSpotImageFallback(spot.category);
+  return getHashedFallback(spot);
 }

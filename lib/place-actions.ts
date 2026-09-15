@@ -10,5 +10,6 @@ export {
   getGooglePhotoUrl,
   getSpotImageFallback,
   getSpotImageUrl,
+  SPOT_IMAGE_FALLBACK_VARIANTS,
   SPOT_IMAGE_FALLBACKS,
 } from './spot-image';

@@ -5,6 +5,7 @@ import {
   getSpotImageFallback,
   getSpotImageTags,
   getSpotImageUrl,
+  SPOT_IMAGE_FALLBACK_VARIANTS,
   SPOT_IMAGE_FALLBACKS,
 } from '../lib/spot-image';
 
@@ -33,18 +34,33 @@ describe('spot image resolver', () => {
     expect(getSpotImageUrl({ name: '黑門市場', category: 'spot' })).toBe(EXACT_SPOT_MAP['黑門市場']);
   });
 
+  it('matches destination aliases embedded in a longer spot name', () => {
+    expect(getSpotImageUrl({ name: '黑門市場早午餐' })).toBe(EXACT_SPOT_MAP['黑門市場']);
+    expect(getSpotImageUrl({ name: '固力果跑者招牌與戎橋夜景' })).toBe(EXACT_SPOT_MAP['道頓堀']);
+    expect(getSpotImageUrl({ name: 'LUCUA Osaka 與 Grand Front' })).toBe(EXACT_SPOT_MAP['梅田']);
+    expect(getSpotImageUrl({ name: '飯店辦理入住' })).toBe(EXACT_SPOT_MAP['飯店']);
+    expect(getSpotImageUrl({ name: '咖啡廳休息' })).toBe(EXACT_SPOT_MAP['咖啡廳']);
+  });
+
   it('uses a category image for unknown spots and never calls a random image API', () => {
     const url = getSpotImageUrl({ name: '一個不存在的景點', category: 'food' });
-    expect(url).toBe(SPOT_IMAGE_FALLBACKS.food);
+    expect(SPOT_IMAGE_FALLBACK_VARIANTS.food).toContain(url);
     expect(url).not.toContain('loremflickr.com');
     expect(url).not.toContain('source.unsplash.com');
+  });
+
+  it('uses a stable name/id hash to spread unknown spots across category images', () => {
+    const first = getSpotImageUrl({ id: 'spot-a', name: '未命名景點 A', category: 'spot' });
+    const second = getSpotImageUrl({ id: 'spot-b', name: '未命名景點 B', category: 'spot' });
+    expect(first).not.toBe(second);
+    expect(getSpotImageUrl({ id: 'spot-a', name: '未命名景點 A', category: 'spot' })).toBe(first);
   });
 
   it('ignores a photo reference when the public key is unavailable', () => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', '');
     expect(getGooglePhotoUrl('photo-ref')).toBeNull();
-    expect(getSpotImageUrl({ name: '未知景點', photoReference: 'photo-ref', category: 'hotel' })).toBe(
-      SPOT_IMAGE_FALLBACKS.hotel,
+    expect(SPOT_IMAGE_FALLBACK_VARIANTS.hotel).toContain(
+      getSpotImageUrl({ name: '未知景點', photoReference: 'photo-ref', category: 'hotel' }),
     );
   });
 
