@@ -159,6 +159,28 @@ export function getSpotImageFallback(category?: SpotImageCategory | null): strin
   return SPOT_IMAGE_FALLBACKS[categoryKey(category)] ?? DEFAULT_FALLBACK;
 }
 
+/**
+ * Pick a deterministic static image after a remote image has failed to load.
+ *
+ * This helper deliberately ignores the spot's explicit/remote URL.  A failed
+ * URL must never be returned again (otherwise React Native/Web will keep
+ * rendering the broken-image placeholder).  Curated destination images are
+ * preferred, then the hashed category variants provide a stable alternative.
+ */
+export function getSpotImageFallbackUrl(spot: SpotImageInput | null | undefined, failedUrl?: string | null): string {
+  const failed = nonEmpty(failedUrl);
+  if (!spot) return getSpotImageFallback('spot');
+
+  const exact = getExactSpotImage(spot);
+  if (exact && exact !== failed) return exact;
+
+  const category = categoryKey(spot.category);
+  const variants = SPOT_IMAGE_FALLBACK_VARIANTS[category] ?? SPOT_IMAGE_FALLBACK_VARIANTS.spot;
+  const preferred = getHashedFallback(spot);
+  const candidates = [preferred, ...variants].filter((url, index, all) => url && all.indexOf(url) === index && url !== failed);
+  return candidates[0] ?? variants.find((url) => url !== failed) ?? getSpotImageFallback(category);
+}
+
 /** Convert free-form spot text into stable category tags for presentation. */
 export function getSpotImageTags(spot: Pick<SpotImageInput, 'name' | 'location_name' | 'address' | 'category'>): string[] {
   const text = [spot.name, spot.location_name, spot.address].filter(Boolean).join(' ');
@@ -301,7 +323,8 @@ export async function resolveSpotImageUrl(spot: SpotImageInput | null | undefine
  * we use the Places Photo endpoint when a public key is configured. If the
  * reference is unavailable or not configured, a curated destination image is
  * preferred, followed by a stable category image. The UI should still handle
- * an image load error and show its local category icon.
+ * an image load error with getSpotImageFallbackUrl and finally show its local
+ * category icon if every static image is unavailable.
  */
 export function getSpotImageUrl(spot: SpotImageInput | null | undefined): string {
   if (!spot) return DEFAULT_FALLBACK;

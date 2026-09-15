@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Linking, Modal, Pressable, Share, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { buildRouteSegments, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
 import { tripDateForDay } from '@/lib/trip-dates';
@@ -14,7 +14,7 @@ import { PuppyMascot } from './PuppyMascot';
 import { areTimelineCardPropsEqual, createTimelineCardContainerStyle, MOBILE_GRIP_CONFIG } from '@/lib/drag-drop';
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
 import { reservationTagLabels } from '@/lib/reservation-tags';
-import { getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
+import { getSpotImageFallbackUrl, getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
 
 const icons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
 export type ItineraryTimelineProps = {
@@ -165,14 +165,18 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));
   const [favorite, setFavorite] = useState(false);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const imageFallbackAttemptedRef = useRef(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [routeModesVisible, setRouteModesVisible] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setImageLoadFailed(false);
+    imageFallbackAttemptedRef.current = false;
     setResolvedImageUrl(getSpotImageUrl(item));
     void resolveSpotImage(item).then((resolved) => {
-      if (!cancelled) setResolvedImageUrl(resolved.url);
+      // Keep the fallback when a remote URL has already failed instead of
+      // racing the failed request back into the image element.
+      if (!cancelled && !imageFallbackAttemptedRef.current) setResolvedImageUrl(resolved.url);
     });
     return () => {
       cancelled = true;
@@ -189,7 +193,17 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
           </View> : null}
           <View style={styles.cardBody}>
             {grip}
-            {!imageLoadFailed && resolvedImageUrl ? <Image source={{ uri: resolvedImageUrl }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} onError={() => setImageLoadFailed(true)} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><Text style={cardVisualStyles.icon}>{icons[item.category] ?? '📍'}</Text></View>}
+            {!imageLoadFailed && resolvedImageUrl ? <Image source={{ uri: resolvedImageUrl }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} onError={() => {
+              if (!imageFallbackAttemptedRef.current) {
+                imageFallbackAttemptedRef.current = true;
+                setResolvedImageUrl(getSpotImageFallbackUrl(item, resolvedImageUrl));
+                return;
+              }
+              // A second failure means even the static CDN is unavailable;
+              // the local category badge is guaranteed not to show a broken
+              // image glyph.
+              setImageLoadFailed(true);
+            }} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><Text style={cardVisualStyles.icon}>{icons[item.category] ?? '📍'}</Text></View>}
             <View style={[styles.content, { gap: 8 }]}>
               <View style={[styles.cardHeader, isMobile && responsiveCardStyles.cardHeaderMobile]}><Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>{isMobile ? <View style={[styles.categoryWrap, responsiveCardStyles.mobileCategoryWrap]}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View> : <><Text numberOfLines={1} style={[styles.name, cardVisualStyles.headerName, { color: '#1A1A1A', fontSize: 17, fontWeight: '700' }]}>{item.location_name}</Text><View style={styles.categoryWrap}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View></> }</View>{isMobile ? <Text style={[styles.name, responsiveCardStyles.mobileName, { color: '#1A1A1A' }]}>{item.location_name}</Text> : null}
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}

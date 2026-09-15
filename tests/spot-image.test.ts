@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   EXACT_SPOT_MAP,
   getGooglePhotoUrl,
+  getSpotImageFallbackUrl,
   getSpotImageFallback,
   getSpotImageTags,
   getSpotImageUrl,
@@ -50,6 +51,14 @@ describe('spot image resolver', () => {
     expect(url).not.toContain('source.unsplash.com');
   });
 
+  it('keeps curated map URLs on the stable Unsplash CDN', () => {
+    for (const url of Object.values(EXACT_SPOT_MAP)) {
+      expect(url).toMatch(/^https:\/\/images\.unsplash\.com\/photo-/);
+      expect(url).not.toContain('source.unsplash.com');
+      expect(url).not.toContain('loremflickr.com');
+    }
+  });
+
   it('uses a stable name/id hash to spread unknown spots across category images', () => {
     const first = getSpotImageUrl({ id: 'spot-a', name: '未命名景點 A', category: 'spot' });
     const second = getSpotImageUrl({ id: 'spot-b', name: '未命名景點 B', category: 'spot' });
@@ -91,6 +100,17 @@ describe('spot image resolver', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('falls back without throwing when Places Photo lookup is rejected', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: 'forbidden' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolveSpotImage({ name: 'Unknown hotel', address: 'Osaka hotel address', category: 'hotel' });
+
+    expect(SPOT_IMAGE_FALLBACK_VARIANTS.hotel).toContain(resolved.url);
+    expect(resolved.photoReference).toBeNull();
+  });
+
   it('maps common destination keywords to stable image tags', () => {
     expect(getSpotImageTags({ name: '關西國際機場', category: 'flight' })).toEqual(['airport']);
     expect(getSpotImageTags({ name: '黑門市場', category: 'spot' })).toEqual(['japan', 'food']);
@@ -101,5 +121,21 @@ describe('spot image resolver', () => {
     expect(getSpotImageUrl({ category: 'food' })).toBe(SPOT_IMAGE_FALLBACKS.food);
     expect(getSpotImageFallback('hotel')).toBe(SPOT_IMAGE_FALLBACKS.hotel);
     expect(getSpotImageFallback('unknown-category')).toBe(SPOT_IMAGE_FALLBACKS.spot);
+  });
+
+  it('returns a stable non-failed image when a remote photo fails to load', () => {
+    const failedGoogleUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=bad&key=test-key';
+    const fallback = getSpotImageFallbackUrl({ name: 'Kuromon Market', category: 'food' }, failedGoogleUrl);
+    expect(fallback).toBe(EXACT_SPOT_MAP['kuromon market']);
+    expect(fallback).not.toBe(failedGoogleUrl);
+    expect(fallback).toMatch(/^https:\/\/images\.unsplash\.com\//);
+  });
+
+  it('skips a failed curated image and selects a different deterministic category variant', () => {
+    const spot = { id: 'unknown-spot', name: 'Unknown place', category: 'food' } as const;
+    const first = getSpotImageUrl(spot);
+    const fallback = getSpotImageFallbackUrl(spot, first);
+    expect(SPOT_IMAGE_FALLBACK_VARIANTS.food).toContain(fallback);
+    expect(fallback).not.toBe(first);
   });
 });
