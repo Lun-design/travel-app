@@ -29,6 +29,48 @@ export const SPOT_IMAGE_FALLBACKS: Record<string, string> = {
 
 const DEFAULT_FALLBACK = SPOT_IMAGE_FALLBACKS.spot;
 
+/**
+ * Curated images for frequently visited destinations.  The keys are kept in
+ * their display language so this table is also useful to callers that want to
+ * inspect or override a specific destination.  Values are stable Unsplash
+ * CDN URLs (never a random image endpoint).
+ */
+export const EXACT_SPOT_MAP: Record<string, string> = {
+  關西國際機場: SPOT_IMAGE_FALLBACKS.flight,
+  関西国際空港: SPOT_IMAGE_FALLBACKS.flight,
+  'kansai international airport': SPOT_IMAGE_FALLBACKS.flight,
+  黑門市場: SPOT_IMAGE_FALLBACKS.food,
+  黒門市場: SPOT_IMAGE_FALLBACKS.food,
+  'kuromon market': SPOT_IMAGE_FALLBACKS.food,
+  難波: SPOT_IMAGE_FALLBACKS.spot,
+  namba: SPOT_IMAGE_FALLBACKS.spot,
+  道頓堀: SPOT_IMAGE_FALLBACKS.food,
+  dotonbori: SPOT_IMAGE_FALLBACKS.food,
+  梅田: SPOT_IMAGE_FALLBACKS.spot,
+  umeda: SPOT_IMAGE_FALLBACKS.spot,
+  心齋橋: SPOT_IMAGE_FALLBACKS.spot,
+  心斎橋: SPOT_IMAGE_FALLBACKS.spot,
+  shinsaibashi: SPOT_IMAGE_FALLBACKS.spot,
+  大阪城: SPOT_IMAGE_FALLBACKS.spot,
+  'osaka castle': SPOT_IMAGE_FALLBACKS.spot,
+  通天閣: SPOT_IMAGE_FALLBACKS.spot,
+  tsutenkaku: SPOT_IMAGE_FALLBACKS.spot,
+  清水寺: SPOT_IMAGE_FALLBACKS.spot,
+  'kiyomizu dera': SPOT_IMAGE_FALLBACKS.spot,
+  東京鐵塔: SPOT_IMAGE_FALLBACKS.spot,
+  東京タワー: SPOT_IMAGE_FALLBACKS.spot,
+  'tokyo tower': SPOT_IMAGE_FALLBACKS.spot,
+  環球影城: SPOT_IMAGE_FALLBACKS.spot,
+  'universal studios japan': SPOT_IMAGE_FALLBACKS.spot,
+  usj: SPOT_IMAGE_FALLBACKS.spot,
+  梅田空中庭園: SPOT_IMAGE_FALLBACKS.spot,
+  海遊館: SPOT_IMAGE_FALLBACKS.spot,
+  天保山: SPOT_IMAGE_FALLBACKS.spot,
+  住吉大社: SPOT_IMAGE_FALLBACKS.spot,
+  大丸: SPOT_IMAGE_FALLBACKS.spot,
+  'lucua osaka': SPOT_IMAGE_FALLBACKS.spot,
+};
+
 const KEYWORD_TAGS: Array<{ pattern: RegExp; tags: string[] }> = [
   { pattern: /機場|airport|terminal|kix|tpe/i, tags: ['airport'] },
   { pattern: /市場|餐館|餐廳|美食|食堂|拉麵|燒肉|火鍋|居酒屋|道頓堀|黑門/i, tags: ['japan', 'food'] },
@@ -51,7 +93,7 @@ export function getSpotImageFallback(category?: SpotImageCategory | null): strin
   return SPOT_IMAGE_FALLBACKS[categoryKey(category)] ?? DEFAULT_FALLBACK;
 }
 
-/** Convert free-form spot text into a small set of stable LoremFlickr tags. */
+/** Convert free-form spot text into stable category tags for presentation. */
 export function getSpotImageTags(spot: Pick<SpotImageInput, 'name' | 'location_name' | 'address' | 'category'>): string[] {
   const text = [spot.name, spot.location_name, spot.address].filter(Boolean).join(' ');
   const match = KEYWORD_TAGS.find(({ pattern }) => pattern.test(text));
@@ -64,20 +106,48 @@ export function getSpotImageTags(spot: Pick<SpotImageInput, 'name' | 'location_n
   return ['travel'];
 }
 
-function getGooglePhotoUrl(reference: string): string | null {
-  const key = typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY : undefined;
-  if (!key) return null;
-  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photo_reference=${encodeURIComponent(reference)}&key=${encodeURIComponent(key)}`;
+/** Build a Google Places Photo URL when a reference and public API key exist. */
+export function getGooglePhotoUrl(reference: string): string | null {
+  const key =
+    typeof process !== 'undefined'
+      ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+      : undefined;
+  const cleanReference = nonEmpty(reference);
+  const cleanKey = nonEmpty(key);
+  if (!cleanReference || !cleanKey) return null;
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=300&photo_reference=${encodeURIComponent(cleanReference)}&key=${encodeURIComponent(cleanKey)}`;
+}
+
+function normalizeSpotText(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .replace(/[\p{P}\p{S}\s]+/gu, '');
+}
+
+function getExactSpotImage(spot: SpotImageInput): string | null {
+  const candidates = [nonEmpty(spot.name), nonEmpty(spot.location_name), nonEmpty(spot.address)].filter(
+    (value): value is string => Boolean(value),
+  );
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeSpotText(candidate);
+    if (!normalizedCandidate) continue;
+    const match = Object.entries(EXACT_SPOT_MAP).find(([name]) => {
+      const normalizedName = normalizeSpotText(name);
+      return normalizedCandidate.includes(normalizedName) || normalizedName.includes(normalizedCandidate);
+    });
+    if (match) return match[1];
+  }
+  return null;
 }
 
 /**
  * Resolve an itinerary spot to an image URL.
  *
  * Existing uploads/API values always win. For a Google Places photo reference
- * we use the Places Photo endpoint when a public key is configured; otherwise
- * a deterministic LoremFlickr query gives the card a useful image without
- * requiring another API call. The UI should still handle an image load error
- * and show its local category icon.
+ * we use the Places Photo endpoint when a public key is configured. If the
+ * reference is unavailable or not configured, a curated destination image is
+ * preferred, followed by a stable category image. The UI should still handle
+ * an image load error and show its local category icon.
  */
 export function getSpotImageUrl(spot: SpotImageInput | null | undefined): string {
   if (!spot) return DEFAULT_FALLBACK;
@@ -91,11 +161,8 @@ export function getSpotImageUrl(spot: SpotImageInput | null | undefined): string
     if (googlePhoto) return googlePhoto;
   }
 
-  const name = nonEmpty(spot.name) ?? nonEmpty(spot.location_name);
-  const address = nonEmpty(spot.address);
-  const category = categoryKey(spot.category);
-  // A category alone is too broad for a useful destination image; use the
-  // curated category asset until a spot name/address is available.
-  if (name || address) return `https://loremflickr.com/300/300/${getSpotImageTags({ name, address, category }).join(',')}`;
-  return getSpotImageFallback(category);
+  const exactImage = getExactSpotImage(spot);
+  if (exactImage) return exactImage;
+
+  return getSpotImageFallback(spot.category);
 }

@@ -5,4 +5,10 @@ export function formatPlaceAddress(address: string | null | undefined): string |
 
 // Keep image resolution discoverable alongside the other place presentation
 // helpers while the implementation remains independently testable.
-export { getSpotImageFallback, getSpotImageUrl, SPOT_IMAGE_FALLBACKS } from './spot-image';
+export {
+  EXACT_SPOT_MAP,
+  getGooglePhotoUrl,
+  getSpotImageFallback,
+  getSpotImageUrl,
+  SPOT_IMAGE_FALLBACKS,
+} from './spot-image';
