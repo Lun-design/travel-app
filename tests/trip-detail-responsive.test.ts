@@ -43,6 +43,26 @@ describe('trip detail responsive layout', () => {
     });
   });
 
+  it('keeps the web safe-area chrome aligned with the itinerary background', () => {
+    const html = readFileSync(projectFile('src', 'app', '+html.tsx'), 'utf8');
+    expect(html).toContain('<meta name="theme-color" content="#FAFAFA" />');
+    expect(html).toContain("<body style={{ margin: 0, backgroundColor: '#FAFAFA' }}>{children}</body>");
+  });
+
+  it('protects mobile timeline header controls from the card edge', () => {
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    expect(timeline).toContain('safeCardContentStyle = { paddingRight: 42 }');
+    expect(timeline).toContain('cardHeaderMobile: { justifyContent: \'flex-start\', flexWrap: \'nowrap\', paddingRight: 42');
+    expect(timeline).toContain('mobileCategoryWrap: { marginLeft: \'auto\', marginRight: 4');
+  });
+
+  it('keeps a bottom scroll inset for the floating add-spot action', () => {
+    const viewport = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelineViewport.tsx'), 'utf8');
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+    expect(viewport).toContain('paddingBottom: 100');
+    expect(detail).toContain('mainContent: { width: \'100%\', flexGrow: 1, paddingBottom: 100 }');
+  });
+
   it('keeps the roomy desktop spacing above the compact breakpoint', async () => {
     const { getTripDetailLayout } = await import('../lib/trip-detail-layout');
     expect(getTripDetailLayout(800)).toMatchObject({

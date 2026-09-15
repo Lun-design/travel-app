@@ -20,8 +20,8 @@ describe('editorial visual system', () => {
   });
 
   it('keeps web metadata aligned with the editorial theme', () => {
-    expect(read('src/app/+html.tsx')).toContain('content="#9A6A45"');
-    expect(read('app.json')).toContain('"themeColor": "#9A6A45"');
-    expect(read('app.json')).toContain('"backgroundColor": "#F8F6F0"');
+    expect(read('src/app/+html.tsx')).toContain('content="#FAFAFA"');
+    expect(read('app.json')).toContain('"themeColor": "#FAFAFA"');
+    expect(read('app.json')).toContain('"backgroundColor": "#FAFAFA"');
   });
 });

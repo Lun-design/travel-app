@@ -204,7 +204,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               // image glyph.
               setImageLoadFailed(true);
             }} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><Text style={cardVisualStyles.icon}>{icons[item.category] ?? '📍'}</Text></View>}
-            <View style={[styles.content, { gap: 8 }]}>
+            <View style={[styles.content, isMobile ? null : safeCardContentStyle, { gap: 8 }]}>
               <View style={[styles.cardHeader, isMobile && responsiveCardStyles.cardHeaderMobile]}><Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>{isMobile ? <View style={[styles.categoryWrap, responsiveCardStyles.mobileCategoryWrap]}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View> : <><Text numberOfLines={1} style={[styles.name, cardVisualStyles.headerName, { color: '#1A1A1A', fontSize: 17, fontWeight: '700' }]}>{item.location_name}</Text><View style={styles.categoryWrap}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View></> }</View>{isMobile ? <Text style={[styles.name, responsiveCardStyles.mobileName, { color: '#1A1A1A' }]}>{item.location_name}</Text> : null}
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
               {weather && isWeatherAlert(weather) ? <View style={[styles.weatherAlerts, compactStyles.hidden]}>{weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘／降雨預警</Text> : null}{weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}</View> : null}
@@ -267,10 +267,12 @@ const cardVisualStyles = StyleSheet.create({
   headerName: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '700' },
 });
 const responsiveCardStyles = StyleSheet.create({
-  cardHeaderMobile: { justifyContent: 'flex-start', flexWrap: 'nowrap', paddingRight: 34, gap: 8 },
-  mobileCategoryWrap: { marginLeft: 'auto', maxWidth: '50%', flexShrink: 1 },
+  cardHeaderMobile: { justifyContent: 'flex-start', flexWrap: 'nowrap', paddingRight: 42, gap: 8 },
+  mobileCategoryWrap: { marginLeft: 'auto', marginRight: 4, maxWidth: '50%', flexShrink: 1 },
   mobileName: { width: '100%', flexGrow: 0, flexShrink: 0, fontSize: 17, fontWeight: '700', lineHeight: 23, marginTop: 2 },
 });
+// Keep the card content clear of the absolute more-options trigger on narrow screens.
+const safeCardContentStyle = { paddingRight: 42 } as const;
 function categoryTint(category: string): string {
   if (category === 'food') return '#F3DCCB';
   if (category === 'hotel') return '#DDE9E2';

@@ -26,8 +26,8 @@
       "startUrl": "/",
       "scope": "/",
       "display": "standalone",
-      "backgroundColor": "#F8F6F0",
-      "themeColor": "#9A6A45",
+      "backgroundColor": "#FAFAFA",
+      "themeColor": "#FAFAFA",
       "lang": "zh-Hant"
     },
     "plugins": [
