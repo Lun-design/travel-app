@@ -2,3 +2,7 @@ export function formatPlaceAddress(address: string | null | undefined): string |
   const value = typeof address === 'string' ? address.trim() : '';
   return value || null;
 }
+
+// Keep image resolution discoverable alongside the other place presentation
+// helpers while the implementation remains independently testable.
+export { getSpotImageFallback, getSpotImageUrl, SPOT_IMAGE_FALLBACKS } from './spot-image';

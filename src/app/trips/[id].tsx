@@ -264,12 +264,12 @@ export default function TripDetailScreen() {
     }
   }
 
-  if (data.loading && !data.trip) return <View style={[styles.loadingShell, { backgroundColor: theme.colors.background }]}><SkeletonCard variant="header" /><SkeletonCard /><SkeletonCard /></View>;
+  if (data.loading && !data.trip) return <View style={[styles.loadingShell, { backgroundColor: '#FAFAFA' }]}><SkeletonCard variant="header" /><SkeletonCard /><SkeletonCard /></View>;
   if (!data.trip) return <View style={styles.center}><Text style={styles.error}>{data.error || '找不到此行程。'}</Text></View>;
   const trip = data.trip;
   const MainScroll = tab === 'timeline' || tab === 'places' ? ScrollView : View;
 
-  return <ActiveTripContext.Provider value={trip.id}><View style={[styles.container, { backgroundColor: theme.colors.background, paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
+  return <ActiveTripContext.Provider value={trip.id}><View style={[styles.container, { backgroundColor: '#FAFAFA', paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
     <MainScroll style={styles.mainScroll} {...(tab === 'timeline' || tab === 'places' ? { contentContainerStyle: styles.mainContent, keyboardShouldPersistTaps: 'handled' as const } : {})}>
     <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onShare={() => setShareVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
      {/* Offline state replaces the legacy offlineBar: 📡 離線模式：已載入快取行程 */}
