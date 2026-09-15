@@ -181,7 +181,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               </View>
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
               {weather && isWeatherAlert(weather) ? <View style={[styles.weatherAlerts, compactStyles.hidden]}>{weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘／降雨預警</Text> : null}{weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}</View> : null}
-              <View style={cardMenuStyles.triggerRow}><Text style={[styles.name, compactStyles.hidden, { color: theme.colors.text }]}>{item.location_name}</Text><Pressable accessibilityRole="button" accessibilityLabel="景點更多操作" style={cardMenuStyles.trigger} onPress={() => setMenuVisible(true)}><Text style={cardMenuStyles.triggerText}>···</Text></Pressable></View>
+              <View style={cardMenuStyles.triggerRow}><Text style={[styles.name, compactStyles.hidden, { color: theme.colors.text }]}>{item.location_name}</Text><Pressable accessibilityRole="button" accessibilityLabel="景點更多操作" style={cardMenuStyles.trigger} onPress={() => setMenuVisible(true)}><MoreHorizontalIcon /></Pressable></View>
               <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}><Pressable style={cardMenuStyles.backdrop} onPress={() => setMenuVisible(false)}><View style={cardMenuStyles.menu}><Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onEdit(item); }}><Text style={cardMenuStyles.text}>編輯景點</Text></Pressable>{onMoveUp ? <Pressable style={cardMenuStyles.item} disabled={!canMoveUp} onPress={() => { setMenuVisible(false); onMoveUp(); }}><Text style={[cardMenuStyles.text, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}{onMoveDown ? <Pressable style={cardMenuStyles.item} disabled={!canMoveDown} onPress={() => { setMenuVisible(false); onMoveDown(); }}><Text style={[cardMenuStyles.text, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onDelete(item); }}><Text style={cardMenuStyles.danger}>刪除景點</Text></Pressable>{placeAddress ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void copyCardText(placeAddress, '地址已複製'); }}><Text style={cardMenuStyles.text}>複製地址</Text></Pressable> : null}{navigationUrl ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={cardMenuStyles.text}>開啟導航</Text></Pressable> : null}{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onPreviewVoucher(itemVouchers[0]); }}><Text style={cardMenuStyles.text}>🎫 檢視票券</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setFavorite((current) => !current); setMenuVisible(false); }}><Text style={cardMenuStyles.text}>{favorite ? '取消收藏' : '加入收藏'}</Text></Pressable></View></Pressable></Modal>
               {reservationTagLabels(item.reservation_tags).length > 0 ? <View style={reservationTagStyles.reservationTags}>{reservationTagLabels(item.reservation_tags).map((label) => <Text key={label} style={[reservationTagStyles.reservationTag, { color: theme.colors.primary, borderColor: theme.colors.border }]}>{label}</Text>)}</View> : null}
               <Text style={[styles.duration, { color: theme.colors.muted }]}>停留 {duration} 分鐘 · 離開 {scheduled?.departureTime ?? '—'}</Text>
@@ -219,15 +219,18 @@ const reservationTagStyles = StyleSheet.create({
   reservationTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 2 },
   reservationTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800' },
 });
+function MoreHorizontalIcon() {
+  return <View accessibilityLabel="更多" style={moreIconStyles.icon}>{[0, 1, 2].map((dot) => <View key={dot} style={moreIconStyles.dot} />)}</View>;
+}
+const moreIconStyles = StyleSheet.create({ icon: { width: 18, height: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#94A3B8' } });
 const cardMenuStyles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(31,31,31,.28)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  menu: { width: 240, backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 6 },
-  item: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 9 },
-  text: { color: EDITORIAL_COLORS.charcoal, fontSize: 14, fontWeight: '700' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(31,31,31,.18)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  menu: { width: 160, backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 6 },
+  item: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 8 },
+  text: { color: '#475569', fontSize: 13, fontWeight: '600' },
   danger: { color: EDITORIAL_COLORS.dangerText, fontSize: 14, fontWeight: '700' },
-  triggerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  trigger: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  triggerText: { color: EDITORIAL_COLORS.taupe, fontSize: 22, fontWeight: '900' },
+  triggerRow: { position: 'absolute', top: 4, right: 4, zIndex: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  trigger: { minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
 });
 const compactStyles = StyleSheet.create({ hidden: { display: 'none' } });
 const cardVisualStyles = StyleSheet.create({
