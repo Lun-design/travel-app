@@ -58,6 +58,8 @@ async function write(tripId: string, mode: ImportMode | 'clear', items: Imported
 export async function runItineraryImport(input: { tripId: string; mode: ImportMode; items: ImportedItineraryPayload[]; destination: string; dayCount: number }, deps: { search: ImportSearch; rpc: ImportRpc }) {
   const cleanItems = sanitizeImportItems(input.items);
   if (!cleanItems.length || cleanItems.some(item => !item.location_name.trim())) throw new Error('沒有可匯入的景點，既有行程未變更。');
+  if (cleanItems.some(item => !Number.isInteger(item.day_number) || item.day_number < 1)) throw new Error('匯入資料包含無效的天數。');
+  console.debug('[ItineraryImport] clean payload days', cleanItems.map(item => ({ title: item.location_name, day_number: item.day_number })));
   const enriched = await enrichImportedItems(cleanItems, input.destination, deps.search);
   const result = await write(input.tripId, input.mode, enriched.items, input.dayCount, deps.rpc);
   return { ...result, unresolved: enriched.unresolved };

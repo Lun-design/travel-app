@@ -59,15 +59,6 @@ export function parseImportSource(input: string, source: ImportSource, reference
   return source === 'ics' ? parseIcsCalendar(input) : normalizeImportedText(input, referenceDate);
 }
 
-function dateValue(date: string): number {
-  const value = Date.parse(`${date}T00:00:00Z`);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function dateDifference(from: string, to: string): number {
-  return Math.round((dateValue(to) - dateValue(from)) / 86_400_000);
-}
-
 function cleanText(value: string | undefined | null): string {
   return (value ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -94,12 +85,10 @@ function safeTime(value: string | undefined): string | null {
 
 /** Convert a parsed draft into safe itinerary_items fields for a target trip. */
 export function mapDraftToTargetTrip(draft: ImportedTripDraft, target: ImportTarget): ImportedItineraryPayload[] {
-  const firstDatedDay = draft.days.find((day) => day.date)?.date ?? draft.startDate;
   return draft.days.flatMap((day) => {
-    const relativeDay = day.date && firstDatedDay
-      ? dateDifference(firstDatedDay, day.date) + 1
-      : day.dayNumber;
-    const dayNumber = Math.max(1, Math.round(relativeDay + target.dayOffset));
+    // dayNumber is the parser's canonical structural index. Dates are
+    // metadata and must never overwrite it when importing into another trip.
+    const dayNumber = Math.max(1, Math.trunc(day.dayNumber) + target.dayOffset);
     return day.items
       .map((item): ImportedItineraryPayload | null => {
         const title = cleanText(item.title).replace(/\s*[（(]?建議時間.*$/u, '').trim();
