@@ -12,10 +12,11 @@ export function calculateTimelineMetrics(items: Array<Pick<ItineraryItem, 'latit
     if (Number.isFinite(duration) && duration > 0) stayMinutes += Math.round(duration);
     const latitude = Number(item.latitude);
     const longitude = Number(item.longitude);
-    if (Number.isFinite(latitude) && Number.isFinite(longitude) && previous) {
+    const valid = Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+    if (valid && previous) {
       transportMinutes += calculateFallbackTravelMinutes(haversineDistanceKm(previous, { latitude, longitude }), 'DRIVING');
     }
-    if (Number.isFinite(latitude) && Number.isFinite(longitude)) previous = { latitude, longitude };
+    if (valid) previous = { latitude, longitude };
   }
   return { spotCount: items.length, stayMinutes, transportMinutes };
 }

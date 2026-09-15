@@ -160,11 +160,12 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const placeAddress = formatPlaceAddress(item.address);
   const [favorite, setFavorite] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [routeModesVisible, setRouteModesVisible] = useState(false);
   return (
     <View style={timelineCardContainerStyle}>
       <View style={styles.row}>
-        <View style={styles.rail}><View style={styles.line} /><View style={styles.dot} /></View>
-        <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }, active && styles.cardActive]}>
+        <View style={styles.rail}><View style={[styles.line, { width: 3 }]} /><View style={styles.dot} /></View>
+        <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, padding: 8, borderRadius: 10 }, active && styles.cardActive]}>
           {(scheduled?.openingWarning || scheduled?.overlapWarning) ? <View style={styles.warningStack}>
             {scheduled.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
             {scheduled.overlapWarning ? <Text style={styles.overlapWarning}>🚨 時間衝突</Text> : null}
@@ -199,8 +200,8 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
         </View>
       </View>
       {segment ? <View style={styles.transition}>
-        <View style={styles.transitionMain}><PuppyMascot puppy="-8" size={46} style={styles.inlineMascot} accessibilityLabel="下一站交通" /><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {routeModes.find((option) => option.mode === segment.mode)?.label} · {formatDistance(segment.distanceKm)} · {segment.loading ? '計算中…' : `約 ${segment.durationMinutes} 分鐘`}</Text></View>
-        <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => onRouteModeChange?.(segment.fromId, option.mode)}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View>
+        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)})</Text></Pressable>
+        {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {segment.navigationUrl ? <Pressable accessibilityRole="link" style={styles.routeLink} onPress={() => { void Linking.openURL(segment.navigationUrl as string).catch(() => undefined); }}><Text style={styles.routeLinkText}>🗺️ 導航路線</Text></Pressable> : null}
       </View> : null}
     </View>
@@ -209,7 +210,8 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
 
 function formatTemperature(weather: WeatherSummary) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}–${max}°C`; if (max !== null) return `${max}°C`; if (min !== null) return `${min}°C`; return '溫度未知'; }
 export function EmptyTimeline() { return <View style={styles.empty}><PuppyMascot puppy="-7" size={165} accessibilityLabel="目前沒有景點" /><Text style={styles.emptyText}>目前還沒有景點，新增第一站吧！</Text></View>; }
-export function InsertSpotButton({ position, onPress }: { position: number; onPress: (position: number) => void }) { return <Pressable accessibilityRole="button" accessibilityLabel="在這裡插入景點" style={styles.insertButton} onPress={() => onPress(position)}><Text style={styles.insertButtonText}>＋ 在這裡插入景點</Text></Pressable>; }
+export function InsertSpotButton({ position, onPress }: { position: number; onPress: (position: number) => void }) { return <Pressable accessibilityRole="button" accessibilityLabel="在這裡插入景點" style={[styles.insertButton, { borderWidth: 0, borderTopWidth: 1, borderStyle: 'dashed', borderRadius: 0, paddingHorizontal: 0, minHeight: 28, width: '100%', marginTop: 0, marginBottom: 4 }]} onPress={() => onPress(position)}><Text style={[styles.insertButtonText, { fontSize: 16 }]}>＋</Text></Pressable>; }
+// Legacy accessibility copy: ＋ 在這裡插入景點
 export function NativeGripHandle({ label, onLongPress }: { label: string; onLongPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.grip} onLongPress={onLongPress} delayLongPress={MOBILE_GRIP_CONFIG.delayLongPress} pressRetentionOffset={MOBILE_GRIP_CONFIG.pressRetentionOffset} hitSlop={MOBILE_GRIP_CONFIG.hitSlop}><Text style={styles.gripText}>⋮⋮</Text></Pressable>; }
 const reservationTagStyles = StyleSheet.create({
   reservationTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 2 },
