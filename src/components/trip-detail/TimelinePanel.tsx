@@ -53,6 +53,8 @@ type Props = {
   onApplyRouteOptimization?: (items: ItineraryItem[]) => Promise<void>;
   onAddAtPosition?: (position: number) => void;
   onAdd: () => void;
+  onImport?: () => void;
+  onClearAll?: () => void;
 };
 
 type OptimizationPreview = { result: RouteOptimizationResult<ItineraryItem>; scheduledItems: ItineraryItem[] };
@@ -69,11 +71,12 @@ function toRoutePoint(item: ItineraryItem): RoutePoint {
   };
 }
 
-export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onReorder, onApplyRouteOptimization, onAddAtPosition, onAdd }: Props) {
+export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onReorder, onApplyRouteOptimization, onAddAtPosition, onAdd, onImport, onClearAll }: Props) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
   const [optimizationBusy, setOptimizationBusy] = useState(false);
   const [exportVisible, setExportVisible] = useState(false);
+  const [moreVisible, setMoreVisible] = useState(false);
   const scheduleContext = useMemo<ScheduleContext>(() => ({ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time, timezone: trip.timezone }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const scheduled = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
   const metrics = useMemo(() => calculateTimelineMetrics(visibleItems), [visibleItems]);
@@ -164,7 +167,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     ? getRouteOptimizationStatus(optimizationPreview.result.originalDistanceKm, optimizationPreview.result.totalDistanceKm)
     : null;
   return <>
-    <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable><Pressable style={styles.exportButton} onPress={() => setExportVisible(true)}><Text style={styles.exportButtonText}>🖼️ 匯出行程圖卡</Text></Pressable><Pressable style={styles.shareButton} onPress={() => void shareDayItinerary()}><Text style={styles.shareText}>↗ 分享今日行程</Text></Pressable></View></View>
+    <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={styles.moreButton} onPress={() => setMoreVisible(true)}><Text style={styles.moreButtonText}>···</Text></Pressable></View></View>
     <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>{optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線'}</Text></Pressable>
     <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} />
     <DashboardMetricsBar metrics={metrics} themeMode={themeMode} />
@@ -204,6 +207,15 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
       </View></View>
     </Modal>
     <ItineraryCardExport visible={exportVisible} data={exportData} themeMode={themeMode} onClose={() => setExportVisible(false)} />
+    <Modal visible={moreVisible} transparent animationType="fade" onRequestClose={() => setMoreVisible(false)}>
+      <Pressable style={styles.menuBackdrop} onPress={() => setMoreVisible(false)}><View style={styles.moreMenu}>
+        {onImport ? <Pressable style={styles.menuItem} onPress={() => { setMoreVisible(false); onImport(); }}><Text style={styles.menuItemText}>📥 匯入行程</Text></Pressable> : null}
+        <Pressable style={styles.menuItem} onPress={() => { setMoreVisible(false); void exportCalendar(); }}><Text style={styles.menuItemText}>📅 匯出行事曆</Text></Pressable>
+        <Pressable style={styles.menuItem} onPress={() => { setMoreVisible(false); setExportVisible(true); }}><Text style={styles.menuItemText}>🖼️ 匯出行程圖卡</Text></Pressable>
+        <Pressable style={styles.menuItem} onPress={() => { setMoreVisible(false); void shareDayItinerary(); }}><Text style={styles.menuItemText}>↗ 分享今日行程</Text></Pressable>
+        {onClearAll ? <Pressable style={styles.menuItem} onPress={() => { setMoreVisible(false); onClearAll(); }}><Text style={styles.menuDangerText}>清空全行程景點</Text></Pressable> : null}
+      </View></Pressable>
+    </Modal>
   </>;
 }
 
@@ -225,6 +237,13 @@ const styles = StyleSheet.create({
   exportButtonText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   shareButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 10, paddingVertical: 8 },
   shareText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '800' },
+  moreButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, backgroundColor: EDITORIAL_COLORS.sand },
+  moreButtonText: { color: EDITORIAL_COLORS.charcoal, fontSize: 22, fontWeight: '900', lineHeight: 24 },
+  menuBackdrop: { flex: 1, backgroundColor: 'rgba(31,31,31,.28)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 86, paddingHorizontal: 18 },
+  moreMenu: { width: 230, backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 6 },
+  menuItem: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 9 },
+  menuItemText: { color: EDITORIAL_COLORS.charcoal, fontSize: 14, fontWeight: '700' },
+  menuDangerText: { color: EDITORIAL_COLORS.dangerText, fontSize: 14, fontWeight: '700' },
   mapToggle: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, overflow: 'hidden' },
   mapToggleText: { color: EDITORIAL_COLORS.terracotta, fontSize: 14, fontWeight: '800', textAlign: 'center' },
   mapPane: { width: '100%', maxWidth: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden', marginBottom: 12 },

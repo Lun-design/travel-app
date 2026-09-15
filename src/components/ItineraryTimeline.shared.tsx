@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, Share, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Alert, Linking, Modal, Pressable, Share, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { buildRouteSegments, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
@@ -159,6 +159,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const navigationUrl = getGoogleMapsDirectionsUrl(item.latitude, item.longitude);
   const placeAddress = formatPlaceAddress(item.address);
   const [favorite, setFavorite] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
   return (
     <View style={timelineCardContainerStyle}>
       <View style={styles.row}>
@@ -175,15 +176,16 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
                 <Text style={[styles.time, { color: theme.colors.primary, backgroundColor: theme.colors.surfaceMuted }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>
                 <View style={styles.categoryWrap}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View>
               </View>
-              {weather ? <View style={styles.weatherRow}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
-              {weather && isWeatherAlert(weather) ? <View style={styles.weatherAlerts}>{weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘／降雨預警</Text> : null}{weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}</View> : null}
-              <Text style={[styles.name, { color: theme.colors.text }]}>{item.location_name}</Text>
+              {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
+              {weather && isWeatherAlert(weather) ? <View style={[styles.weatherAlerts, compactStyles.hidden]}>{weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘／降雨預警</Text> : null}{weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}</View> : null}
+              <View style={cardMenuStyles.triggerRow}><Text style={[styles.name, { color: theme.colors.text }]}>{item.location_name}</Text><Pressable accessibilityRole="button" accessibilityLabel="景點更多操作" style={cardMenuStyles.trigger} onPress={() => setMenuVisible(true)}><Text style={cardMenuStyles.triggerText}>···</Text></Pressable></View>
+              <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}><Pressable style={cardMenuStyles.backdrop} onPress={() => setMenuVisible(false)}><View style={cardMenuStyles.menu}><Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onEdit(item); }}><Text style={cardMenuStyles.text}>編輯景點</Text></Pressable>{onMoveUp ? <Pressable style={cardMenuStyles.item} disabled={!canMoveUp} onPress={() => { setMenuVisible(false); onMoveUp(); }}><Text style={[cardMenuStyles.text, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}{onMoveDown ? <Pressable style={cardMenuStyles.item} disabled={!canMoveDown} onPress={() => { setMenuVisible(false); onMoveDown(); }}><Text style={[cardMenuStyles.text, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onDelete(item); }}><Text style={cardMenuStyles.danger}>刪除景點</Text></Pressable>{placeAddress ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void copyCardText(placeAddress, '地址已複製'); }}><Text style={cardMenuStyles.text}>複製地址</Text></Pressable> : null}{navigationUrl ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={cardMenuStyles.text}>開啟導航</Text></Pressable> : null}{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onPreviewVoucher(itemVouchers[0]); }}><Text style={cardMenuStyles.text}>🎫 檢視票券</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setFavorite((current) => !current); setMenuVisible(false); }}><Text style={cardMenuStyles.text}>{favorite ? '取消收藏' : '加入收藏'}</Text></Pressable></View></Pressable></Modal>
               {reservationTagLabels(item.reservation_tags).length > 0 ? <View style={reservationTagStyles.reservationTags}>{reservationTagLabels(item.reservation_tags).map((label) => <Text key={label} style={[reservationTagStyles.reservationTag, { color: theme.colors.primary, borderColor: theme.colors.border }]}>{label}</Text>)}</View> : null}
               <Text style={[styles.duration, { color: theme.colors.muted }]}>停留 {duration} 分鐘 · 離開 {scheduled?.departureTime ?? '—'}</Text>
               {placeAddress ? <Text style={[styles.address, { color: theme.colors.muted }]}>{placeAddress}</Text> : null}
               {item.notes ? <Text style={[styles.notes, { color: theme.colors.muted }]}>{item.notes}</Text> : null}
               {navigationUrl ? <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={styles.navigation}>🧭 開啟 Google Maps 導航</Text></Pressable> : null}
-              <View style={styles.actions}>
+              <View style={[styles.actions, compactStyles.hidden]}>
                 {onMoveUp ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="上移景點" disabled={!canMoveUp} onPress={onMoveUp}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}
                 {onMoveDown ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="下移景點" disabled={!canMoveDown} onPress={onMoveDown}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}
                 <Pressable style={styles.actionButton} onPress={() => onEdit(item)}><Text style={[styles.edit, { color: theme.colors.primary }]}>編輯</Text></Pressable>
@@ -213,6 +215,17 @@ const reservationTagStyles = StyleSheet.create({
   reservationTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 2 },
   reservationTag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800' },
 });
+const cardMenuStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(31,31,31,.28)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  menu: { width: 240, backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 6 },
+  item: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 9 },
+  text: { color: EDITORIAL_COLORS.charcoal, fontSize: 14, fontWeight: '700' },
+  danger: { color: EDITORIAL_COLORS.dangerText, fontSize: 14, fontWeight: '700' },
+  triggerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  trigger: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  triggerText: { color: EDITORIAL_COLORS.taupe, fontSize: 22, fontWeight: '900' },
+});
+const compactStyles = StyleSheet.create({ hidden: { display: 'none' } });
 function formatDistance(distanceKm: number) { return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`; }
 const timelineCardContainerStyle = createTimelineCardContainerStyle();
 
