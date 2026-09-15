@@ -23,6 +23,8 @@ import { createRouteEstimator, estimateRouteSequence, type RoutePoint } from '@/
 import { formatRouteDuration, formatRouteLegContext, getRouteOptimizationStatus } from '@/lib/route-connector';
 import { ItineraryCardExport } from '@/components/ItineraryCardExport';
 import type { ItineraryExportData } from '@/lib/export-image';
+import { DashboardMetricsBar } from '@/components/DashboardMetricsBar';
+import { calculateTimelineMetrics } from '@/lib/timeline-metrics';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -74,6 +76,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const [exportVisible, setExportVisible] = useState(false);
   const scheduleContext = useMemo<ScheduleContext>(() => ({ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time, timezone: trip.timezone }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const scheduled = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
+  const metrics = useMemo(() => calculateTimelineMetrics(visibleItems), [visibleItems]);
   const scheduleDate = useMemo(() => tripDateForDay(trip.start_date, day), [day, trip.start_date]);
   const exportData = useMemo<ItineraryExportData>(() => ({ title: trip.title, destination: trip.destination, dayNumber: day, date: scheduleDate, items: visibleItems }), [day, scheduleDate, trip.destination, trip.title, visibleItems]);
   const persistedWeather = useMemo(() => {
@@ -164,6 +167,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable><Pressable style={styles.exportButton} onPress={() => setExportVisible(true)}><Text style={styles.exportButtonText}>🖼️ 匯出行程圖卡</Text></Pressable><Pressable style={styles.shareButton} onPress={() => void shareDayItinerary()}><Text style={styles.shareText}>↗ 分享今日行程</Text></Pressable></View></View>
     <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>{optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線'}</Text></Pressable>
     <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} />
+    <DashboardMetricsBar metrics={metrics} themeMode={themeMode} />
     <TodayFocusCard schedule={scheduled} items={items} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} onSwitchToBackupPlan={onSwitchToBackupPlan} persistedWeather={persistedWeather} compact={layout.compact} />
     <Pressable style={styles.mapToggle} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: layout.mapMinHeight }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}

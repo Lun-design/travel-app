@@ -1,4 +1,5 @@
 export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+import { normalizeReservationTags } from './reservation-tags';
 export type OpeningPeriod = { open: string; close: string };
 export type OpeningHoursDay = { closed?: boolean; periods?: OpeningPeriod[] };
 /** Maximum number of daily opening intervals persisted by the form/schema. */
@@ -15,6 +16,7 @@ export type ItineraryItem = {
   updated_at?: string | null; updated_by?: string | null;
   /** Legacy/API alias used by some clients; `time` remains canonical. */
   start_time?: string | null;
+  reservation_tags?: string[];
 };
 
 /**
@@ -174,6 +176,9 @@ export function normalizeItineraryItemPayload(item: ItineraryItemSaveInput): Iti
   if ('difficulty' in item) {
     const candidate = normalizeOptionalText(item.difficulty);
     payload.difficulty = ITINERARY_DIFFICULTIES.includes(candidate as (typeof ITINERARY_DIFFICULTIES)[number]) ? candidate as string : null;
+  }
+  if ('reservation_tags' in item) {
+    payload.reservation_tags = normalizeReservationTags(item.reservation_tags);
   }
   return payload;
 }

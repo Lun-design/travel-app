@@ -13,6 +13,7 @@ import { tripDayNumberForDate } from '@/lib/trip-dates';
 import { ManualLocationMap } from './ManualLocationMap';
 import { OpeningHoursEditor } from './OpeningHoursEditor';
 import { EDITORIAL_COLORS } from '@/lib/theme';
+import { RESERVATION_TAG_OPTIONS, normalizeReservationTags, type ReservationTag } from '@/lib/reservation-tags';
 
 const categories = ['spot', 'food', 'hotel', 'flight', 'trail', 'outdoor'];
 type AutoHoursStatus = 'idle' | 'loading' | 'found' | 'missing';
@@ -51,6 +52,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   const [autoHoursStatus, setAutoHoursStatus] = useState<AutoHoursStatus>('idle');
   const [difficulty, setDifficulty] = useState('');
   const [notes, setNotes] = useState('');
+  const [reservationTags, setReservationTags] = useState<ReservationTag[]>([]);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [results, setResults] = useState<GeocodingResult[]>([]);
@@ -82,6 +84,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setAutoHoursStatus(item?.opening_hours ? 'found' : 'idle');
     setDifficulty(item?.difficulty ?? '');
     setNotes(item?.notes ?? '');
+    setReservationTags(normalizeReservationTags(item?.reservation_tags));
     setLat(item?.latitude ?? null);
     setLng(item?.longitude ?? null);
     setResults([]);
@@ -217,6 +220,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       notes: notes.trim() || null,
       latitude: lat,
       longitude: lng,
+      reservation_tags: reservationTags,
     };
 
     setSaving(true);
@@ -379,6 +383,11 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} />
         <Text style={styles.label}>備註</Text>
         <TextInput style={[styles.input, styles.notes]} placeholder="例如：需要預約" multiline value={notes} onChangeText={setNotes} />
+        <Text style={styles.label}>預約與景點狀態</Text>
+        <View style={styles.chips}>{RESERVATION_TAG_OPTIONS.map((option) => {
+          const selected = reservationTags.includes(option.key);
+          return <Pressable key={option.key} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} onPress={() => setReservationTags((current) => selected ? current.filter((tag) => tag !== option.key) : [...current, option.key])} style={[styles.chip, selected && styles.selected]}><Text style={selected ? styles.white : styles.chipText}>{option.label}</Text></Pressable>;
+        })}</View>
         <Text style={styles.label}>地圖 Marker（查無結果時可手動微調）</Text>
         <ManualLocationMap latitude={lat} longitude={lng} onChange={(latitude, longitude) => { setLat(latitude); setLng(longitude); }} />
       </View> : null}
