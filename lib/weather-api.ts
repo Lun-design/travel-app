@@ -359,6 +359,13 @@ function addDays(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+/** Keep Open-Meteo's inclusive date window valid even when upstream dates are reversed. */
+export function normalizeWeatherDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
+  return startDate.localeCompare(endDate) <= 0
+    ? { startDate, endDate }
+    : { startDate: endDate, endDate: startDate };
+}
+
 type WeatherStorage = { getItem: (key: string) => string | null; setItem: (key: string, value: string) => void };
 type WeatherCacheEnvelope = { weather: WeatherSummary; cachedAt: string };
 
@@ -514,7 +521,7 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
     }
     if (cached) cache.delete(key);
 
-    const endDate = addDays(date, 6);
+    const dateRange = normalizeWeatherDateRange(date, addDays(date, 6));
 
     const params = [
       `latitude=${encodeURIComponent(latitude.toFixed(5))}`,
@@ -523,8 +530,8 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
       'hourly=temperature_2m,precipitation_probability,precipitation,weather_code',
       'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max,precipitation_sum',
       `timezone=${encodeURIComponent(timezone || 'auto')}`,
-      `start_date=${encodeURIComponent(date)}`,
-      `end_date=${encodeURIComponent(endDate)}`,
+      `start_date=${encodeURIComponent(dateRange.startDate)}`,
+      `end_date=${encodeURIComponent(dateRange.endDate)}`,
       `_t=${encodeURIComponent(String(now()))}`,
     ].join('&');
     const requestUrl = `https://api.open-meteo.com/v1/forecast?${params}`;

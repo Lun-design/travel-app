@@ -14,10 +14,18 @@ import {
   weatherCodeToPresentation,
   getTemperatureRangeC,
   getWearTip,
+  normalizeWeatherDateRange,
 } from '../lib/weather-api';
 import { blockedNetworkFetch } from './setup';
 
 describe('weather helpers', () => {
+  it('sorts a reversed Open-Meteo date range before building a request', () => {
+    expect(normalizeWeatherDateRange('2026-10-24', '2026-10-03')).toEqual({
+      startDate: '2026-10-03',
+      endDate: '2026-10-24',
+    });
+  });
+
   it('keeps only the 08:00-20:00 hourly rain timeline for each day', () => {
     const payload = {
       hourly: {
@@ -193,6 +201,20 @@ describe('weather helpers', () => {
     expect(requestUrl.searchParams.get('start_date')).toBe('2026-01-22');
     expect(requestUrl.searchParams.get('end_date')).toBe('2026-01-28');
     expect(requestUrl.searchParams.get('current')).toBe('temperature_2m,weather_code,precipitation');
+  });
+
+  it('keeps the Open-Meteo request range ordered across a month boundary', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      daily: { time: ['2026-10-28'], precipitation_probability_max: [0], weather_code: [1] },
+    }), { status: 200 }));
+    const service = createWeatherService(fetchMock);
+
+    await service.getForecast(25.03, 121.56, '2026-10-28', 'Asia/Taipei');
+
+    const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string);
+    expect(requestUrl.searchParams.get('start_date')).toBe('2026-10-28');
+    expect(requestUrl.searchParams.get('end_date')).toBe('2026-11-03');
+    expect(requestUrl.searchParams.get('start_date')! <= requestUrl.searchParams.get('end_date')!).toBe(true);
   });
 
   it('parses the current temperature from Open-Meteo current data', () => {

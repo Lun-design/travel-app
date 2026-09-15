@@ -86,10 +86,13 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   function toggleMap() { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); onToggleMap(); }
   function completeSpot(itemId: string) { setCompletedIds((current) => new Set(current).add(itemId)); }
   async function openOptimizationPreview() {
+    console.log('[OptimizeRoute] Clicked!');
     if (optimizationBusy) return;
     const result = optimizeRoute(visibleItems);
     if (result.strategy === 'none') {
-      Alert.alert('無法最佳化路線', result.reason === 'missing-coordinates' ? '請先補齊所有景點的經緯度座標。' : '至少需要 2 個景點才能進行路線最佳化。');
+      Alert.alert('無法最佳化路線', result.reason === 'missing-coordinates'
+        ? '需至少 2 個具備經緯度的景點才能進行路線最佳化，請先補齊景點座標。'
+        : '需至少 2 個具備經緯度的景點才能進行路線最佳化。');
       return;
     }
     setOptimizationBusy(true);
@@ -157,7 +160,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     : null;
   return <>
     <View style={styles.dayHeader}><Text style={styles.dayTitle}>Day {day} 行程</Text><View style={styles.dayHeaderActions}><Pressable style={styles.calendarButton} onPress={() => void exportCalendar()}><Text style={styles.calendarText}>📅 匯出行事曆</Text></Pressable><Pressable style={styles.exportButton} onPress={() => setExportVisible(true)}><Text style={styles.exportButtonText}>🖼️ 匯出行程圖卡</Text></Pressable><Pressable style={styles.shareButton} onPress={() => void shareDayItinerary()}><Text style={styles.shareText}>↗ 分享今日行程</Text></Pressable></View></View>
-    <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>🧭 最佳化今日路線</Text></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={styles.optimizeButton} onPress={openOptimizationPreview}><Text style={styles.optimizeText}>{optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線'}</Text></Pressable>
     <DayTabs days={days} selected={day} onChange={onDayChange} themeMode={themeMode} />
     <TodayFocusCard schedule={scheduled} items={items} vouchers={vouchers} scheduleDate={scheduleDate} timezone={trip.timezone} themeMode={themeMode} completedIds={completedIds} onComplete={completeSpot} onPreviewVoucher={onFocusedVoucher} onSwitchToBackupPlan={onSwitchToBackupPlan} persistedWeather={persistedWeather} compact={layout.compact} />
     <Pressable style={styles.mapToggle} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線 (點擊展開)'}</Text></Pressable>
