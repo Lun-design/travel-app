@@ -39,10 +39,6 @@ export function PuppyMascot({ puppy, size = 32, style, accessibilityLabel }: {
     accessibilityLabel={accessibilityLabel}
     style={[
       { width: size, height: size, backgroundColor: 'transparent' },
-      // `mixBlendMode` is a React Native Web style that is not part of the
-      // base React Native ImageStyle type. Keep the web-only enhancement while
-      // preventing strict Vercel/TypeScript builds from rejecting the object.
-      { mixBlendMode: 'multiply' } as any,
       style,
       { opacity },
     ]}
