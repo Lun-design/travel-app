@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Linking, Modal, Pressable, Share, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
+import { Alert, Image, Linking, Modal, Pressable, Share, StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { buildRouteSegments, resolveRouteSegmentLabels, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
@@ -14,7 +14,7 @@ import type { PuppyId } from '@/lib/puppy';
 import { PuppyMascot } from './PuppyMascot';
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
 import { reservationTagLabels } from '@/lib/reservation-tags';
-import { getSpotImageFallbackUrl, getSpotImageLightboxUrl, getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
+import { getSpotImageFallbackUrl, getSpotImageLightboxUrl, getSpotImageUrl, resolveSpotImage, searchSpotImage } from '@/lib/spot-image';
 import { getCategoryBadgePalette } from '@/lib/visual-styles';
 
 export type ItineraryTimelineProps = {
@@ -204,9 +204,32 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [lightboxImageFailed, setLightboxImageFailed] = useState(false);
+  const [manualPhotoSearchOpen, setManualPhotoSearchOpen] = useState(false);
+  const [manualPhotoQuery, setManualPhotoQuery] = useState('');
+  const [manualPhotoLoading, setManualPhotoLoading] = useState(false);
+  const [manualPhotoError, setManualPhotoError] = useState<string | null>(null);
   const imageFallbackAttemptedRef = useRef(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [routeModesVisible, setRouteModesVisible] = useState(false);
+  const handleManualPhotoSearch = async () => {
+    const query = manualPhotoQuery.trim();
+    if (!query || manualPhotoLoading) return;
+    setManualPhotoLoading(true);
+    setManualPhotoError(null);
+    try {
+      const result = await searchSpotImage(query);
+      if (!result) throw new Error('查無可用照片，請換個景點關鍵字。');
+      setResolvedImageUrl(result.url);
+      imageFallbackAttemptedRef.current = false;
+      setImageLoadFailed(false);
+      setLightboxImageFailed(false);
+      setManualPhotoSearchOpen(false);
+    } catch (error: any) {
+      setManualPhotoError(error?.message ?? '照片搜尋失敗，請稍後再試。');
+    } finally {
+      setManualPhotoLoading(false);
+    }
+  };
   useEffect(() => {
     let cancelled = false;
     setImageLoadFailed(false);
@@ -235,6 +258,13 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               <View style={styles.lightboxContent}>
                 <Pressable style={styles.lightboxImagePressable} onPress={(event) => event.stopPropagation()}>
                   {lightboxImageFailed ? <View style={[styles.lightboxImage, styles.lightboxFallback]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={72} accessibilityLabel={`${item.location_name} 無預覽圖`} /><Text style={styles.lightboxFallbackText}>目前無預覽圖</Text></View> : <Image source={{ uri: getSpotImageLightboxUrl(item, undefined, resolvedImageUrl) }} style={styles.lightboxImage} resizeMode="contain" accessibilityLabel={`${item.location_name} 大圖`} onError={() => setLightboxImageFailed(true)} />}
+                </Pressable>
+                <Pressable style={styles.lightboxActions} onPress={(event) => event.stopPropagation()}>
+                  {!manualPhotoSearchOpen ? <Pressable accessibilityRole="button" accessibilityLabel="更換照片" style={styles.lightboxReplaceButton} onPress={() => { setManualPhotoError(null); setManualPhotoSearchOpen(true); }}><Text style={styles.lightboxReplaceText}>🔄 更換照片</Text></Pressable> : <View style={styles.lightboxSearchRow}>
+                    <TextInput value={manualPhotoQuery} onChangeText={setManualPhotoQuery} autoFocus placeholder="輸入景點關鍵字" placeholderTextColor="#A8A29E" style={styles.lightboxSearchInput} returnKeyType="search" onSubmitEditing={() => { void handleManualPhotoSearch(); }} />
+                    <Pressable accessibilityRole="button" accessibilityLabel="搜尋替換照片" disabled={manualPhotoLoading || !manualPhotoQuery.trim()} style={[styles.lightboxSearchButton, (manualPhotoLoading || !manualPhotoQuery.trim()) && styles.lightboxSearchButtonDisabled]} onPress={() => { void handleManualPhotoSearch(); }}><Text style={styles.lightboxSearchButtonText}>{manualPhotoLoading ? '搜尋中…' : '搜尋'}</Text></Pressable>
+                  </View>}
+                  {manualPhotoError ? <Text style={styles.lightboxSearchError}>{manualPhotoError}</Text> : null}
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel="關閉照片預覽" style={styles.lightboxClose} onPress={() => setLightboxVisible(false)}><Text style={styles.lightboxCloseText}>×</Text></Pressable>
               </View>
@@ -447,6 +477,15 @@ const styles = {
   lightboxFallbackText: { color: '#F5F5F4', fontSize: 14, fontWeight: '600' } as const,
   lightboxClose: { position: 'absolute', top: 24, right: 20, minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)' } as const,
   lightboxCloseText: { color: '#FFFFFF', fontSize: 30, lineHeight: 34, fontWeight: '300' } as const,
+  lightboxActions: { position: 'absolute', bottom: 34, left: 20, right: 20, alignItems: 'center', gap: 8 } as const,
+  lightboxReplaceButton: { minHeight: 44, borderRadius: 22, justifyContent: 'center', paddingHorizontal: 18, backgroundColor: 'rgba(255,255,255,0.14)' } as const,
+  lightboxReplaceText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' } as const,
+  lightboxSearchRow: { width: '100%', maxWidth: 520, flexDirection: 'row', alignItems: 'center', gap: 8 } as const,
+  lightboxSearchInput: { flex: 1, minWidth: 0, minHeight: 44, borderRadius: 22, paddingHorizontal: 16, backgroundColor: '#FFFFFF', color: '#292524', fontSize: 14 } as const,
+  lightboxSearchButton: { minHeight: 44, borderRadius: 22, justifyContent: 'center', paddingHorizontal: 18, backgroundColor: '#8C6D58' } as const,
+  lightboxSearchButtonDisabled: { opacity: 0.5 } as const,
+  lightboxSearchButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' } as const,
+  lightboxSearchError: { color: '#FECACA', fontSize: 12, textAlign: 'center' } as const,
 };
 
 // Compatibility markers retained for previous UI checks: ??銝宏 / ??銝宏 / ?妣 ?? Google Maps 撠

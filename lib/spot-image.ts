@@ -4,7 +4,7 @@
  * The resolver is intentionally side-effect free: cards can calculate a URL
  * during render without making a network request or depending on browser APIs.
  */
-import { fetchGooglePlaceDetails, isGooglePhotoResourceName, searchGooglePlacesText } from './google-places';
+import { fetchGooglePlaceDetails, isGooglePhotoResourceName, sanitizePlaceSearchQuery, searchGooglePlacesText } from './google-places';
 
 export type SpotImageCategory = 'food' | 'hotel' | 'flight' | 'spot' | 'trail' | 'outdoor' | string;
 
@@ -284,7 +284,7 @@ function dynamicPhotoKey(spot: SpotImageInput): string | null {
   // title would spend Places quota for entries that have no useful location.
   const address = nonEmpty(spot.address);
   if (!address) return null;
-  const query = [nonEmpty(spot.name), nonEmpty(spot.location_name), address].filter(Boolean).join(' ');
+  const query = sanitizePlaceSearchQuery(nonEmpty(spot.name) ?? nonEmpty(spot.location_name), address);
   return query ? `query:${query.toLocaleLowerCase('zh-Hant')}` : null;
 }
 
@@ -308,9 +308,10 @@ export async function resolveSpotImage(spot: SpotImageInput | null | undefined, 
   const request = (async (): Promise<SpotImageResolution | null> => {
     try {
       const placeId = nonEmpty(spot.placeId) ?? nonEmpty(spot.googlePlaceId) ?? nonEmpty(spot.google_place_id);
+      const searchQuery = sanitizePlaceSearchQuery(nonEmpty(spot.name) ?? nonEmpty(spot.location_name), spot.address);
       const place = placeId
         ? await fetchGooglePlaceDetails(placeId, key)
-        : (await searchGooglePlacesText([nonEmpty(spot.name), nonEmpty(spot.location_name), nonEmpty(spot.address)].filter(Boolean).join(' '), key))[0];
+        : (await searchGooglePlacesText(searchQuery, key))[0];
       const resolvedReference = place?.photoReference;
       const url = resolvedReference ? getGooglePhotoUrl(resolvedReference, key) : null;
       return url ? { url, photoReference: resolvedReference ?? null } : null;
@@ -326,6 +327,23 @@ export async function resolveSpotImage(spot: SpotImageInput | null | undefined, 
 
 export async function resolveSpotImageUrl(spot: SpotImageInput | null | undefined, apiKey?: string): Promise<string> {
   return (await resolveSpotImage(spot, apiKey)).url;
+}
+
+/** Search for a replacement preview image from a user-provided query. */
+export async function searchSpotImage(query: string, apiKey?: string): Promise<SpotImageResolution | null> {
+  const normalizedQuery = sanitizePlaceSearchQuery(query);
+  const key = getGooglePhotoApiKey(apiKey);
+  if (!normalizedQuery || !key) return null;
+  try {
+    const places = await searchGooglePlacesText(normalizedQuery, key);
+    const place = places.find((candidate) => candidate.photoReference);
+    const photoReference = place?.photoReference;
+    const url = photoReference ? getGooglePhotoUrl(photoReference, key) : null;
+    return url ? { url, photoReference: photoReference ?? null } : null;
+  } catch (error) {
+    console.warn('[SpotImage] manual photo search failed', error);
+    return null;
+  }
 }
 
 /**

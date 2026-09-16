@@ -6,6 +6,52 @@ const GOOGLE_TEXT_SEARCH_ENDPOINT = 'https://places.googleapis.com/v1/places:sea
 const GOOGLE_DETAILS_ENDPOINT = 'https://places.googleapis.com/v1/places';
 const GOOGLE_WEEKDAYS: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+const PLACE_ACTION_PATTERN = /(?:拍攝|拍照|拍|前往|前去|到|體驗|吃|買|購買|參拜|逛逛|逛|看|欣賞|休息|找|搭車|搭乘|返回|回到|入住|辦理入住|寄放行李|退房|早餐|午餐|晚餐|take\s+photos?|photograph|visit|go\s+to|heading\s+to|eat|buy|experience|relax|check\s*-?\s*(?:in|out))/giu;
+const PLACE_TIME_PATTERN = /\b\d{1,2}(?::\d{2})?\s*(?:[~～-]\s*\d{1,2}(?::\d{2})?)?\b/gu;
+const KNOWN_PLACE_NAMES = [
+  'Universal Studios Japan', 'Grand Front', 'LUCUA Osaka', '大阪城公園', '大阪城', '環球影城',
+  '黑門市場', '道頓堀', '戎橋', '固力果', '梅田', 'LUCUA', '難波', '心齋橋',
+  '海遊館', '天保山', '住吉大社', '清水寺', '東京鐵塔', '關西國際機場', 'Kansai International Airport',
+  'Dotonbori', 'Umeda', 'Namba', 'Shinsaibashi', 'Kuromon Market', 'Kiyomizu-dera',
+].sort((left, right) => right.length - left.length);
+const REGION_HINTS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /大阪(?:府|市)|osaka/iu, label: '大阪' },
+  { pattern: /京都(?:府|市)|kyoto/iu, label: '京都' },
+  { pattern: /東京(?:都|市)|tokyo/iu, label: '東京' },
+  { pattern: /台北(?:市)?|新北(?:市)?|taipei/iu, label: '台北' },
+  { pattern: /台中(?:市)?|taichung/iu, label: '台中' },
+  { pattern: /首爾|seoul/iu, label: '首爾' },
+];
+
+function extractPlaceRegion(address?: string | null): string | null {
+  const normalized = address?.trim();
+  if (!normalized) return null;
+  return REGION_HINTS.find(({ pattern }) => pattern.test(normalized))?.label ?? null;
+}
+
+/** Remove itinerary prose and add a location hint before Places searches. */
+export function sanitizePlaceSearchQuery(name: string | null | undefined, address?: string | null): string {
+  const source = typeof name === 'string' ? name : '';
+  let cleaned = source
+    .replace(PLACE_TIME_PATTERN, ' ')
+    .replace(PLACE_ACTION_PATTERN, ' ')
+    .replace(/[\u3010\u3011\[\]「」『』（）()：:，,、；;|｜]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  const lowerCleaned = cleaned.toLocaleLowerCase();
+  const primaryPlace = KNOWN_PLACE_NAMES
+    .filter((candidate) => lowerCleaned.includes(candidate.toLocaleLowerCase()))
+    .sort((left, right) => {
+      const leftIndex = lowerCleaned.indexOf(left.toLocaleLowerCase());
+      const rightIndex = lowerCleaned.indexOf(right.toLocaleLowerCase());
+      return leftIndex - rightIndex || right.length - left.length;
+    })[0];
+  if (primaryPlace) cleaned = primaryPlace;
+  const region = extractPlaceRegion(address);
+  if (region && cleaned && !cleaned.toLocaleLowerCase().includes(region.toLocaleLowerCase())) return `${region} ${cleaned}`;
+  return cleaned || region || address?.trim() || '';
+}
+
 type GoogleTime = { day?: number; hour?: number; minute?: number };
 export type GoogleOpeningHoursPayload = {
   periods?: { open?: GoogleTime; close?: GoogleTime }[];
@@ -272,6 +318,7 @@ export function extractGooglePhotoReference(photos?: GooglePlacePhotoPayload[] |
 
 async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {
   const key = getGoogleApiKey(apiKey);
+  const sanitizedQuery = sanitizePlaceSearchQuery(query);
   if (!key) return [];
   const response = await fetch(GOOGLE_AUTOCOMPLETE_ENDPOINT, {
     method: 'POST',
@@ -280,7 +327,7 @@ async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): P
       'X-Goog-Api-Key': key,
       'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text',
     },
-    body: JSON.stringify({ input: query.trim(), languageCode: 'zh-TW' }),
+    body: JSON.stringify({ input: sanitizedQuery, languageCode: 'zh-TW' }),
   });
   if (!response.ok) throw new Error(`Google Places 搜尋失敗 (${response.status})`);
   const payload = await response.json() as GoogleAutocompletePayload;
@@ -327,7 +374,7 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[
 
 export async function searchGooglePlacesTextPage(query: string, apiKey?: string, pageToken?: string): Promise<GooglePlaceSearchPage> {
   const key = getGoogleApiKey(apiKey);
-  const normalizedQuery = query.trim();
+  const normalizedQuery = sanitizePlaceSearchQuery(query);
   if (!key || !normalizedQuery) return { results: [], nextPageToken: null };
   const response = await fetch(GOOGLE_TEXT_SEARCH_ENDPOINT, {
     method: 'POST',
@@ -356,7 +403,7 @@ export async function searchGooglePlacesText(query: string, apiKey?: string): Pr
 
 export async function searchGooglePlaces(query: string, apiKey?: string): Promise<GeocodingResult[]> {
   const key = getGoogleApiKey(apiKey);
-  const normalizedQuery = query.trim();
+  const normalizedQuery = sanitizePlaceSearchQuery(query);
   if (!key || !normalizedQuery) return [];
   try {
     const results = await searchGooglePlacesAutocomplete(normalizedQuery, key);

@@ -5,7 +5,9 @@ import {
   parseGooglePlaceDetails,
   pickPreferredPlaceAddress,
   resolveTripPlaceAddress,
+  sanitizePlaceSearchQuery,
   searchGooglePlaces,
+  searchGooglePlacesText,
 } from '../lib/google-places';
 
 afterEach(() => {
@@ -158,6 +160,20 @@ describe('Google Places API mapping', () => {
     });
 
     expect(details.photoReference).toBeUndefined();
+  });
+
+  it('removes action words and adds the address region to a place query', () => {
+    expect(sanitizePlaceSearchQuery('戎橋拍攝固力果招牌', '大阪府大阪市中央區道頓堀')).toBe('大阪 戎橋');
+  });
+
+  it('sends the sanitized query to Places Text Search', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ places: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await searchGooglePlacesText('戎橋拍攝固力果招牌', 'test-key');
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).textQuery).toBe('戎橋');
   });
 
   it('posts Autocomplete (New) input and maps place predictions', async () => {

@@ -5,6 +5,7 @@ import {
   getSpotImageFallbackUrl,
   getSpotImageFallback,
   getSpotImageLightboxUrl,
+  searchSpotImage,
   getSpotImageTags,
   getSpotImageUrl,
   resolveSpotImage,
@@ -44,6 +45,29 @@ describe('spot image resolver', () => {
     expect(getSpotImageLightboxUrl({ photoReference: 'photo-ref' })).toBe(
       'https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference=photo-ref&key=test-key',
     );
+  });
+
+  it('searches a replacement photo and returns its Google media URL', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        places: [{
+          id: 'places/ChIJreplacement',
+          displayName: { text: '戎橋' },
+          formattedAddress: '大阪府大阪市',
+          location: { latitude: 34.67, longitude: 135.5 },
+          photos: [{ name: 'places/ChIJreplacement/photos/panorama', types: ['landmark'], widthPx: 1600, heightPx: 900 }],
+        }],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(searchSpotImage('戎橋拍攝固力果招牌')).resolves.toMatchObject({
+      photoReference: 'places/ChIJreplacement/photos/panorama',
+      url: 'https://places.googleapis.com/v1/places/ChIJreplacement/photos/panorama/media?maxWidthPx=400&key=test-key',
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).textQuery).toBe('戎橋');
   });
 
   it('upscales curated static images for the lightbox preview', () => {

@@ -12,5 +12,8 @@ describe('itinerary spot image lightbox', () => {
     expect(source).toContain('styles.lightboxBackdrop');
     expect(source).toContain('accessibilityLabel="關閉照片預覽"');
     expect(source).toContain('getSpotImageLightboxUrl');
+    expect(source).toContain('更換照片');
+    expect(source).toContain('searchSpotImage');
+    expect(source).toContain('setResolvedImageUrl(result.url)');
   });
 });
