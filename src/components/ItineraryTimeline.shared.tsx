@@ -5,7 +5,7 @@ import { tripDateForDay } from '@/lib/trip-dates';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
 import type { Voucher } from '@/lib/vouchers';
 import { buildDaySchedule, type ScheduleContext, type ScheduledItem } from '@/lib/schedule';
-import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
+import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
 import { formatPlaceAddress } from '@/lib/place-actions';
 import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
 import { shareOrCopyText } from '@/lib/share-actions';
@@ -166,7 +166,12 @@ export const TimelineCard = React.memo(function TimelineCard({ item, grip, segme
   const isMobile = viewportWidth < 600;
   const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
-  const navigationUrl = getGoogleMapsDirectionsUrl(item.latitude, item.longitude);
+  const navigationUrl = getGoogleMapsNavigationUrl({
+    latitude: item.latitude,
+    longitude: item.longitude,
+    location_name: item.location_name,
+    address: item.address,
+  });
   const placeAddress = formatPlaceAddress(item.address);
   const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));
   const [favorite, setFavorite] = useState(false);
@@ -225,7 +230,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, grip, segme
               <Text style={[styles.duration, { color: theme.colors.muted }]}>停留 {duration} 分鐘 · 離開 {scheduled?.departureTime ?? '—'}</Text>
               {placeAddress ? <Text style={[styles.address, { color: '#8E8E93', fontSize: 13 }]}>{placeAddress}</Text> : null}
               {item.notes ? <Text style={[styles.notes, { color: '#8E8E93', fontSize: 13 }]}>{item.notes}</Text> : null}
-              <Pressable accessibilityRole={navigationUrl ? 'link' : 'button'} accessibilityState={{ disabled: !navigationUrl }} disabled={!navigationUrl} style={[styles.navigationButton, !navigationUrl && styles.navigationButtonDisabled]} onPress={() => { if (navigationUrl) void Linking.openURL(navigationUrl).catch(() => undefined); }}><PuppyMascot puppy={navigationPuppyId(item.category)} size={20} style={styles.navigationPuppy} accessibilityLabel="導航小狗" /><Text numberOfLines={1} style={styles.navigation}>🧭 開啟 Google Maps 導航</Text></Pressable>
+              <Pressable accessibilityRole="link" style={styles.navigationButton} onPress={() => { void Linking.openURL(navigationUrl).catch(() => undefined); }}><PuppyMascot puppy={navigationPuppyId(item.category)} size={20} style={styles.navigationPuppy} accessibilityLabel="導航小狗" /><Text numberOfLines={1} style={styles.navigation}>🧭 開啟 Google Maps 導航</Text></Pressable>
               <View style={[styles.actions, compactStyles.hidden]}>
                 {onMoveUp ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="上移景點" disabled={!canMoveUp} onPress={onMoveUp}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}
                 {onMoveDown ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="下移景點" disabled={!canMoveDown} onPress={onMoveDown}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}
@@ -346,8 +351,7 @@ const styles = {
   routeLink: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6, marginLeft: 0 } as const,
   routeLinkText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
   navigationButton: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6 } as const,
-  navigationButtonDisabled: { opacity: 0.55 } as const,
-  navigationPuppy: { width: 20, height: 20, flexShrink: 0, backgroundColor: 'transparent' } as const,
+   navigationPuppy: { width: 20, height: 20, flexShrink: 0, backgroundColor: 'transparent', opacity: 1 } as const,
   navigation: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
 };
 

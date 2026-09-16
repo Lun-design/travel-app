@@ -189,7 +189,7 @@ describe('trip detail responsive layout', () => {
     expect(detail).toContain('focusedItemId={focusedItemId}');
     expect(webMap).toContain('trip-map-marker-press');
     expect(nativeMap).toContain('onPress={() => onMarkerPress?.(marker.id)}');
-    expect(timeline).toContain('getGoogleMapsDirectionsUrl');
+    expect(timeline).toContain('getGoogleMapsNavigationUrl');
     expect(timeline).toContain('🧭 開啟 Google Maps 導航');
   });
 

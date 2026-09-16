@@ -75,7 +75,10 @@ describe('mobile visual color polish', () => {
     expect(timeline).toContain('navigationPuppy');
     expect(timeline).not.toContain('routeLinkPuppy');
     expect(timeline).toContain("return categoryPuppies[category.trim().toLowerCase()] ?? '-8'");
-    expect(timeline).toContain('disabled={!navigationUrl}');
+    expect(timeline).not.toContain('disabled={!navigationUrl}');
+    expect(timeline).toContain('getGoogleMapsNavigationUrl');
+    expect(timeline).toContain('opacity: 1');
+    expect(timeline).not.toContain('navigationButtonDisabled');
     expect(timeline).toContain('paddingHorizontal: 12');
     expect(timeline).toContain('paddingVertical: 6');
     expect(timeline).toContain('gap: 6');

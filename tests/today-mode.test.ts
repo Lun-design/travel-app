@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findActiveOrNextSpot, distanceToFocusSpot, shouldUseCompactTodayBanner } from '../lib/today-mode';
 import { haversineDistanceKm } from '../lib/itinerary';
-import { getGoogleMapsDirectionsUrl } from '../lib/map-links';
+import { getGoogleMapsDirectionsUrl, getGoogleMapsNavigationUrl } from '../lib/map-links';
 
 const schedule: any[] = [
   {
@@ -49,6 +49,12 @@ describe('Today Mode distance and navigation', () => {
 
   it('builds a Google Maps navigation URL for the focus spot', () => {
     expect(getGoogleMapsDirectionsUrl(25.047, 121.517)).toContain('destination=25.047%2C121.517');
+  });
+
+  it('falls back to a title search when a spot has no coordinates', () => {
+    expect(getGoogleMapsNavigationUrl({ location_name: '黑門市場', latitude: null, longitude: null, address: null })).toBe(
+      'https://www.google.com/maps/search/?api=1&query=%E9%BB%91%E9%96%80%E5%B8%82%E5%A0%B4',
+    );
   });
 });
 
