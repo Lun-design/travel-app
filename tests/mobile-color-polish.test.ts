@@ -36,7 +36,7 @@ describe('mobile visual color polish', () => {
     const metrics = readFileSync(projectFile('src', 'components', 'DashboardMetricsBar.tsx'), 'utf8');
     expect(panel).toContain("backgroundColor: '#8C6D58'");
     expect(panel).toContain("color: '#FFFFFF'");
-    expect(panel).toContain("color: '#D6D3D1'");
+    expect(panel).toContain("color: '#F5F5F4'");
     expect(panel).toContain("backgroundColor: pressed ? 'rgba(255,255,255,0.2)'");
     expect(panel).toContain("backgroundColor: '#F1F5F9'");
     expect(metrics).toContain('iconColor');

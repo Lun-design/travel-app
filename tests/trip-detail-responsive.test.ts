@@ -72,6 +72,19 @@ describe('trip detail responsive layout', () => {
     expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
   });
 
+  it('keeps the desktop hero subtitle padded and the header mascot aligned', () => {
+    const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
+    const header = readFileSync(projectFile('src', 'components', 'trip-detail', 'TripDetailHeader.tsx'), 'utf8');
+
+    expect(panel).toContain('ellipsizeMode="tail"');
+    expect(panel).toContain('daySubtitle');
+    expect(panel).toContain('paddingHorizontal: 16');
+    expect(panel).toContain('paddingVertical: 4');
+    expect(panel).toContain("color: '#F5F5F4'");
+    expect(header).toContain("alignSelf: 'center'");
+    expect(header).toContain('marginRight: 24');
+  });
+
   it('keeps transport and drag affordances visually lightweight on mobile', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     expect(timeline).toContain("transition: { alignSelf: 'flex-start', width: 'auto'");
@@ -93,7 +106,7 @@ describe('trip detail responsive layout', () => {
 
     expect(panel).toContain("backgroundColor: '#8C6D58'");
     expect(panel).toContain("color: '#FFFFFF'");
-    expect(panel).toContain("color: '#D6D3D1'");
+    expect(panel).toContain("color: '#F5F5F4'");
     expect(panel).toContain("backgroundColor: pressed ? 'rgba(255,255,255,0.2)'");
     expect(panel).toContain(": 'rgba(255,255,255,0.1)'");
     expect(detail).toContain("theme.isDark ? theme.colors.background : '#F7F5F0'");

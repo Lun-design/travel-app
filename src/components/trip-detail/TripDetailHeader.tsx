@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   compactHeader: { gap: 6, marginBottom: 8 },
   titleRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0 },
   titleCopy: { flex: 1, minWidth: 0 },
-  mascot: { flexShrink: 0 },
+  mascot: { flexShrink: 0, alignSelf: 'center', marginRight: 24 },
   metaRow: { width: '100%', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, minWidth: 0 },
   dateBlock: { flex: 1, minWidth: 120 },
   back: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700', marginBottom: 9, minHeight: 44, paddingVertical: 12 },
