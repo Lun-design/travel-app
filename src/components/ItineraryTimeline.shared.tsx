@@ -10,6 +10,7 @@ import { formatPlaceAddress } from '@/lib/place-actions';
 import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
+import type { PuppyId } from '@/lib/puppy';
 import { PuppyMascot } from './PuppyMascot';
 import { areTimelineCardPropsEqual, createTimelineCardContainerStyle, MOBILE_GRIP_CONFIG } from '@/lib/drag-drop';
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
@@ -17,7 +18,6 @@ import { reservationTagLabels } from '@/lib/reservation-tags';
 import { getSpotImageFallbackUrl, getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
 import { getCategoryBadgePalette } from '@/lib/visual-styles';
 
-const icons: Record<string, string> = { spot: '📍', food: '🍴', hotel: '🏨', flight: '✈️', trail: '🥾', outdoor: '🌲' };
 export type ItineraryTimelineProps = {
   items: ItineraryItem[];
   themeMode?: ThemeMode;
@@ -214,9 +214,9 @@ export const TimelineCard = React.memo(function TimelineCard({ item, grip, segme
               // the local category badge is guaranteed not to show a broken
               // image glyph.
               setImageLoadFailed(true);
-            }} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><Text style={cardVisualStyles.icon}>{icons[item.category] ?? '📍'}</Text></View>}
+            }} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={34} accessibilityLabel={`${item.category} 類別`} /></View>}
             <View style={[styles.content, isMobile ? null : safeCardContentStyle, { gap: 8 }]}>
-              <View style={[styles.cardHeader, isMobile && responsiveCardStyles.cardHeaderMobile]}><Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>{isMobile ? <View style={[styles.categoryWrap, responsiveCardStyles.mobileCategoryWrap]}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View> : <><Text numberOfLines={1} style={[styles.name, cardVisualStyles.headerName, { color: '#1A1A1A', fontSize: 17, fontWeight: '700' }]}>{item.location_name}</Text><View style={styles.categoryWrap}>{item.category === 'food' ? <PuppyMascot puppy="-10" size={46} style={styles.inlineMascot} accessibilityLabel="美食" /> : null}<Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{icons[item.category] ?? '📌'} {item.category}</Text></View></> }</View>{isMobile ? <Text style={[styles.name, responsiveCardStyles.mobileName, { color: '#1A1A1A' }]}>{item.location_name}</Text> : null}
+              <View style={[styles.cardHeader, isMobile && responsiveCardStyles.cardHeaderMobile]}><Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>{isMobile ? <View style={[styles.categoryWrap, responsiveCardStyles.mobileCategoryWrap]}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View> : <><Text numberOfLines={1} style={[styles.name, cardVisualStyles.headerName, { color: '#1A1A1A', fontSize: 17, fontWeight: '700' }]}>{item.location_name}</Text><View style={styles.categoryWrap}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View></> }</View>{isMobile ? <Text style={[styles.name, responsiveCardStyles.mobileName, { color: '#1A1A1A' }]}>{item.location_name}</Text> : null}
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
               {weather && isWeatherAlert(weather) ? <View style={[styles.weatherAlerts, compactStyles.hidden]}>{weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘／降雨預警</Text> : null}{weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}</View> : null}
               <View style={cardMenuStyles.triggerRow}><CategoryBadge category={item.category} compact={isMobile} inline /><Pressable accessibilityRole="button" accessibilityLabel="景點更多操作" style={cardMenuStyles.trigger} onPress={() => setMenuVisible(true)}><MoreHorizontalIcon /></Pressable></View>
@@ -293,10 +293,26 @@ function categoryTint(category: string): string {
   return '#E9E1D5';
 }
 
+const categoryPuppies: Record<string, PuppyId> = {
+  flight: '-8',
+  transit: '-8',
+  hotel: '-6',
+  food: '-10',
+  restaurant: '-10',
+  spot: '-11',
+  outdoor: '-9',
+  trail: '-7',
+};
+
+function categoryPuppyId(category: string): PuppyId {
+  return categoryPuppies[category.trim().toLowerCase()] ?? '-11';
+}
+
 function CategoryBadge({ category, compact, inline = false }: { category: string; compact: boolean; inline?: boolean }) {
   const palette = getCategoryBadgePalette(category);
   return <View pointerEvents="none" style={[styles.categoryBadge, compact && styles.categoryBadgeCompact, inline && styles.categoryBadgeInline, { backgroundColor: palette.backgroundColor, borderColor: palette.borderColor }]}>
-    <Text numberOfLines={1} style={[styles.categoryBadgeText, { color: palette.color }]}>{icons[category] ?? '📌'} {category}</Text>
+    <PuppyMascot puppy={categoryPuppyId(category)} size={18} style={styles.categoryBadgeIcon} accessibilityLabel={`${category} 類別`} />
+    <Text numberOfLines={1} style={[styles.categoryBadgeText, { color: palette.color }]}>{category}</Text>
   </View>;
 }
 function formatDistance(distanceKm: number) { return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`; }
@@ -321,6 +337,7 @@ const styles = {
   categoryBadge: { position: 'absolute', top: 8, right: 48, zIndex: 4, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, minHeight: 24 } as const,
   categoryBadgeCompact: { right: 48, maxWidth: '100%' } as const,
   categoryBadgeInline: { position: 'relative', top: 0, right: 0, zIndex: 0, maxWidth: '70%' } as const,
+  categoryBadgeIcon: { width: 18, height: 18, flexShrink: 0, marginRight: 4 } as const,
   categoryBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3, flexShrink: 1 } as const,
 };
 

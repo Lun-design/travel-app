@@ -32,10 +32,11 @@ export const EDITORIAL_COLORS = {
   dangerText: '#944B3C',
 } as const;
 
-// Deep coffee accent for selected day tabs, the mobile FAB, and route actions.
-// It restores the warm editorial tone without the muddy yellow/coral cast.
-export const MOBILE_ACCENT_COFFEE = '#6F5846' as const;
-export const DAY_ACTIVE_COLOR = '#4A3E3D' as const;
+// Warm oat/chestnut coffee accent for selected day tabs, the mobile FAB,
+// route actions, and the day hero. The lighter value keeps the editorial
+// palette warm without making the mobile view feel heavy.
+export const MOBILE_ACCENT_COFFEE = '#8C6D58' as const;
+export const DAY_ACTIVE_COLOR = '#8C6D58' as const;
 // Backwards-compatible aliases for callers that still use the previous tokens.
 export const MOBILE_EARTH = MOBILE_ACCENT_COFFEE;
 export const MOBILE_ACCENT_ORANGE = MOBILE_ACCENT_COFFEE;

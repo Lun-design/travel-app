@@ -237,7 +237,7 @@ const dayHeroStyle = {
   borderRadius: 16,
   paddingHorizontal: 20,
   paddingVertical: 16,
-  backgroundColor: '#4A3E3D',
+  backgroundColor: '#8C6D58',
   shadowColor: '#000000',
   shadowOpacity: 0.05,
   shadowRadius: 12,

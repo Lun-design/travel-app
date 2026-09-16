@@ -66,7 +66,7 @@ describe('trip detail responsive layout', () => {
     expect(timeline).toContain("backgroundColor: '#FFFFFF'");
     expect(drag).toContain('borderWidth: 0');
     expect(drag).toContain('shadowOpacity: 0.05');
-    expect(theme).toContain("export const MOBILE_ACCENT_COFFEE = '#6F5846'");
+    expect(theme).toContain("export const MOBILE_ACCENT_COFFEE = '#8C6D58'");
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     expect(panel).toContain('accentColor={DAY_ACTIVE_COLOR}');
     expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
@@ -91,7 +91,7 @@ describe('trip detail responsive layout', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
 
-    expect(panel).toContain("backgroundColor: '#4A3E3D'");
+    expect(panel).toContain("backgroundColor: '#8C6D58'");
     expect(panel).toContain("color: '#FFFFFF'");
     expect(panel).toContain("color: '#D6D3D1'");
     expect(panel).toContain("backgroundColor: pressed ? 'rgba(255,255,255,0.2)'");
