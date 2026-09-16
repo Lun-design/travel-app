@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
-import { reorderItineraryItems, sortItineraryItemsByStartTime } from '@/lib/itinerary';
+import { reorderItineraryItems, sortItineraryItemsByPosition } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import {
@@ -27,7 +27,7 @@ export function ItineraryTimeline({
   focusedItemId,
   onInsertAtPosition,
 }: ItineraryTimelineProps) {
-  const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
+  const [localItems, setLocalItems] = useState(() => sortItineraryItemsByPosition(items));
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeEstimates = useRouteSegments(localItems, routeModes);
   const segments = useMemo(
@@ -52,7 +52,7 @@ export function ItineraryTimeline({
   }, []);
 
   useEffect(() => {
-    setLocalItems(sortItineraryItemsByStartTime(items));
+    setLocalItems(sortItineraryItemsByPosition(items));
   }, [items]);
 
   async function moveItem(itemId: string, direction: -1 | 1) {
@@ -65,7 +65,7 @@ export function ItineraryTimeline({
     try {
       await (onReorder ? onReorder(orderPayload(ordered)) : updateItineraryItemsOrder(orderPayload(ordered)));
     } catch (error) {
-      setLocalItems(sortItineraryItemsByStartTime(items));
+      setLocalItems(sortItineraryItemsByPosition(items));
       Alert.alert('排序更新失敗', error instanceof Error ? error.message : '請稍後再試。');
     }
   }

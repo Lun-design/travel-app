@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { getTrip, listTripMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { deleteItineraryItem, listItineraryItems, saveItineraryItem, updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import type { ItineraryItem, ItineraryItemSaveInput } from '@/lib/itinerary';
-import { sortItineraryItemsByStartTime } from '@/lib/itinerary';
+import { applyItineraryOrder, sortItineraryItemsByStartTime } from '@/lib/itinerary';
 import { calculateBalances, deleteExpense, listExpenses, saveExpense, type Expense, type ExpenseSplit } from '@/lib/expenses-api';
 import { exchangeRateService, getDefaultExchangeRateSnapshot, type ExchangeRateSnapshot } from '@/lib/exchange-rates';
 import { listVouchers } from '@/lib/vouchers-api';
@@ -173,10 +173,15 @@ export function useTripDetailData(tripId: string | undefined) {
 
   const reorderItems = useCallback(async (order: { id: string; position: number }[]) => {
     const previous = items;
-    const positions = new Map(order.map((entry) => [entry.id, entry.position]));
-    setItems((current) => current.map((item) => positions.has(item.id) ? { ...item, position: positions.get(item.id)! } : item));
-    try { await saveOrder(order); } catch (cause) { setItems(previous); throw cause; }
-  }, [items, saveOrder]);
+    setItems((current) => applyItineraryOrder(current, order));
+    try {
+      await saveOrder(order);
+      await reload();
+    } catch (cause) {
+      setItems(previous);
+      throw cause;
+    }
+  }, [items, reload, saveOrder]);
 
   const saveTripSettings = useCallback(async (changes: Parameters<typeof updateTrip>[1]) => {
     if (!trip) throw new Error('找不到此行程。');

@@ -228,6 +228,11 @@ export function sortItineraryItemsByStartTime<T extends Pick<ItineraryItem, 'tim
     return a.position - b.position;
   });
 }
+
+/** Use the explicit user-defined order when rendering a manually reordered day. */
+export function sortItineraryItemsByPosition<T extends Pick<ItineraryItem, 'position'>>(items: readonly T[]): T[] {
+  return [...items].sort((left, right) => left.position - right.position);
+}
 export function coordinatesForPolyline(items: ItineraryItem[], day: number) {
   return mapMarkersForDay(items, day).map(({ latitude, longitude }) => ({ latitude, longitude }));
 }
@@ -277,4 +282,25 @@ export function reorderItineraryItems(items: ItineraryItem[], fromIndex: number,
   const [moved] = reordered.splice(fromIndex, 1);
   reordered.splice(toIndex, 0, moved);
   return reordered.map((item, position) => ({ ...item, position }));
+}
+
+/** Apply persisted positions without mutating the collection or mixing days. */
+export function applyItineraryOrder<T extends { id: string; position: number; day_number?: number }>(
+  items: readonly T[],
+  order: readonly { id: string; position: number }[],
+): T[] {
+  const positions = new Map(order.map((entry) => [entry.id, entry.position]));
+  const updated = items.map((item) => positions.has(item.id)
+    ? { ...item, position: positions.get(item.id)! }
+    : { ...item });
+  const groups = new Map<string, { firstIndex: number; values: T[] }>();
+  updated.forEach((item, index) => {
+    const key = String(item.day_number ?? '__all__');
+    const group = groups.get(key);
+    if (group) group.values.push(item);
+    else groups.set(key, { firstIndex: index, values: [item] });
+  });
+  return [...groups.values()]
+    .sort((left, right) => left.firstIndex - right.firstIndex)
+    .flatMap((group) => group.values.sort((left, right) => left.position - right.position));
 }

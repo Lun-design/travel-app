@@ -6,7 +6,7 @@ import { getDefaultMapOpen, getTripDetailLayout } from '@/lib/trip-detail-layout
 import { getThemeForMode, MOBILE_ACCENT_COFFEE, type ThemeMode } from '@/lib/theme';
 import { loadThemeMode, saveThemeMode } from '@/lib/theme-preference';
 import { tripDayNumbers } from '@/lib/trip-dates';
-import { saveItineraryItemAndRefresh, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
+import { saveItineraryItemAndRefresh, sortItineraryItemsByPosition, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
 import { importTripItems, clearTripItems } from '@/lib/itinerary-import-api';
 import type { ImportMode } from '@/lib/itinerary-import-service';
 import { listTrips } from '@/lib/trips';
@@ -75,7 +75,7 @@ export default function TripDetailScreen() {
   const pendingSavedItemRef = useRef<ItineraryItem | null>(null);
   const reminderItemsRef = useRef<ItineraryItem[]>(data.items);
   const days = useMemo(() => data.trip ? tripDayNumbers(data.trip.start_date, data.trip.end_date) : [1], [data.trip]);
-  const visibleItems = useMemo(() => sortItineraryItemsByStartTime(data.items.filter((item) => item.day_number === day && !item.is_backup)), [data.items, day]);
+  const visibleItems = useMemo(() => sortItineraryItemsByPosition(data.items.filter((item) => item.day_number === day && !item.is_backup)), [data.items, day]);
 
   useEffect(() => { void loadThemeMode().then(setThemeMode); }, []);
   useEffect(() => { reminderItemsRef.current = data.items; }, [data.items]);
