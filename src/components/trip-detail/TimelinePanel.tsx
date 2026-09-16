@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, LayoutAnimation, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, LayoutAnimation, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { TimelineViewport } from './TimelineViewport';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { ItineraryItem } from '@/lib/itinerary';
@@ -14,7 +14,7 @@ import { ItineraryTimeline } from '@/components/ItineraryTimeline';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import type { ThemeMode } from '@/lib/theme';
 import type { getTripDetailLayout } from '@/lib/trip-detail-layout';
-import { EDITORIAL_COLORS, MOBILE_ACCENT_COFFEE } from '@/lib/theme';
+import { DAY_ACTIVE_COLOR, EDITORIAL_COLORS } from '@/lib/theme';
 import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
@@ -170,8 +170,8 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     ? firstAddressLabel
     : (trip.destination && /[\u3400-\u9fff]/.test(trip.destination) ? trip.destination : `Day ${day} 行程`);
   return <>
-    <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#E2E8F0', fontSize: 14, fontWeight: '700', marginTop: 3 }}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={[styles.moreButton, { backgroundColor: 'rgba(255,255,255,.14)', borderColor: 'rgba(255,255,255,.3)' }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
-    <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={MOBILE_ACCENT_COFFEE} />
+    <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#334155' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#64748B', fontSize: 14, fontWeight: '700', marginTop: 3 }}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={[styles.moreButton, { backgroundColor: '#F1F5F9', borderColor: 'transparent', borderWidth: 0 }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#475569' }]}>···</Text></Pressable></View></View>
+    <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} />
     <DashboardMetricsBar metrics={metrics} themeMode={themeMode} action={<Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable>} />
     {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
     {/* optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線' */}
@@ -226,8 +226,6 @@ function formatDistance(distanceKm: number): string {
   return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`;
 }
 
-// React Native has no built-in gradient primitive. On web we add a subtle
-// slate gradient while retaining the same dark-slate surface on native.
 const dayHeroStyle = {
   width: '100%',
   flexDirection: 'row' as const,
@@ -239,8 +237,12 @@ const dayHeroStyle = {
   borderRadius: 16,
   paddingHorizontal: 20,
   paddingVertical: 16,
-  backgroundColor: '#1F2937',
-  ...(Platform.OS === 'web' ? { backgroundImage: 'linear-gradient(135deg, #1F2937 0%, #0F172A 100%)' } : {}),
+  backgroundColor: '#FFFFFF',
+  shadowColor: '#000000',
+  shadowOpacity: 0.05,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 1,
 } as const;
 
 const styles = StyleSheet.create({
@@ -251,9 +253,9 @@ const styles = StyleSheet.create({
   dayTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
   optimizeButton: { width: '100%', minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
-  optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: MOBILE_ACCENT_COFFEE, paddingHorizontal: 10 },
+  optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 0, borderColor: 'transparent', backgroundColor: '#F1F5F9', paddingHorizontal: 10 },
   optimizeInlineCompact: { minWidth: 36, paddingHorizontal: 8 },
-  optimizeInlineText: { color: MOBILE_ACCENT_COFFEE, fontSize: 11, fontWeight: '800' },
+  optimizeInlineText: { color: '#475569', fontSize: 11, fontWeight: '800' },
   optimizeInlineIconText: { fontSize: 16 },
   calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
   calendarText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
@@ -268,9 +270,9 @@ const styles = StyleSheet.create({
   menuItem: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 9 },
   menuItemText: { color: EDITORIAL_COLORS.charcoal, fontSize: 14, fontWeight: '700' },
   menuDangerText: { color: EDITORIAL_COLORS.dangerText, fontSize: 14, fontWeight: '700' },
-  mapToggle: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, overflow: 'hidden' },
-  mapToggleText: { color: EDITORIAL_COLORS.terracotta, fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  mapPane: { width: '100%', maxWidth: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden', marginBottom: 12 },
+  mapToggle: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, borderColor: 'transparent', paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, overflow: 'hidden' },
+  mapToggleText: { color: '#475569', fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  mapPane: { width: '100%', maxWidth: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden', marginBottom: 12, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   timelinePane: { flex: 1, minHeight: 0, width: '100%', minWidth: 0, borderRadius: 18, overflow: 'hidden' },
   // Keep the final timeline row clear of the floating add-spot action.
   paneContent: { width: '100%', paddingBottom: 144, boxSizing: 'border-box' },

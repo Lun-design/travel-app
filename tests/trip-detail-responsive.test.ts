@@ -64,11 +64,11 @@ describe('trip detail responsive layout', () => {
 
     expect(detail).toContain("backgroundColor: theme.isDark ? theme.colors.background : '#F8FAFC'");
     expect(timeline).toContain("backgroundColor: '#FFFFFF'");
-    expect(drag).toContain("borderColor: '#F1F5F9'");
-    expect(drag).toContain('shadowOpacity: 0.04');
+    expect(drag).toContain('borderWidth: 0');
+    expect(drag).toContain('shadowOpacity: 0.05');
     expect(theme).toContain("export const MOBILE_ACCENT_COFFEE = '#6F5846'");
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
-    expect(panel).toContain('accentColor={MOBILE_ACCENT_COFFEE}');
+    expect(panel).toContain('accentColor={DAY_ACTIVE_COLOR}');
     expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
   });
 

@@ -25,15 +25,19 @@ describe('mobile visual color polish', () => {
     const tabs = readFileSync(projectFile('src', 'components', 'DayTabs.tsx'), 'utf8');
     const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
     expect(theme).toContain("MOBILE_ACCENT_COFFEE = '#6F5846'");
+    expect(theme).toContain("DAY_ACTIVE_COLOR = '#4A3E3D'");
     expect(tabs).toContain('accentColor?: string');
+    expect(tabs).toContain('const activeColor = accentColor ?? DAY_ACTIVE_COLOR');
     expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
   });
 
-  it('renders a dark slate day hero and colored metrics icons', () => {
+  it('renders an airy neutral day hero and colored metrics icons', () => {
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     const metrics = readFileSync(projectFile('src', 'components', 'DashboardMetricsBar.tsx'), 'utf8');
-    expect(panel).toContain('#1F2937');
-    expect(panel).toContain('#0F172A');
+    expect(panel).toContain("backgroundColor: '#FFFFFF'");
+    expect(panel).toContain("color: '#334155'");
+    expect(panel).toContain("color: '#64748B'");
+    expect(panel).toContain("backgroundColor: '#F1F5F9'");
     expect(metrics).toContain('iconColor');
     expect(metrics).toContain('#DC4A3D');
     expect(metrics).toContain('#2563EB');
@@ -47,5 +51,19 @@ describe('mobile visual color polish', () => {
     expect(timeline).toContain('backgroundColor: palette.backgroundColor');
     expect(timeline).toContain('borderColor: palette.borderColor');
     expect(timeline).toContain('paddingHorizontal: 8');
+  });
+
+  it('removes hard borders from hero controls, day tabs, and timeline surfaces', () => {
+    const tabs = readFileSync(projectFile('src', 'components', 'DayTabs.tsx'), 'utf8');
+    const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
+    const drag = readFileSync(projectFile('lib', 'drag-drop.ts'), 'utf8');
+    expect(tabs).toContain('borderWidth: 0');
+    expect(tabs).toContain("const inactiveColor = '#94A3B8'");
+    expect(panel).toContain('optimizeInlineButton: { minHeight: 34');
+    expect(panel).toContain("backgroundColor: '#F1F5F9'");
+    expect(panel).toContain('borderWidth: 0');
+    expect(panel).toContain('mapToggle: {');
+    expect(drag).toContain('borderWidth: 0');
+    expect(drag).toContain('shadowOpacity: 0.05');
   });
 });
