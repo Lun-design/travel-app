@@ -4,6 +4,7 @@ import {
   getGooglePhotoUrl,
   getSpotImageFallbackUrl,
   getSpotImageFallback,
+  getSpotImageLightboxUrl,
   getSpotImageTags,
   getSpotImageUrl,
   resolveSpotImage,
@@ -36,6 +37,20 @@ describe('spot image resolver', () => {
     expect(getGooglePhotoUrl('places/ChIJphoto/photos/photo-reference-123')).toBe(
       'https://places.googleapis.com/v1/places/ChIJphoto/photos/photo-reference-123/media?maxWidthPx=400&key=test-key',
     );
+  });
+
+  it('uses a larger Google photo URL for the lightbox preview', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    expect(getSpotImageLightboxUrl({ photoReference: 'photo-ref' })).toBe(
+      'https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference=photo-ref&key=test-key',
+    );
+  });
+
+  it('upscales curated static images for the lightbox preview', () => {
+    const preview = getSpotImageLightboxUrl({ name: 'Unknown spot', category: 'spot' });
+    expect(preview).toContain('images.unsplash.com');
+    expect(preview).toContain('w=1200');
+    expect(preview).toContain('h=1200');
   });
 
   it('rejects invalid photo references before constructing a request URL', () => {

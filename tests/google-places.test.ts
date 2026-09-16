@@ -137,6 +137,29 @@ describe('Google Places API mapping', () => {
     })).toMatchObject({ photoReference: 'places/ChIJcamelPhoto/photos/photo-reference-456' });
   });
 
+  it('prefers a highly rated outdoor panorama over food or indoor photos', () => {
+    const details = parseGooglePlaceDetails({
+      id: 'ChIJrankedPhotos',
+      displayName: { text: 'Example landmark' },
+      photos: [
+        { name: 'places/ChIJrankedPhotos/photos/food', rating: 5, userRatingCount: 2000, types: ['restaurant'], displayName: 'food interior' },
+        { name: 'places/ChIJrankedPhotos/photos/panorama', rating: 4.8, userRatingCount: 1800, types: ['park'], widthPx: 1600, heightPx: 800, displayName: 'outdoor panorama' },
+      ] as any,
+    });
+
+    expect(details.photoReference).toBe('places/ChIJrankedPhotos/photos/panorama');
+  });
+
+  it('does not persist a clearly indoor-only photo set', () => {
+    const details = parseGooglePlaceDetails({
+      id: 'ChIJindoorPhotos',
+      displayName: { text: 'Example landmark' },
+      photos: [{ name: 'places/ChIJindoorPhotos/photos/restaurant', types: ['restaurant'], displayName: 'restaurant interior' }],
+    });
+
+    expect(details.photoReference).toBeUndefined();
+  });
+
   it('posts Autocomplete (New) input and maps place predictions', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

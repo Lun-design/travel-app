@@ -204,20 +204,21 @@ function getGooglePhotoApiKey(apiKey?: string): string | null {
 
 const LEGACY_PHOTO_REFERENCE_PATTERN = /^[A-Za-z0-9._~:-]+$/u;
 
-export function getGooglePhotoUrl(reference: unknown, apiKey?: string): string | null {
+export function getGooglePhotoUrl(reference: unknown, apiKey?: string, maxWidth = 400): string | null {
   const key = getGooglePhotoApiKey(apiKey);
   const cleanReference = nonEmpty(reference);
   if (!cleanReference || !key) return null;
   if (/^(?:undefined|null|\[object object\])$/iu.test(cleanReference)) return null;
+  const width = Number.isFinite(maxWidth) && maxWidth > 0 ? Math.round(maxWidth) : 400;
 
   if (isGooglePhotoResourceName(cleanReference)) {
-    return `https://places.googleapis.com/v1/${cleanReference}/media?maxWidthPx=400&key=${encodeURIComponent(key)}`;
+    return `https://places.googleapis.com/v1/${cleanReference}/media?maxWidthPx=${width}&key=${encodeURIComponent(key)}`;
   }
 
   // Legacy references are opaque URL-safe tokens. Reject paths, query
   // strings, and arbitrary objects before they can produce a guaranteed 400.
   if (!LEGACY_PHOTO_REFERENCE_PATTERN.test(cleanReference)) return null;
-  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${encodeURIComponent(cleanReference)}&key=${encodeURIComponent(key)}`;
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${width}&photo_reference=${encodeURIComponent(cleanReference)}&key=${encodeURIComponent(key)}`;
 }
 
 function normalizeSpotText(value: string): string {
@@ -353,4 +354,39 @@ export function getSpotImageUrl(spot: SpotImageInput | null | undefined): string
   if (exactImage) return exactImage;
 
   return getHashedFallback(spot);
+}
+
+function upscaleStaticImage(url: string): string {
+  if (!url.includes('images.unsplash.com')) return url;
+  return url
+    .replace(/([?&]w=)\d+/u, (_match, prefix: string) => `${prefix}1200`)
+    .replace(/([?&]h=)\d+/u, (_match, prefix: string) => `${prefix}1200`);
+}
+
+/**
+ * Resolve the image used by the full-screen preview. Google photos receive a
+ * larger request while curated/static images are kept deterministic.
+ */
+export function getSpotImageLightboxUrl(
+  spot: SpotImageInput | null | undefined,
+  apiKey?: string,
+  resolvedUrl?: string | null,
+): string {
+  if (!spot) return upscaleStaticImage(DEFAULT_FALLBACK);
+  const explicit = nonEmpty(spot.imageUrl) ?? nonEmpty(spot.image_url);
+  if (explicit) return explicit;
+  const reference = nonEmpty(spot.photoReference) ?? nonEmpty(spot.photo_reference);
+  const googlePhoto = reference ? getGooglePhotoUrl(reference, apiKey, 1600) : null;
+  if (googlePhoto) return googlePhoto;
+  const resolved = nonEmpty(resolvedUrl);
+  if (resolved) {
+    if (resolved.includes('maps.googleapis.com/maps/api/place/photo')) {
+      return resolved.replace(/([?&]maxwidth=)\d+/u, (_match, prefix: string) => `${prefix}1600`);
+    }
+    if (resolved.includes('places.googleapis.com/v1/')) {
+      return resolved.replace(/([?&]maxWidthPx=)\d+/u, (_match, prefix: string) => `${prefix}1600`);
+    }
+    return upscaleStaticImage(resolved);
+  }
+  return upscaleStaticImage(getSpotImageUrl(spot));
 }

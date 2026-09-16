@@ -19,6 +19,15 @@ export type GooglePlacePhotoPayload = {
   photoReference?: string;
   /** Places API (New) resource name, e.g. places/…/photos/… . */
   name?: string;
+  widthPx?: number;
+  heightPx?: number;
+  rating?: number;
+  userRatingCount?: number;
+  user_ratings_total?: number;
+  width?: number;
+  height?: number;
+  types?: string[];
+  displayName?: string;
 };
 
 export type GooglePlaceDetailsPayload = {
@@ -216,16 +225,49 @@ export function isGooglePhotoResourceName(value: unknown): value is string {
  * preserved in full so callers can use the `/media` endpoint rather than the
  * incompatible legacy Maps Photo endpoint.
  */
-export function extractGooglePhotoReference(photos?: GooglePlacePhotoPayload[] | null): string | undefined {
-  const first = photos?.find((photo) => photo && typeof photo === 'object');
-  if (!first) return undefined;
+const PHOTO_BLOCKLIST_PATTERN = /\b(?:food|restaurant|meal|cafe|coffee|interior|room|bedroom|lobby|indoor)\b/iu;
+const PHOTO_OUTDOOR_PATTERN = /\b(?:park|outdoor|landscape|panorama|scenic|nature|landmark|temple|museum|street)\b/iu;
 
-  const reference = normalizePhotoValue(first.photo_reference ?? first.photoReference);
-  if (reference && isGooglePhotoResourceName(reference)) return reference;
-  if (reference && LEGACY_PHOTO_REFERENCE_PATTERN.test(reference)) return reference;
-
-  const resourceName = normalizePhotoValue(first.name);
+function photoReferenceValue(photo: GooglePlacePhotoPayload): string | undefined {
+  const reference = normalizePhotoValue(photo.photo_reference ?? photo.photoReference);
+  if (reference && (isGooglePhotoResourceName(reference) || LEGACY_PHOTO_REFERENCE_PATTERN.test(reference))) return reference;
+  const resourceName = normalizePhotoValue(photo.name);
   return resourceName && isGooglePhotoResourceName(resourceName) ? resourceName : undefined;
+}
+
+/** Rank photos for an itinerary card, preferring outdoor panorama imagery. */
+function scoreGooglePhoto(photo: GooglePlacePhotoPayload, index: number): number {
+  const metadata = [photo.displayName, ...(photo.types ?? [])]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ');
+  if (PHOTO_BLOCKLIST_PATTERN.test(metadata)) return -100000 - index;
+  let score = 0;
+  const rating = Number(photo.rating);
+  const reviewCount = Number(photo.userRatingCount ?? photo.user_ratings_total);
+  if (Number.isFinite(rating)) score += rating * 100;
+  if (Number.isFinite(reviewCount) && reviewCount > 0) score += Math.log10(reviewCount + 1) * 10;
+  const width = Number(photo.widthPx ?? photo.width);
+  const height = Number(photo.heightPx ?? photo.height);
+  if (Number.isFinite(width) && Number.isFinite(height) && height > 0 && width / height >= 1.2) score += 25;
+  if (PHOTO_OUTDOOR_PATTERN.test(metadata)) score += 20;
+  return score - index * 0.001;
+}
+
+export function extractGooglePhotoReference(photos?: GooglePlacePhotoPayload[] | null): string | undefined {
+  const candidates = (photos ?? [])
+    .filter((photo): photo is GooglePlacePhotoPayload => Boolean(photo && typeof photo === 'object'))
+    .map((photo, index) => ({ photo, index, reference: photoReferenceValue(photo) }))
+    .filter((candidate): candidate is { photo: GooglePlacePhotoPayload; index: number; reference: string } => Boolean(candidate.reference));
+  if (!candidates.length) return undefined;
+  const suitable = candidates.filter(({ photo, index }) => scoreGooglePhoto(photo, index) > -100000);
+  // If every returned image is clearly food/indoor imagery, don't persist a
+  // misleading reference; callers will render their category fallback.
+  if (!suitable.length) return undefined;
+  const ranked = suitable.sort((left, right) => {
+    const scoreDifference = scoreGooglePhoto(right.photo, right.index) - scoreGooglePhoto(left.photo, left.index);
+    return scoreDifference || left.index - right.index;
+  });
+  return ranked[0]?.reference;
 }
 
 async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {

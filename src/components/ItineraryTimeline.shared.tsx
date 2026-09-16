@@ -14,7 +14,7 @@ import type { PuppyId } from '@/lib/puppy';
 import { PuppyMascot } from './PuppyMascot';
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
 import { reservationTagLabels } from '@/lib/reservation-tags';
-import { getSpotImageFallbackUrl, getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
+import { getSpotImageFallbackUrl, getSpotImageLightboxUrl, getSpotImageUrl, resolveSpotImage } from '@/lib/spot-image';
 import { getCategoryBadgePalette } from '@/lib/visual-styles';
 
 export type ItineraryTimelineProps = {
@@ -202,6 +202,8 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));
   const [favorite, setFavorite] = useState(false);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxImageFailed, setLightboxImageFailed] = useState(false);
   const imageFallbackAttemptedRef = useRef(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [routeModesVisible, setRouteModesVisible] = useState(false);
@@ -228,6 +230,16 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
             {scheduled.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
             {scheduled.overlapWarning ? <Text style={styles.overlapWarning}>🚨 時間衝突</Text> : null}
           </View> : null}
+          <Modal visible={lightboxVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxVisible(false)}>
+            <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxVisible(false)}>
+              <View style={styles.lightboxContent}>
+                <Pressable style={styles.lightboxImagePressable} onPress={(event) => event.stopPropagation()}>
+                  {lightboxImageFailed ? <View style={[styles.lightboxImage, styles.lightboxFallback]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={72} accessibilityLabel={`${item.location_name} 無預覽圖`} /><Text style={styles.lightboxFallbackText}>目前無預覽圖</Text></View> : <Image source={{ uri: getSpotImageLightboxUrl(item, undefined, resolvedImageUrl) }} style={styles.lightboxImage} resizeMode="contain" accessibilityLabel={`${item.location_name} 大圖`} onError={() => setLightboxImageFailed(true)} />}
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="關閉照片預覽" style={styles.lightboxClose} onPress={() => setLightboxVisible(false)}><Text style={styles.lightboxCloseText}>×</Text></Pressable>
+              </View>
+            </Pressable>
+          </Modal>
           <View style={styles.cardBody}>
             {!imageLoadFailed && resolvedImageUrl ? <Image source={{ uri: resolvedImageUrl }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} onError={() => {
               if (!imageFallbackAttemptedRef.current) {
@@ -240,6 +252,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               // image glyph.
               setImageLoadFailed(true);
             }} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={34} accessibilityLabel={`${item.category} 類別`} /></View>}
+            <Pressable accessibilityRole="button" accessibilityLabel={`放大查看 ${item.location_name}`} style={styles.thumbnailOverlay} onPress={() => { setLightboxImageFailed(!resolvedImageUrl || imageLoadFailed); setLightboxVisible(true); }} />
             <View style={[styles.content, isMobile ? null : safeCardContentStyle, { gap: 8 }]}>
               <View style={[styles.cardHeader, isMobile && responsiveCardStyles.cardHeaderMobile]}><Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>{isMobile ? <View style={[styles.categoryWrap, responsiveCardStyles.mobileCategoryWrap]}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View> : <><Text numberOfLines={1} style={[styles.name, cardVisualStyles.headerName, { color: '#1A1A1A', fontSize: 17, fontWeight: '700' }]}>{item.location_name}</Text><View style={styles.categoryWrap}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View></> }</View>{isMobile ? <Text style={[styles.name, responsiveCardStyles.mobileName, { color: '#1A1A1A' }]}>{item.location_name}</Text> : null}
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
@@ -360,7 +373,7 @@ const styles = {
     dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 3, borderColor: EDITORIAL_COLORS.terracottaSoft, zIndex: 1 },
     card: { flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', marginBottom: 12, padding: 12, borderRadius: 14, borderWidth: 0, position: 'relative' },
     cardActive: { shadowOpacity: 0.08 },
-    cardBody: { width: '100%', flexDirection: 'row', alignItems: 'stretch', gap: 10 },
+    cardBody: { width: '100%', flexDirection: 'row', alignItems: 'stretch', gap: 10, position: 'relative' },
     content: { flex: 1, minWidth: 0, gap: 5 },
     cardHeader: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 },
     time: { fontWeight: '800', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
@@ -423,8 +436,17 @@ const styles = {
   routeLink: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6, marginLeft: 0 } as const,
   routeLinkText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
   navigationButton: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6 } as const,
-   navigationPuppy: { width: 20, height: 20, flexShrink: 0, backgroundColor: 'transparent', opacity: 1 } as const,
+  navigationPuppy: { width: 20, height: 20, flexShrink: 0, backgroundColor: 'transparent', opacity: 1 } as const,
   navigation: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
+  thumbnailOverlay: { position: 'absolute', left: 0, top: 0, width: 64, height: 64, borderRadius: 16, zIndex: 3 } as const,
+  lightboxBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.9)', alignItems: 'center', justifyContent: 'center' } as const,
+  lightboxContent: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', position: 'relative' } as const,
+  lightboxImagePressable: { width: '100%', height: '82%', alignItems: 'center', justifyContent: 'center' } as const,
+  lightboxImage: { width: '100%', height: '100%', maxWidth: 960 } as const,
+  lightboxFallback: { alignItems: 'center', justifyContent: 'center', gap: 10 } as const,
+  lightboxFallbackText: { color: '#F5F5F4', fontSize: 14, fontWeight: '600' } as const,
+  lightboxClose: { position: 'absolute', top: 24, right: 20, minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)' } as const,
+  lightboxCloseText: { color: '#FFFFFF', fontSize: 30, lineHeight: 34, fontWeight: '300' } as const,
 };
 
 // Compatibility markers retained for previous UI checks: ??銝宏 / ??銝宏 / ?妣 ?? Google Maps 撠
