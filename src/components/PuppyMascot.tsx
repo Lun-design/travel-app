@@ -37,7 +37,7 @@ export function PuppyMascot({ puppy, size = 32, style, accessibilityLabel }: {
     resizeMode="contain"
     accessible={Boolean(accessibilityLabel)}
     accessibilityLabel={accessibilityLabel}
-    style={[{ width: size, height: size, backgroundColor: 'transparent' }, style, { opacity }]}
+    style={[{ width: size, height: size, backgroundColor: 'transparent', mixBlendMode: 'multiply' }, style, { opacity }]}
   />;
 }
 

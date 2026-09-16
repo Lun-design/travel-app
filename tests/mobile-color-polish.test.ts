@@ -69,16 +69,20 @@ describe('mobile visual color polish', () => {
   it('places a compact transparent linedog inside the card navigation pill', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const mascot = readFileSync(projectFile('src', 'components', 'PuppyMascot.tsx'), 'utf8');
-    expect(timeline).toContain('<PuppyMascot puppy="-8" size={20}');
+    expect(timeline).toContain('navigationPuppyId');
+    expect(timeline).toContain('<PuppyMascot puppy={navigationPuppyId(item.category)} size={20}');
     expect(timeline).toContain('navigationButton');
     expect(timeline).toContain('navigationPuppy');
     expect(timeline).not.toContain('routeLinkPuppy');
+    expect(timeline).toContain("return categoryPuppies[category.trim().toLowerCase()] ?? '-8'");
+    expect(timeline).toContain('disabled={!navigationUrl}');
     expect(timeline).toContain('paddingHorizontal: 12');
     expect(timeline).toContain('paddingVertical: 6');
     expect(timeline).toContain('gap: 6');
     expect(timeline).toContain("backgroundColor: 'transparent'");
     expect(mascot).toContain('resizeMode="contain"');
     expect(mascot).toContain("backgroundColor: 'transparent'");
+    expect(mascot).toContain("mixBlendMode: 'multiply'");
   });
 
   it('removes hard borders from hero controls, day tabs, and timeline surfaces', () => {
