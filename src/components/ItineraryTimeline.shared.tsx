@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Linking, Modal, Pressable, Share, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
-import { buildRouteSegments, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
+import { buildRouteSegments, resolveRouteSegmentLabels, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
 import type { Voucher } from '@/lib/vouchers';
@@ -33,6 +33,8 @@ export type ItineraryTimelineProps = {
 export type TimelineRouteSegment = RouteSegment & {
   mode: TravelMode;
   durationMinutes: number;
+  fromTitle: string;
+  toTitle: string;
   navigationUrl: string | null;
   loading?: boolean;
 };
@@ -127,8 +129,10 @@ export function displayRouteSegments(items: ItineraryItem[], modes: Record<strin
     const mode = modes[segment.fromId] ?? 'DRIVING';
     const fallback = calculateFallbackTravelMinutes(segment.distanceKm, mode);
     const estimate = estimates[segment.fromId];
+    const labels = resolveRouteSegmentLabels(items, segment);
     return {
       ...segment,
+      ...labels,
       mode,
       durationMinutes: estimate?.durationMinutes ?? fallback,
       estimatedDriveMinutes: estimate?.durationMinutes ?? fallback,
@@ -261,6 +265,11 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
         </View>
       </View>
       {segment ? <View style={styles.transition}>
+        <View style={styles.transitionContext}>
+          <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.fromTitle}</Text>
+          <Text style={styles.transitionArrow}>➔</Text>
+          <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
+        </View>
         <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)})</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {segment.navigationUrl ? <Pressable accessibilityRole="link" style={styles.routeLink} onPress={() => { void Linking.openURL(segment.navigationUrl as string).catch(() => undefined); }}><Text numberOfLines={1} style={styles.routeLinkText}>🗺️ 導航路線</Text></Pressable> : null}
@@ -394,6 +403,9 @@ const styles = {
   }),
   // Mobile-friendly transport presentation: a compact, neutral pill.
   transition: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, gap: 4, marginLeft: 24, marginTop: 4, marginBottom: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, borderColor: 'transparent', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.line } as const,
+  transitionContext: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', minWidth: 0 } as const,
+  transitionEndpoint: { maxWidth: 120, minWidth: 0, flexShrink: 1, color: '#8C6D58', fontSize: 11, fontWeight: '500' } as const,
+  transitionArrow: { color: '#8C6D58', fontSize: 11, fontWeight: '500', flexShrink: 0 } as const,
   transitionMain: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 } as const,
   transitionText: { color: '#475569', fontSize: 11, fontWeight: '600', flexShrink: 1 } as const,
   // Extend the rail through the compact transport pill so the timeline never

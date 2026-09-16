@@ -209,6 +209,11 @@ export type RouteSegment = {
   estimatedDriveMinutes: number;
 };
 
+export type RouteSegmentLabels = {
+  fromTitle: string;
+  toTitle: string;
+};
+
 export function filterAndSortItems(items: ItineraryItem[], day: number) {
   return sortItineraryItemsByStartTime(items.filter((x) => x.day_number === day));
 }
@@ -291,6 +296,18 @@ export function buildRouteSegments(
       estimatedDriveMinutes: Math.max(1, Math.round(distanceKm / averageSpeedKmh * 60)),
     };
   });
+}
+
+/** Resolve human-readable endpoint names for a route segment. */
+export function resolveRouteSegmentLabels(
+  items: readonly Pick<ItineraryItem, 'id' | 'location_name'>[],
+  segment: Pick<RouteSegment, 'fromId' | 'toId'>,
+): RouteSegmentLabels {
+  const byId = new Map(items.map((item) => [item.id, item.location_name]));
+  return {
+    fromTitle: byId.get(segment.fromId)?.trim() || segment.fromId,
+    toTitle: byId.get(segment.toId)?.trim() || segment.toId,
+  };
 }
 
 export function reorderItineraryItems(items: ItineraryItem[], fromIndex: number, toIndex: number): ItineraryItem[] {
