@@ -262,8 +262,25 @@ export function haversineDistanceKm(from: Coordinate, to: Coordinate) {
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function buildRouteSegments(items: ItineraryItem[], day: number, averageSpeedKmh = 35): RouteSegment[] {
-  const markers = mapMarkersForDay(items, day);
+export function buildRouteSegments(
+  items: ItineraryItem[],
+  day: number,
+  averageSpeedKmh = 35,
+  order: 'time' | 'position' = 'time',
+): RouteSegment[] {
+  const markers = order === 'position'
+    ? items
+      .filter((item) => item.day_number === day && item.latitude != null && item.longitude != null)
+      .sort((left, right) => left.position - right.position)
+      .map((item, index) => ({
+        id: item.id,
+        order: index + 1,
+        title: item.location_name,
+        description: item.notes || item.address,
+        latitude: item.latitude as number,
+        longitude: item.longitude as number,
+      }))
+    : mapMarkersForDay(items, day);
   return markers.slice(0, -1).map((from, index) => {
     const to = markers[index + 1];
     const distanceKm = haversineDistanceKm(from, to);

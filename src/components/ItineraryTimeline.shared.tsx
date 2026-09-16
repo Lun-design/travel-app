@@ -82,16 +82,24 @@ export function useWeatherByItem(items: ItineraryItem[], context?: Pick<Schedule
   return weatherById;
 }
 
-export function segmentsForItems(items: ItineraryItem[]) { return items.length ? buildRouteSegments(items, items[0].day_number) : []; }
+export function segmentsForItems(items: ItineraryItem[]) {
+  return items.length ? buildRouteSegments(items, items[0].day_number, 35, 'position') : [];
+}
 export function orderPayload(items: ItineraryItem[]) { return items.map(({ id, position }) => ({ id, position })); }
 
 export function useRouteSegments(items: ItineraryItem[], modes: Record<string, TravelMode>) {
   const [estimates, setEstimates] = useState<Record<string, RouteEstimate>>({});
-  const itemKey = items.map((item) => `${item.id}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
+  const routeOrderKeyRef = useRef<string | null>(null);
+  const itemKey = items.map((item) => `${item.id}:${item.position}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
+  const orderKey = items.map((item) => `${item.id}:${item.position}`).join('|');
   const modeKey = Object.entries(modes).sort(([left], [right]) => left.localeCompare(right)).map(([id, mode]) => `${id}:${mode}`).join('|');
 
   useEffect(() => {
     let active = true;
+    if (routeOrderKeyRef.current !== null && routeOrderKeyRef.current !== orderKey) {
+      routeEstimator.cache.clear();
+    }
+    routeOrderKeyRef.current = orderKey;
     const byId = new Map(items.map((item) => [item.id, item]));
     const baseSegments = segmentsForItems(items);
     setEstimates({});
@@ -106,7 +114,7 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
       if (active) setEstimates(Object.fromEntries(results.flatMap((entry) => entry ? [entry] : [])) as Record<string, RouteEstimate>);
     });
     return () => { active = false; };
-  }, [itemKey, modeKey]);
+  }, [itemKey, modeKey, orderKey]);
 
   return estimates;
 }

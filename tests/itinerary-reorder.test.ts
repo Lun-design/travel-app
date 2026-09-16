@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyItineraryOrder, reorderItineraryItems } from '../lib/itinerary';
+import { applyItineraryOrder, buildRouteSegments, reorderItineraryItems } from '../lib/itinerary';
 
 const source = (...parts: string[]) => readFileSync(path.resolve(process.cwd(), ...parts), 'utf8');
 
@@ -42,6 +42,25 @@ describe('timeline menu reorder controls', () => {
     expect(updated.find((item) => item.id === 'other-day')?.position).toBe(0);
   });
 
+  it('recalculates adjacent route segments when positions are swapped', () => {
+    const routeItems = [
+      { id: 'a', day_number: 1, time: '09:00', position: 0, latitude: 25.0478, longitude: 121.517 },
+      { id: 'b', day_number: 1, time: '10:00', position: 1, latitude: 25.033968, longitude: 121.564468 },
+      { id: 'c', day_number: 1, time: '11:00', position: 2, latitude: 24.1477, longitude: 120.6736 },
+    ] as any;
+    const before = buildRouteSegments(routeItems, 1, 35, 'position');
+    const reordered = applyItineraryOrder(routeItems, [
+      { id: 'b', position: 0 },
+      { id: 'a', position: 1 },
+      { id: 'c', position: 2 },
+    ]) as any;
+    const after = buildRouteSegments(reordered, 1, 35, 'position');
+
+    expect(before.map(({ fromId, toId }) => [fromId, toId])).toEqual([['a', 'b'], ['b', 'c']]);
+    expect(after.map(({ fromId, toId }) => [fromId, toId])).toEqual([['b', 'a'], ['a', 'c']]);
+    expect(after[1]?.distanceKm).not.toBe(before[1]?.distanceKm);
+  });
+
   it('keeps the up/down menu wiring while removing drag wrappers and gestures', () => {
     const shared = source('src', 'components', 'ItineraryTimeline.shared.tsx');
     const web = source('src', 'components', 'ItineraryTimeline.web.tsx');
@@ -65,5 +84,8 @@ describe('timeline menu reorder controls', () => {
     expect(tripDetail).toContain('sortItineraryItemsByPosition');
     expect(web).toContain('sortItineraryItemsByPosition(items)');
     expect(native).toContain('sortItineraryItemsByPosition(items)');
+    expect(shared).toContain("buildRouteSegments(items, items[0].day_number, 35, 'position')");
+    expect(shared).toContain('routeEstimator.cache.clear()');
+    expect(shared).toContain('item.id}:${item.position}');
   });
 });
