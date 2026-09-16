@@ -51,24 +51,26 @@ describe('mobile visual color polish', () => {
     expect(timeline).toContain('categoryBadge');
     expect(timeline).toContain('backgroundColor: palette.backgroundColor');
     expect(timeline).toContain('borderColor: palette.borderColor');
-    expect(timeline).toContain('paddingHorizontal: 12');
+    expect(timeline).toContain('paddingHorizontal: 8');
   });
 
-  it('uses linedog artwork for category badges instead of emoji icons', () => {
+  it('keeps category badges text-only after moving linedogs to navigation', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     expect(timeline).toContain('categoryPuppyId');
     expect(timeline).toContain("flight: '-8'");
     expect(timeline).toContain("hotel: '-6'");
     expect(timeline).toContain("food: '-10'");
     expect(timeline).toContain("spot: '-11'");
-    expect(timeline).toContain('PuppyMascot puppy={categoryPuppyId(category)}');
+    const badge = timeline.slice(timeline.indexOf('function CategoryBadge'), timeline.indexOf('function formatDistance'));
+    expect(badge).not.toContain('PuppyMascot');
+    expect(badge).toContain('{category}</Text>');
   });
 
-  it('gives category linedogs a larger transparent, centered badge treatment', () => {
+  it('places a larger transparent linedog inside the navigation pill', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const mascot = readFileSync(projectFile('src', 'components', 'PuppyMascot.tsx'), 'utf8');
-    expect(timeline).toContain('size={24}');
-    expect(timeline).toContain('categoryBadgeIcon: { width: 24, height: 24');
+    expect(timeline).toContain('<PuppyMascot puppy="-8" size={24}');
+    expect(timeline).toContain('routeLinkPuppy');
     expect(timeline).toContain('paddingHorizontal: 12');
     expect(timeline).toContain('paddingVertical: 6');
     expect(timeline).toContain('gap: 6');

@@ -242,7 +242,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, grip, segme
       {segment ? <View style={styles.transition}>
         <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)})</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
-        {segment.navigationUrl ? <Pressable accessibilityRole="link" style={styles.routeLink} onPress={() => { void Linking.openURL(segment.navigationUrl as string).catch(() => undefined); }}><Text style={styles.routeLinkText}>🗺️ 導航路線</Text></Pressable> : null}
+        {segment.navigationUrl ? <Pressable accessibilityRole="link" style={styles.routeLink} onPress={() => { void Linking.openURL(segment.navigationUrl as string).catch(() => undefined); }}><PuppyMascot puppy="-8" size={24} style={styles.routeLinkPuppy} accessibilityLabel="導航小狗" /><Text numberOfLines={1} style={styles.routeLinkText}>🗺️ 導航路線</Text></Pressable> : null}
       </View> : null}
     </View>
   );
@@ -311,7 +311,6 @@ function categoryPuppyId(category: string): PuppyId {
 function CategoryBadge({ category, compact, inline = false }: { category: string; compact: boolean; inline?: boolean }) {
   const palette = getCategoryBadgePalette(category);
   return <View pointerEvents="none" style={[styles.categoryBadge, compact && styles.categoryBadgeCompact, inline && styles.categoryBadgeInline, { backgroundColor: palette.backgroundColor, borderColor: palette.borderColor }]}>
-    <PuppyMascot puppy={categoryPuppyId(category)} size={24} style={styles.categoryBadgeIcon} accessibilityLabel={`${category} 類別`} />
     <Text numberOfLines={1} style={[styles.categoryBadgeText, { color: palette.color }]}>{category}</Text>
   </View>;
 }
@@ -334,11 +333,15 @@ const styles = {
   // The category is rendered once as an outer, position-safe badge. The
   // legacy inline wrapper remains hidden to avoid duplicate labels.
   categoryWrap: { display: 'none' } as const,
-  categoryBadge: { position: 'absolute', top: 8, right: 48, zIndex: 4, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, minHeight: 36 } as const,
+  categoryBadge: { position: 'absolute', top: 8, right: 48, zIndex: 4, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, minHeight: 24 } as const,
   categoryBadgeCompact: { right: 48, maxWidth: '100%' } as const,
   categoryBadgeInline: { position: 'relative', top: 0, right: 0, zIndex: 0, maxWidth: '70%' } as const,
-  categoryBadgeIcon: { width: 24, height: 24, flexShrink: 0, marginRight: 0, backgroundColor: 'transparent' } as const,
   categoryBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3, flexShrink: 1 } as const,
+  // Navigation is a compact pill; the linedog sits inside rather than in the
+  // category badge so the card header stays clean on narrow screens.
+  routeLink: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6, marginLeft: 0 } as const,
+  routeLinkPuppy: { width: 24, height: 24, flexShrink: 0, backgroundColor: 'transparent' } as const,
+  routeLinkText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
 };
 
 // Compatibility markers retained for previous UI checks: ??銝宏 / ??銝宏 / ?妣 ?? Google Maps 撠
