@@ -170,7 +170,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     ? firstAddressLabel
     : (trip.destination && /[\u3400-\u9fff]/.test(trip.destination) ? trip.destination : `Day ${day} 行程`);
   return <>
-    <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#334155' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#64748B', fontSize: 14, fontWeight: '700', marginTop: 3 }}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={[styles.moreButton, { backgroundColor: '#F1F5F9', borderColor: 'transparent', borderWidth: 0 }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#475569' }]}>···</Text></Pressable></View></View>
+    <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#D6D3D1', fontSize: 14, fontWeight: '700', marginTop: 3 }}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={({ pressed }) => [styles.moreButton, { backgroundColor: pressed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)', borderColor: 'transparent', borderWidth: 0 }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
     <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} />
     <DashboardMetricsBar metrics={metrics} themeMode={themeMode} action={<Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable>} />
     {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
@@ -237,7 +237,7 @@ const dayHeroStyle = {
   borderRadius: 16,
   paddingHorizontal: 20,
   paddingVertical: 16,
-  backgroundColor: '#FFFFFF',
+  backgroundColor: '#4A3E3D',
   shadowColor: '#000000',
   shadowOpacity: 0.05,
   shadowRadius: 12,

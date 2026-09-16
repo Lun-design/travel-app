@@ -31,12 +31,13 @@ describe('mobile visual color polish', () => {
     expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
   });
 
-  it('renders an airy neutral day hero and colored metrics icons', () => {
+  it('renders a coffee day hero and colored metrics icons', () => {
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     const metrics = readFileSync(projectFile('src', 'components', 'DashboardMetricsBar.tsx'), 'utf8');
-    expect(panel).toContain("backgroundColor: '#FFFFFF'");
-    expect(panel).toContain("color: '#334155'");
-    expect(panel).toContain("color: '#64748B'");
+    expect(panel).toContain("backgroundColor: '#4A3E3D'");
+    expect(panel).toContain("color: '#FFFFFF'");
+    expect(panel).toContain("color: '#D6D3D1'");
+    expect(panel).toContain("backgroundColor: pressed ? 'rgba(255,255,255,0.2)'");
     expect(panel).toContain("backgroundColor: '#F1F5F9'");
     expect(metrics).toContain('iconColor');
     expect(metrics).toContain('#DC4A3D');

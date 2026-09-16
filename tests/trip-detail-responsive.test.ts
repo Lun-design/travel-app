@@ -62,7 +62,7 @@ describe('trip detail responsive layout', () => {
     const drag = readFileSync(projectFile('lib', 'drag-drop.ts'), 'utf8');
     const theme = readFileSync(projectFile('lib', 'theme.ts'), 'utf8');
 
-    expect(detail).toContain("backgroundColor: theme.isDark ? theme.colors.background : '#F8FAFC'");
+    expect(detail).toContain("backgroundColor: theme.isDark ? theme.colors.background : '#F7F5F0'");
     expect(timeline).toContain("backgroundColor: '#FFFFFF'");
     expect(drag).toContain('borderWidth: 0');
     expect(drag).toContain('shadowOpacity: 0.05');
@@ -84,6 +84,22 @@ describe('trip detail responsive layout', () => {
     const web = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.web.tsx'), 'utf8');
     expect(web).toContain("marginLeft: 8, marginRight: 8");
     expect(web).toContain("color: '#CBD5E1'");
+  });
+
+  it('uses the coffee hero palette and clear card-to-transport rhythm', () => {
+    const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
+
+    expect(panel).toContain("backgroundColor: '#4A3E3D'");
+    expect(panel).toContain("color: '#FFFFFF'");
+    expect(panel).toContain("color: '#D6D3D1'");
+    expect(panel).toContain("backgroundColor: pressed ? 'rgba(255,255,255,0.2)'");
+    expect(panel).toContain(": 'rgba(255,255,255,0.1)'");
+    expect(detail).toContain("theme.isDark ? theme.colors.background : '#F7F5F0'");
+    expect(timeline).toContain("borderTopColor: 'rgba(74,62,61,0.15)'");
+    expect(timeline).toContain('marginTop: 4');
+    expect(timeline).toContain('marginBottom: 12');
   });
 
   it('keeps a bottom scroll inset for the floating add-spot action', () => {
