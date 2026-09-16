@@ -5,7 +5,7 @@
  */
 // Re-export the accent from the theme module so native and web entry points
 // cannot accidentally drift to different active-state colors.
-export { MOBILE_ACCENT_ORANGE } from './theme';
+export { MOBILE_ACCENT_COFFEE } from './theme';
 
 export type CategoryBadgePalette = Readonly<{
   backgroundColor: string;

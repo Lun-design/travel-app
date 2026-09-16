@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getCategoryBadgePalette, MOBILE_ACCENT_ORANGE } from '../lib/visual-styles';
+import { getCategoryBadgePalette, MOBILE_ACCENT_COFFEE } from '../lib/visual-styles';
 
 const projectFile = (...parts: string[]) => path.resolve(process.cwd(), ...parts);
 
@@ -19,14 +19,14 @@ describe('mobile visual color polish', () => {
     expect(getCategoryBadgePalette('unknown')).toEqual({ backgroundColor: '#F8FAFC', color: '#475569', borderColor: '#E2E8F0' });
   });
 
-  it('uses a vivid orange accent for active mobile controls', () => {
-    expect(MOBILE_ACCENT_ORANGE).toBe('#E05D38');
+  it('uses a deep coffee accent for active mobile controls', () => {
+    expect(MOBILE_ACCENT_COFFEE).toBe('#6F5846');
     const theme = readFileSync(projectFile('lib', 'theme.ts'), 'utf8');
     const tabs = readFileSync(projectFile('src', 'components', 'DayTabs.tsx'), 'utf8');
     const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
-    expect(theme).toContain("MOBILE_ACCENT_ORANGE = '#E05D38'");
+    expect(theme).toContain("MOBILE_ACCENT_COFFEE = '#6F5846'");
     expect(tabs).toContain('accentColor?: string');
-    expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_ORANGE : theme.colors.primary');
+    expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
   });
 
   it('renders a dark slate day hero and colored metrics icons', () => {

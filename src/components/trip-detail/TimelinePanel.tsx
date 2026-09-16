@@ -14,7 +14,7 @@ import { ItineraryTimeline } from '@/components/ItineraryTimeline';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import type { ThemeMode } from '@/lib/theme';
 import type { getTripDetailLayout } from '@/lib/trip-detail-layout';
-import { EDITORIAL_COLORS, MOBILE_ACCENT_ORANGE } from '@/lib/theme';
+import { EDITORIAL_COLORS, MOBILE_ACCENT_COFFEE } from '@/lib/theme';
 import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
@@ -171,7 +171,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     : (trip.destination && /[\u3400-\u9fff]/.test(trip.destination) ? trip.destination : `Day ${day} 行程`);
   return <>
     <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} style={{ color: '#E2E8F0', fontSize: 14, fontWeight: '700', marginTop: 3 }}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={[styles.moreButton, { backgroundColor: 'rgba(255,255,255,.14)', borderColor: 'rgba(255,255,255,.3)' }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
-    <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={MOBILE_ACCENT_ORANGE} />
+    <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={MOBILE_ACCENT_COFFEE} />
     <DashboardMetricsBar metrics={metrics} themeMode={themeMode} action={<Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable>} />
     {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
     {/* optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線' */}
@@ -251,9 +251,9 @@ const styles = StyleSheet.create({
   dayTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
   optimizeButton: { width: '100%', minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
-  optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: MOBILE_ACCENT_ORANGE, paddingHorizontal: 10 },
+  optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: MOBILE_ACCENT_COFFEE, paddingHorizontal: 10 },
   optimizeInlineCompact: { minWidth: 36, paddingHorizontal: 8 },
-  optimizeInlineText: { color: MOBILE_ACCENT_ORANGE, fontSize: 11, fontWeight: '800' },
+  optimizeInlineText: { color: MOBILE_ACCENT_COFFEE, fontSize: 11, fontWeight: '800' },
   optimizeInlineIconText: { fontSize: 16 },
   calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
   calendarText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
