@@ -153,7 +153,9 @@ export function createTimelineCardContainerStyle() {
 /** Touch dragging starts only after a deliberate long press and movement. */
 export const MOBILE_DRAG_CONFIG = Object.freeze({
   activationDistance: 16,
-  delayLongPress: 280,
+  // A short deliberate hold starts dragging without making cards feel slow.
+  delayLongPress: 200,
+  delayTouchStart: 200,
   scrollEnabled: false,
   removeClippedSubviews: false,
   dragItemOverflow: false,
@@ -171,7 +173,7 @@ export const MOBILE_DRAG_CONFIG = Object.freeze({
 
 /** Pressable tuning prevents a tiny finger drift from cancelling long press. */
 export const MOBILE_GRIP_CONFIG = Object.freeze({
-  delayLongPress: 280,
+  delayLongPress: 200,
   pressRetentionOffset: 24,
   hitSlop: 4,
 });
@@ -205,6 +207,8 @@ export function areTimelineCardPropsEqual(previous: any, next: any) {
     && previous.onMoveDown === next.onMoveDown
     && previous.canMoveUp === next.canMoveUp
     && previous.canMoveDown === next.canMoveDown
+    && previous.onLongPress === next.onLongPress
+    && previous.isDragging === next.isDragging
     && previous.onRouteModeChange === next.onRouteModeChange;
 }
 

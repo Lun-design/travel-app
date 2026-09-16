@@ -74,7 +74,7 @@ describe('trip detail responsive layout', () => {
 
   it('keeps transport and drag affordances visually lightweight on mobile', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
-    expect(timeline).toContain("transition: { alignSelf: 'center', width: '100%', gap: 4");
+    expect(timeline).toContain("transition: { alignSelf: 'flex-start', width: 'auto'");
     expect(timeline).toContain("backgroundColor: '#F1F5F9', borderWidth: 0");
     expect(timeline).toContain("transitionText: { color: '#475569', fontSize: 11");
     expect(timeline).toContain("gripText: { color: '#CBD5E1'");

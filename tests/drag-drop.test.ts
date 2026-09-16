@@ -1,7 +1,11 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createDragCloneStyle, createDragContainerStyle, createDragOverlayRootStyle, createDragPreviewStyle, createNativeDragRowStyle, createTimelineCardContainerStyle, getDragOverlayContainer, MOBILE_DRAG_CONFIG, MOBILE_GRIP_CONFIG, reconcileDraggedItems, areTimelineCardPropsEqual } from '../lib/drag-drop';
 
 describe('drag and drop layout safeguards', () => {
+  const source = (...parts: string[]) => readFileSync(path.resolve(process.cwd(), ...parts), 'utf8');
+
   it('keeps a dragging preview full-width and clipped to the timeline bounds', () => {
     const style = createDragPreviewStyle({ transform: 'translate(0px, 40px)' }, true);
 
@@ -97,7 +101,8 @@ describe('drag and drop layout safeguards', () => {
   it('requires a deliberate long-press/distance before touch dragging starts', () => {
     expect(MOBILE_DRAG_CONFIG).toEqual(expect.objectContaining({
       activationDistance: 16,
-      delayLongPress: 280,
+      delayLongPress: 200,
+      delayTouchStart: 200,
       scrollEnabled: false,
       removeClippedSubviews: false,
       dragItemOverflow: false,
@@ -133,10 +138,38 @@ describe('drag and drop layout safeguards', () => {
 
   it('keeps a touch gesture captured after a small finger drift', () => {
     expect(MOBILE_GRIP_CONFIG).toEqual({
-      delayLongPress: 280,
+      delayLongPress: 200,
       pressRetentionOffset: 24,
       hitSlop: 4,
     });
+  });
+
+  it('starts mobile dragging from the full card after a short long press', () => {
+    const native = source('src', 'components', 'ItineraryTimeline.native.tsx');
+    const shared = source('src', 'components', 'ItineraryTimeline.shared.tsx');
+
+    expect(native).toContain('onLongPress={drag}');
+    expect(native).toContain('{...MOBILE_DRAG_CONFIG}');
+    expect(shared).toContain('onLongPress?: () => void');
+    expect(shared).toContain('dragTrigger}>{grip}</View>');
+    expect(shared).not.toContain('<View style={styles.grip}>');
+  });
+
+  it('keeps the category badge and menu in one compact top-right row', () => {
+    const shared = source('src', 'components', 'ItineraryTimeline.shared.tsx');
+    expect(shared).toContain('CategoryBadge category={item.category} compact={isMobile} inline');
+    expect(shared).toContain('gap: 8 }');
+    expect(shared).toContain('triggerRow: { position: \'absolute\'');
+    expect(shared).toContain('categoryBadge: {');
+    expect(shared).toContain("maxWidth: '100%'");
+  });
+
+  it('renders transport as an inline pill instead of a full-width block', () => {
+    const shared = source('src', 'components', 'ItineraryTimeline.shared.tsx');
+    expect(shared).toContain("transition: { alignSelf: 'flex-start'");
+    expect(shared).toContain('width: \'auto\'');
+    expect(shared).toContain('borderRadius: 999');
+    expect(shared).toContain('line: { bottom: -30 }');
   });
 
   it('skips TimelineCard re-render when data and interaction state are unchanged', () => {
