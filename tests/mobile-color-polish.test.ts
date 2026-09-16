@@ -90,14 +90,14 @@ describe('mobile visual color polish', () => {
   it('removes hard borders from hero controls, day tabs, and timeline surfaces', () => {
     const tabs = readFileSync(projectFile('src', 'components', 'DayTabs.tsx'), 'utf8');
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
-    const drag = readFileSync(projectFile('lib', 'drag-drop.ts'), 'utf8');
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     expect(tabs).toContain('borderWidth: 0');
     expect(tabs).toContain("const inactiveColor = '#94A3B8'");
     expect(panel).toContain('optimizeInlineButton: { minHeight: 34');
     expect(panel).toContain("backgroundColor: '#F1F5F9'");
     expect(panel).toContain('borderWidth: 0');
     expect(panel).toContain('mapToggle: {');
-    expect(drag).toContain('borderWidth: 0');
-    expect(drag).toContain('shadowOpacity: 0.05');
+    expect(timeline).toContain('borderWidth: 0');
+    expect(timeline).toContain('shadowOpacity: 0.05');
   });
 });

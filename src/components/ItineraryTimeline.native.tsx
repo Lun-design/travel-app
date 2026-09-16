@@ -1,45 +1,59 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
-import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
-import { reorderItineraryItems, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
+import { reorderItineraryItems, sortItineraryItemsByStartTime } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
 import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
-import { displayRouteSegments, EmptyTimeline, InsertSpotButton, NativeGripHandle, orderPayload, TimelineCard, useRouteSegments, useWeatherByItem, type ItineraryTimelineProps } from './ItineraryTimeline.shared';
+import {
+  displayRouteSegments,
+  EmptyTimeline,
+  InsertSpotButton,
+  orderPayload,
+  TimelineCard,
+  useRouteSegments,
+  useWeatherByItem,
+  type ItineraryTimelineProps,
+} from './ItineraryTimeline.shared';
 import type { TravelMode } from '@/lib/routes';
-import { createNativeDragRowStyle, MOBILE_DRAG_CONFIG, reconcileDraggedItems } from '@/lib/drag-drop';
 
-export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelete, onReorder, scheduleContext, vouchers, onPreviewVoucher, focusedItemId, onInsertAtPosition }: ItineraryTimelineProps) {
+export function ItineraryTimeline({
+  items,
+  themeMode = 'system',
+  onEdit,
+  onDelete,
+  onReorder,
+  scheduleContext,
+  vouchers,
+  onPreviewVoucher,
+  focusedItemId,
+  onInsertAtPosition,
+}: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByStartTime(items));
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeEstimates = useRouteSegments(localItems, routeModes);
-  const segments = useMemo(() => displayRouteSegments(localItems, routeModes, routeEstimates), [localItems, routeEstimates, routeModes]);
-  const segmentsByFromId = useMemo(() => new Map(segments.map((segment) => [segment.fromId, segment])), [segments]);
-  const scheduled = useMemo(() => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [], [localItems, scheduleContext]);
-  const scheduleById = useMemo(() => new Map(scheduled.map((entry) => [entry.item.id, entry])), [scheduled]);
+  const segments = useMemo(
+    () => displayRouteSegments(localItems, routeModes, routeEstimates),
+    [localItems, routeEstimates, routeModes],
+  );
+  const segmentsByFromId = useMemo(
+    () => new Map(segments.map((segment) => [segment.fromId, segment])),
+    [segments],
+  );
+  const scheduled = useMemo(
+    () => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [],
+    [localItems, scheduleContext],
+  );
+  const scheduleById = useMemo(
+    () => new Map(scheduled.map((entry) => [entry.item.id, entry])),
+    [scheduled],
+  );
   const weatherById = useWeatherByItem(localItems, scheduleContext);
-  const moveItemRef = useRef<(itemId: string, direction: -1 | 1) => void>(() => undefined);
   const handleRouteModeChange = useCallback((fromId: string, mode: TravelMode) => {
     setRouteModes((current) => ({ ...current, [fromId]: mode }));
   }, []);
-  const moveHandlers = useMemo(() => new Map(localItems.map((item) => [item.id, {
-    up: () => { moveItemRef.current(item.id, -1); },
-    down: () => { moveItemRef.current(item.id, 1); },
-  }])), [localItems]);
-  moveItemRef.current = (itemId, direction) => { void moveItem(itemId, direction); };
-  useEffect(() => {
-    setLocalItems((current) => reconcileDraggedItems(current, items, sortItineraryItemsByStartTime));
-  }, [items]);
 
-  async function finishDrag(ordered: ItineraryItem[]) {
-    const positioned = ordered.map((item, position) => ({ ...item, position }));
-    setLocalItems(positioned);
-    try {
-      await (onReorder ? onReorder(orderPayload(positioned)) : updateItineraryItemsOrder(orderPayload(positioned)));
-    } catch (error) {
-      setLocalItems(items);
-      Alert.alert('排序更新失敗', error instanceof Error ? error.message : '請稍後再試。');
-    }
-  }
+  useEffect(() => {
+    setLocalItems(sortItineraryItemsByStartTime(items));
+  }, [items]);
 
   async function moveItem(itemId: string, direction: -1 | 1) {
     const sourceIndex = localItems.findIndex((item) => item.id === itemId);
@@ -51,24 +65,60 @@ export function ItineraryTimeline({ items, themeMode = 'system', onEdit, onDelet
     try {
       await (onReorder ? onReorder(orderPayload(ordered)) : updateItineraryItemsOrder(orderPayload(ordered)));
     } catch (error) {
-      setLocalItems(items);
+      setLocalItems(sortItineraryItemsByStartTime(items));
       Alert.alert('排序更新失敗', error instanceof Error ? error.message : '請稍後再試。');
     }
   }
 
+  const moveHandlers = useMemo(
+    () => new Map(localItems.map((item) => [item.id, {
+      up: () => { void moveItem(item.id, -1); },
+      down: () => { void moveItem(item.id, 1); },
+    }])),
+    [localItems],
+  );
+
   if (!localItems.length) return <EmptyTimeline />;
-  return <DraggableFlatList
-    data={localItems}
-    keyExtractor={(item) => item.id}
-    {...MOBILE_DRAG_CONFIG}
-    containerStyle={{ width: '100%', flexGrow: 0 }}
-    contentContainerStyle={{ width: '100%', paddingBottom: 144 }}
-    onDragEnd={({ data }) => void finishDrag(data)}
-    renderItem={({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => <View collapsable={false} style={nativeDragRowStyle}>
-      <TimelineCard item={item} themeMode={themeMode} scheduled={scheduleById.get(item.id)} weather={weatherById[item.id]} vouchers={vouchers} onPreviewVoucher={onPreviewVoucher} segment={segmentsByFromId.get(item.id)} onRouteModeChange={handleRouteModeChange} onLongPress={drag} isDragging={isActive} grip={<NativeGripHandle label={`長按拖曳 ${item.location_name} 重新排序`} onLongPress={drag} />} active={isActive || focusedItemId === item.id} onEdit={onEdit} onDelete={onDelete} onMoveUp={moveHandlers.get(item.id)?.up} onMoveDown={moveHandlers.get(item.id)?.down} canMoveUp={localItems.findIndex((entry) => entry.id === item.id) > 0} canMoveDown={localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1} />
-      {localItems.findIndex((entry) => entry.id === item.id) < localItems.length - 1 && onInsertAtPosition ? <InsertSpotButton position={localItems.findIndex((entry) => entry.id === item.id) + 1} onPress={onInsertAtPosition} /> : null}
-    </View>}
-  />;
+  return (
+    <View style={timelineListStyle}>
+      {localItems.map((item, index) => (
+        <React.Fragment key={item.id}>
+          <View collapsable={false} style={timelineRowStyle}>
+            <TimelineCard
+              item={item}
+              themeMode={themeMode}
+              scheduled={scheduleById.get(item.id)}
+              weather={weatherById[item.id]}
+              vouchers={vouchers}
+              onPreviewVoucher={onPreviewVoucher}
+              segment={segmentsByFromId.get(item.id)}
+              onRouteModeChange={handleRouteModeChange}
+              active={focusedItemId === item.id}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onMoveUp={moveHandlers.get(item.id)?.up}
+              onMoveDown={moveHandlers.get(item.id)?.down}
+              canMoveUp={index > 0}
+              canMoveDown={index < localItems.length - 1}
+            />
+          </View>
+          {index < localItems.length - 1 && onInsertAtPosition
+            ? <InsertSpotButton position={index + 1} onPress={onInsertAtPosition} />
+            : null}
+        </React.Fragment>
+      ))}
+    </View>
+  );
 }
 
-const nativeDragRowStyle = createNativeDragRowStyle();
+const timelineListStyle = {
+  width: '100%',
+  maxWidth: '100%',
+  paddingBottom: 144,
+} as const;
+
+const timelineRowStyle = {
+  width: '100%',
+  maxWidth: '100%',
+  overflow: 'visible',
+} as const;
