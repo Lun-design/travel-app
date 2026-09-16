@@ -83,6 +83,7 @@ describe('mobile visual color polish', () => {
     expect(mascot).toContain('resizeMode="contain"');
     expect(mascot).toContain("backgroundColor: 'transparent'");
     expect(mascot).toContain("mixBlendMode: 'multiply'");
+    expect(mascot).toContain("{ mixBlendMode: 'multiply' } as any");
   });
 
   it('removes hard borders from hero controls, day tabs, and timeline surfaces', () => {
