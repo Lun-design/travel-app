@@ -51,7 +51,7 @@ describe('mobile visual color polish', () => {
     expect(timeline).toContain('categoryBadge');
     expect(timeline).toContain('backgroundColor: palette.backgroundColor');
     expect(timeline).toContain('borderColor: palette.borderColor');
-    expect(timeline).toContain('paddingHorizontal: 8');
+    expect(timeline).toContain('paddingHorizontal: 12');
   });
 
   it('uses linedog artwork for category badges instead of emoji icons', () => {
@@ -62,6 +62,18 @@ describe('mobile visual color polish', () => {
     expect(timeline).toContain("food: '-10'");
     expect(timeline).toContain("spot: '-11'");
     expect(timeline).toContain('PuppyMascot puppy={categoryPuppyId(category)}');
+  });
+
+  it('gives category linedogs a larger transparent, centered badge treatment', () => {
+    const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const mascot = readFileSync(projectFile('src', 'components', 'PuppyMascot.tsx'), 'utf8');
+    expect(timeline).toContain('size={24}');
+    expect(timeline).toContain('categoryBadgeIcon: { width: 24, height: 24');
+    expect(timeline).toContain('paddingHorizontal: 12');
+    expect(timeline).toContain('paddingVertical: 6');
+    expect(timeline).toContain('gap: 6');
+    expect(timeline).toContain("backgroundColor: 'transparent'");
+    expect(mascot).toContain('resizeMode="contain"');
   });
 
   it('removes hard borders from hero controls, day tabs, and timeline surfaces', () => {

@@ -311,7 +311,7 @@ function categoryPuppyId(category: string): PuppyId {
 function CategoryBadge({ category, compact, inline = false }: { category: string; compact: boolean; inline?: boolean }) {
   const palette = getCategoryBadgePalette(category);
   return <View pointerEvents="none" style={[styles.categoryBadge, compact && styles.categoryBadgeCompact, inline && styles.categoryBadgeInline, { backgroundColor: palette.backgroundColor, borderColor: palette.borderColor }]}>
-    <PuppyMascot puppy={categoryPuppyId(category)} size={18} style={styles.categoryBadgeIcon} accessibilityLabel={`${category} 類別`} />
+    <PuppyMascot puppy={categoryPuppyId(category)} size={24} style={styles.categoryBadgeIcon} accessibilityLabel={`${category} 類別`} />
     <Text numberOfLines={1} style={[styles.categoryBadgeText, { color: palette.color }]}>{category}</Text>
   </View>;
 }
@@ -334,10 +334,10 @@ const styles = {
   // The category is rendered once as an outer, position-safe badge. The
   // legacy inline wrapper remains hidden to avoid duplicate labels.
   categoryWrap: { display: 'none' } as const,
-  categoryBadge: { position: 'absolute', top: 8, right: 48, zIndex: 4, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, minHeight: 24 } as const,
+  categoryBadge: { position: 'absolute', top: 8, right: 48, zIndex: 4, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, minHeight: 36 } as const,
   categoryBadgeCompact: { right: 48, maxWidth: '100%' } as const,
   categoryBadgeInline: { position: 'relative', top: 0, right: 0, zIndex: 0, maxWidth: '70%' } as const,
-  categoryBadgeIcon: { width: 18, height: 18, flexShrink: 0, marginRight: 4 } as const,
+  categoryBadgeIcon: { width: 24, height: 24, flexShrink: 0, marginRight: 0, backgroundColor: 'transparent' } as const,
   categoryBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3, flexShrink: 1 } as const,
 };
 
