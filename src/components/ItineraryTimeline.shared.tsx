@@ -285,6 +285,23 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const { width: viewportWidth } = useWindowDimensions();
   const isMobile = viewportWidth < 600;
   const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
+  // Treat conflictMinutes as the single source of truth for the warning UI.
+  // Older schedule payloads may still carry overlapWarning=true after the
+  // underlying times have been corrected, so never render from that flag
+  // alone. Normalising here also prevents null/negative values from leaking
+  // into the badge or shift action.
+  const conflictMinutes = Math.max(0, Number(scheduled?.conflictMinutes ?? 0));
+  const hasTimeConflict = conflictMinutes > 0;
+  // Compatibility marker for consumers that still inspect the legacy field:
+  // scheduled.conflictMinutes remains the source value, while the normalised
+  // conflictMinutes below is the only value used for rendering.
+  if (hasTimeConflict) {
+    console.warn('[UI RENDER CONFLICT]', {
+      itemName: item.location_name,
+      conflictMinutes,
+      itemStartTime: item.time ?? item.start_time ?? null,
+    });
+  }
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
   const navigationUrl = getGoogleMapsNavigationUrl({
     latitude: item.latitude,
@@ -344,12 +361,12 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
       <View style={styles.row}>
         <View style={styles.rail}><View style={[styles.line, { width: 3 }]} /><View style={styles.dot} /></View>
         <View style={[styles.card, { backgroundColor: '#FFFFFF', borderWidth: 0, borderColor: 'transparent', borderTopWidth: 2, borderTopColor: 'rgba(74,62,61,0.15)', padding: 18, borderRadius: 16, marginBottom: 16, shadowColor: '#4A3E3D', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, active && styles.cardActive]}>
-          {(scheduled?.openingWarning || scheduled?.overlapWarning) ? <View style={styles.warningStack}>
-            {scheduled.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
-            {scheduled.overlapWarning ? <>
-              <Text style={styles.overlapWarning}>{`⚠️ 時間重疊 ${scheduled.conflictMinutes ?? 0} 分鐘`}</Text>
-              {onShiftSubsequent && (scheduled.conflictMinutes ?? 0) > 0
-                ? <Pressable accessibilityRole="button" style={styles.shiftButton} onPress={() => { void onShiftSubsequent(scheduled.conflictMinutes ?? 0); }}><Text style={styles.shiftButtonText}>⚡ 一鍵順延後續行程</Text></Pressable>
+          {(scheduled?.openingWarning || hasTimeConflict) ? <View style={styles.warningStack}>
+            {scheduled?.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
+            {hasTimeConflict ? <>
+              <Text style={styles.overlapWarning}>{`⚠️ 時間重疊 ${conflictMinutes} 分鐘`}</Text>
+              {onShiftSubsequent
+                ? <Pressable accessibilityRole="button" style={styles.shiftButton} onPress={() => { void onShiftSubsequent(conflictMinutes); }}><Text style={styles.shiftButtonText}>⚡ 一鍵順延後續行程</Text></Pressable>
                 : null}
             </> : null}
           </View> : null}

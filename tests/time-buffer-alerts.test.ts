@@ -106,6 +106,14 @@ describe('smart time buffers and alerts', () => {
     expect(conflicts[0]?.conflictMinutes).toBeGreaterThan(0);
   });
 
+  it('renders conflict warnings only for positive overlap minutes and logs the rendered values', () => {
+    const shared = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.shared.tsx'), 'utf8');
+
+    expect(shared).toContain("console.warn('[UI RENDER CONFLICT]'");
+    expect(shared).toContain('const hasTimeConflict = conflictMinutes > 0;');
+    expect(shared).toContain('{hasTimeConflict ? <>');
+  });
+
   it('does not report a conflict when the next stop starts at the estimated arrival', () => {
     const schedule = buildDaySchedule([
       item({ id: 'first', time: '09:00', duration_minutes: 60, latitude: 25.0109, longitude: 121.464 }),
