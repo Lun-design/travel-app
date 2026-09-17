@@ -27,6 +27,15 @@ export type WeatherSummary = WeatherDaySummary & {
   currentTemperatureC?: number | null;
 };
 
+/** A geolocated itinerary item used by the day-level weather batch client. */
+export type WeatherBatchLocation = {
+  id: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type WeatherBatchResult = Record<string, WeatherSummary | null>;
+
 export type TemperatureRangeInput = Pick<WeatherDaySummary, 'temperatureMinC' | 'temperatureMaxC'>;
 export const LARGE_TEMPERATURE_RANGE_C = 8;
 
@@ -507,21 +516,33 @@ export type WeatherFetcher = typeof fetch;
 export type WeatherServiceOptions = { ttlMs?: number; now?: () => number; today?: () => string };
 export type WeatherService = {
   getForecast: (latitude: number, longitude: number, date: string, timezone?: string | null, targetTime?: string | null) => Promise<WeatherSummary | null>;
+  getForecastBatch: (locations: readonly WeatherBatchLocation[], date: string, timezone?: string | null, targetTimes?: Record<string, string | null | undefined>) => Promise<WeatherBatchResult>;
 };
 
 /** Create a cached Open-Meteo client; cache entries are shared per service instance. */
 export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(globalThis), options: WeatherServiceOptions = {}): WeatherService {
   const cache = new Map<string, { expiresAt: number; value: Promise<WeatherSummary | null> }>();
+  const batchCache = new Map<string, { expiresAt: number; value: Promise<WeatherBatchResult> }>();
   const ttlMs = options.ttlMs ?? 30 * 60 * 1000;
   const now = options.now ?? Date.now;
   const today = options.today ?? (() => new Date().toISOString().slice(0, 10));
+
+  function forecastCacheKey(latitude: number, longitude: number, date: string, timezone: string | null, targetTime: string | null): string {
+    return `${WEATHER_CACHE_VERSION}:${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
+  }
+
+  function validBatchCoordinate(location: WeatherBatchLocation): boolean {
+    return Number.isFinite(location.latitude) && Number.isFinite(location.longitude)
+      && location.latitude >= -90 && location.latitude <= 90
+      && location.longitude >= -180 && location.longitude <= 180;
+  }
 
   function loadForecast(latitude: number, longitude: number, date: string, timezone: string | null = 'auto', targetTime: string | null = null, bypassCache = false): Promise<WeatherSummary | null> {
     if (!date) return Promise.resolve(null);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(createMockWeatherSummary(date));
     const dateRange = forecastWindowFor(date, Date.parse(`${today()}T00:00:00Z`));
     if (!dateRange) return Promise.resolve(createMockWeatherSummary(date));
-    const key = `${WEATHER_CACHE_VERSION}:${latitude.toFixed(5)},${longitude.toFixed(5)}:${date}:${timezone ?? 'auto'}:${normalizeTargetTime(targetTime) ?? 'auto'}`;
+    const key = forecastCacheKey(latitude, longitude, date, timezone, targetTime);
     const cached = cache.get(key);
     if (!bypassCache && cached && cached.expiresAt > now()) {
       return cached.value.then((value) => {
@@ -564,8 +585,113 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
     return request;
   }
 
+  function batchCacheKey(locations: readonly WeatherBatchLocation[], date: string, timezone: string | null, targetTimes: Record<string, string | null | undefined>): string {
+    const coordinates = locations
+      .filter(validBatchCoordinate)
+      .map((location) => `${location.id}:${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}:${normalizeTargetTime(targetTimes[location.id]) ?? 'auto'}`)
+      .join('|');
+    return `${WEATHER_CACHE_VERSION}:batch:${date}:${timezone ?? 'auto'}:${coordinates}`;
+  }
+
+  function loadForecastBatch(
+    locations: readonly WeatherBatchLocation[],
+    date: string,
+    timezone: string | null = 'auto',
+    targetTimes: Record<string, string | null | undefined> = {},
+  ): Promise<WeatherBatchResult> {
+    const immediate: WeatherBatchResult = {};
+    if (!date || !locations.length) return Promise.resolve(immediate);
+
+    const validLocations = locations.filter(validBatchCoordinate);
+    for (const location of locations) {
+      if (!validBatchCoordinate(location)) immediate[location.id] = createMockWeatherSummary(date);
+    }
+    if (!validLocations.length) return Promise.resolve(immediate);
+
+    const dateRange = forecastWindowFor(date, Date.parse(`${today()}T00:00:00Z`));
+    if (!dateRange) {
+      for (const location of validLocations) immediate[location.id] = createMockWeatherSummary(date);
+      return Promise.resolve(immediate);
+    }
+
+    // Open-Meteo accepts comma-separated coordinates and returns one payload
+    // per location. Collapse identical coordinates so a day never requests
+    // the same weather twice, while preserving each item id in the result.
+    const uniqueLocations: WeatherBatchLocation[] = [];
+    const coordinateIndex = new Map<string, number>();
+    const locationIndexes = new Map<string, number>();
+    for (const location of validLocations) {
+      const coordinateKey = `${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}`;
+      let index = coordinateIndex.get(coordinateKey);
+      if (index === undefined) {
+        index = uniqueLocations.length;
+        coordinateIndex.set(coordinateKey, index);
+        uniqueLocations.push(location);
+      }
+      locationIndexes.set(location.id, index);
+    }
+
+    const key = batchCacheKey(uniqueLocations, date, timezone, targetTimes);
+    const cached = batchCache.get(key);
+    if (cached && cached.expiresAt > now()) {
+      return cached.value.then((result) => ({ ...immediate, ...result }));
+    }
+    if (cached) batchCache.delete(key);
+
+    const params = [
+      `latitude=${encodeURIComponent(uniqueLocations.map((location) => location.latitude.toFixed(5)).join(','))}`,
+      `longitude=${encodeURIComponent(uniqueLocations.map((location) => location.longitude.toFixed(5)).join(','))}`,
+      'current=temperature_2m,weather_code,precipitation',
+      'hourly=temperature_2m,precipitation_probability,precipitation,weather_code',
+      'daily=weather_code,temperature_2m_min,temperature_2m_max,precipitation_probability_max,precipitation_sum',
+      `timezone=${encodeURIComponent(timezone || 'auto')}`,
+      `start_date=${encodeURIComponent(dateRange.startDate)}`,
+      `end_date=${encodeURIComponent(dateRange.endDate)}`,
+      `_t=${encodeURIComponent(String(now()))}`,
+    ].join('&');
+    const requestUrl = `https://api.open-meteo.com/v1/forecast?${params}`;
+    const request = fetcher(requestUrl, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status})`);
+        const raw = await response.json() as unknown;
+        const payloads = Array.isArray(raw) ? raw : [raw];
+        const summaries = uniqueLocations.map((location, index) => {
+          const payload = payloads[index] && typeof payloads[index] === 'object'
+            ? payloads[index] as OpenMeteoPayload
+            : payloads[0] && typeof payloads[0] === 'object'
+              ? payloads[0] as OpenMeteoPayload
+              : null;
+          return payload
+            ? parseOpenMeteoResponse(payload, date, 'live', targetTimes[location.id]) ?? createMockWeatherSummary(date)
+            : createMockWeatherSummary(date);
+        });
+        const result: WeatherBatchResult = { ...immediate };
+        for (const location of validLocations) {
+          const index = locationIndexes.get(location.id);
+          result[location.id] = index === undefined ? createMockWeatherSummary(date) : summaries[index];
+          const summary = result[location.id];
+          if (summary && summary.source === 'live' && !summary.isSimulated) {
+            writeWeatherCache(forecastCacheKey(location.latitude, location.longitude, date, timezone, targetTimes[location.id] ?? null), summary);
+          }
+        }
+        return result;
+      })
+      .catch((error) => {
+        console.error('[Weather] batch forecast lookup skipped', error);
+        const result: WeatherBatchResult = { ...immediate };
+        for (const location of validLocations) {
+          result[location.id] = readWeatherCache(forecastCacheKey(location.latitude, location.longitude, date, timezone, targetTimes[location.id] ?? null))
+            ?? createMockWeatherSummary(date);
+        }
+        return result;
+      });
+    batchCache.set(key, { expiresAt: now() + ttlMs, value: request });
+    return request;
+  }
+
   return {
     getForecast: (latitude, longitude, date, timezone = 'auto', targetTime = null) => loadForecast(latitude, longitude, date, timezone, targetTime),
+    getForecastBatch: (locations, date, timezone = 'auto', targetTimes = {}) => loadForecastBatch(locations, date, timezone, targetTimes),
   };
 }
 
@@ -573,4 +699,14 @@ export const weatherService = createWeatherService();
 
 export function fetchWeatherForecast(latitude: number, longitude: number, date: string, timezone?: string | null, targetTime?: string | null) {
   return weatherService.getForecast(latitude, longitude, date, timezone, targetTime);
+}
+
+/** Fetch all geolocated items for a day with one Open-Meteo request. */
+export function fetchWeatherForecastBatch(
+  locations: readonly WeatherBatchLocation[],
+  date: string,
+  timezone?: string | null,
+  targetTimes?: Record<string, string | null | undefined>,
+) {
+  return weatherService.getForecastBatch(locations, date, timezone, targetTimes);
 }

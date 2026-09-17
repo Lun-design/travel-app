@@ -17,6 +17,7 @@ import type { TravelMode } from '@/lib/routes';
 
 export function ItineraryTimeline({
   items,
+  tripId,
   themeMode = 'system',
   onEdit,
   onDelete,
@@ -30,7 +31,7 @@ export function ItineraryTimeline({
 }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByPosition(items));
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
-  const routeEstimates = useRouteSegments(localItems, routeModes);
+  const routeEstimates = useRouteSegments(localItems, routeModes, { tripId, day: localItems[0]?.day_number });
   const segments = useMemo(
     () => displayRouteSegments(localItems, routeModes, routeEstimates),
     [localItems, routeEstimates, routeModes],
@@ -47,7 +48,7 @@ export function ItineraryTimeline({
     () => new Map(scheduled.map((entry) => [entry.item.id, entry])),
     [scheduled],
   );
-  const weatherById = useWeatherByItem(localItems, scheduleContext);
+  const weatherById = useWeatherByItem(localItems, scheduleContext, tripId);
   const handleRouteModeChange = useCallback((fromId: string, mode: TravelMode) => {
     setRouteModes((current) => ({ ...current, [fromId]: mode }));
   }, []);

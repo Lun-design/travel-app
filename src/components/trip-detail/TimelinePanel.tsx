@@ -18,7 +18,7 @@ import { DAY_ACTIVE_COLOR, EDITORIAL_COLORS } from '@/lib/theme';
 import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
-import { createRouteEstimator, estimateRouteSequence, type RoutePoint } from '@/lib/routes';
+import { createRouteEstimator, type RoutePoint } from '@/lib/routes';
 import { formatRouteDuration, formatRouteLegContext, getRouteOptimizationStatus } from '@/lib/route-connector';
 import { ItineraryCardExport } from '@/components/ItineraryCardExport';
 import type { ItineraryExportData } from '@/lib/export-image';
@@ -103,8 +103,8 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     }
     setOptimizationBusy(true);
     try {
-      const originalRoute = await estimateRouteSequence(visibleItems.map(toRoutePoint), 'DRIVING', routeSequenceEstimator);
-      const optimizedRoute = await estimateRouteSequence(result.items.map(toRoutePoint), 'DRIVING', routeSequenceEstimator);
+      const originalRoute = await routeSequenceEstimator.getRouteSequence(visibleItems.map(toRoutePoint), 'DRIVING');
+      const optimizedRoute = await routeSequenceEstimator.getRouteSequence(result.items.map(toRoutePoint), 'DRIVING');
       const refinedResult: RouteOptimizationResult<ItineraryItem> = {
         ...result,
         originalDistanceKm: originalRoute.totalDistanceKm,
@@ -178,7 +178,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     <Pressable style={[styles.mapToggle, { alignSelf: 'flex-start', width: 'auto', minHeight: 38, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, marginVertical: 8 }]} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: Math.min(layout.mapMinHeight, 220), maxHeight: 220 }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
     <TimelineViewport width={width} height={height}>
-      {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onUpdateImage={onUpdateImage} onReorder={onReorder} onInsertAtPosition={onAddAtPosition} />}
+      {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} tripId={trip.id} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onUpdateImage={onUpdateImage} onReorder={onReorder} onInsertAtPosition={onAddAtPosition} />}
     </TimelineViewport>
     <Modal visible={Boolean(optimizationPreview)} transparent animationType="fade" onRequestClose={() => { if (!optimizationBusy) setOptimizationPreview(null); }}>
       <View style={styles.modalBackdrop}><View style={styles.modalCard}>

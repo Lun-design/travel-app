@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Linking, Modal, Pressable, Share, StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { buildRouteSegments, resolveRouteSegmentLabels, type ItineraryItem, type RouteSegment } from '@/lib/itinerary';
 import { tripDateForDay } from '@/lib/trip-dates';
-import { createMockWeatherSummary, fetchWeatherForecast, isWeatherAlert, type WeatherSummary } from '@/lib/weather-api';
+import { createMockWeatherSummary, fetchWeatherForecastBatch, isWeatherAlert, type WeatherBatchLocation, type WeatherSummary } from '@/lib/weather-api';
 import type { Voucher } from '@/lib/vouchers';
 import { buildDaySchedule, type ScheduleContext, type ScheduledItem } from '@/lib/schedule';
 import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
@@ -20,6 +20,8 @@ import { getCategoryIcon } from '@/lib/category-icons';
 
 export type ItineraryTimelineProps = {
   items: ItineraryItem[];
+  /** Used to isolate day-level weather batches between trips. */
+  tripId?: string;
   themeMode?: ThemeMode;
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => void;
@@ -63,26 +65,67 @@ const timelineCardContainerStyle = {
 } as const;
 
 const routeEstimator = createRouteEstimator();
+const weatherBatchCache = new Map<string, { expiresAt: number; value: Promise<Record<string, WeatherSummary | null>> }>();
+const routeBatchCache = new Map<string, Promise<Record<string, RouteEstimate>>>();
+const WEATHER_BATCH_CACHE_TTL_MS = 30 * 60 * 1000;
 
-export function useWeatherByItem(items: ItineraryItem[], context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>) {
+export function weatherBatchCacheKey(
+  items: readonly ItineraryItem[],
+  context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>,
+  tripId?: string,
+): string {
+  const coordinateHash = [...items]
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((item) => `${item.id}:${item.latitude ?? ''},${item.longitude ?? ''}:${item.time ?? item.start_time ?? ''}`)
+    .join('|');
+  return `${tripId ?? 'unknown'}:${context?.dayNumber ?? 0}:${context?.tripStartDate ?? ''}:${context?.timezone ?? 'auto'}:${coordinateHash}`;
+}
+
+export function routeBatchCacheKey(
+  items: readonly ItineraryItem[],
+  modes: Record<string, TravelMode>,
+  scope?: { tripId?: string; day?: number },
+): string {
+  const orderedItems = items.map((item) => `${item.id}:${item.position}:${item.latitude ?? ''},${item.longitude ?? ''}`).join('|');
+  const modeKey = Object.entries(modes).sort(([left], [right]) => left.localeCompare(right)).map(([id, mode]) => `${id}:${mode}`).join('|');
+  return `${scope?.tripId ?? 'unknown'}:${scope?.day ?? items[0]?.day_number ?? 0}:${orderedItems}:${modeKey}`;
+}
+
+export function useWeatherByItem(
+  items: ItineraryItem[],
+  context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>,
+  tripId?: string,
+) {
   const [weatherById, setWeatherById] = useState<Record<string, WeatherSummary>>({});
-  const itemKey = items.map((item) => `${item.id}:${item.latitude ?? ''}:${item.longitude ?? ''}:${item.time ?? item.start_time ?? ''}`).join('|');
+  const itemKey = weatherBatchCacheKey(items, context, tripId);
   useEffect(() => {
     let active = true;
     const date = context ? tripDateForDay(context.tripStartDate, context.dayNumber) : null;
     setWeatherById({});
     if (!date || !items.length) return () => { active = false; };
     const scheduledById = new Map(buildDaySchedule(items, { ...context, tripStartDate: context!.tripStartDate, dayNumber: context!.dayNumber }).map((entry) => [entry.item.id, entry]));
-    void Promise.all(items.map(async (item) => {
+    const locations: WeatherBatchLocation[] = items.flatMap((item) => {
       const latitude = item.latitude == null ? null : Number(item.latitude);
       const longitude = item.longitude == null ? null : Number(item.longitude);
-      const weather = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
-        ? await fetchWeatherForecast(latitude, longitude, date, context?.timezone, scheduledById.get(item.id)?.arrivalTime ?? item.time ?? item.start_time)
-        : createMockWeatherSummary(date);
-      return [item.id, weather] as const;
-    })).then((entries) => { if (active) setWeatherById(Object.fromEntries(entries.flatMap(([id, weather]) => weather ? [[id, weather]] : [])) as Record<string, WeatherSummary>); });
+      return latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? [{ id: item.id, latitude, longitude }]
+        : [];
+    });
+    const targetTimes = Object.fromEntries(items.map((item) => [item.id, scheduledById.get(item.id)?.arrivalTime ?? item.time ?? item.start_time ?? null]));
+    const requestKey = `${itemKey}:${date}`;
+    const cached = weatherBatchCache.get(requestKey);
+    let request = cached && cached.expiresAt > Date.now() ? cached.value : undefined;
+    if (!request) {
+      request = fetchWeatherForecastBatch(locations, date, context?.timezone, targetTimes);
+      weatherBatchCache.set(requestKey, { expiresAt: Date.now() + WEATHER_BATCH_CACHE_TTL_MS, value: request });
+    }
+    void request.then((batch) => {
+      if (!active) return;
+      const entries = items.map((item) => [item.id, batch[item.id] ?? createMockWeatherSummary(date)] as const);
+      setWeatherById(Object.fromEntries(entries.filter(([, weather]) => Boolean(weather))) as Record<string, WeatherSummary>);
+    });
     return () => { active = false; };
-  }, [context?.dayNumber, context?.tripStartDate, context?.timezone, itemKey]);
+  }, [context?.dayNumber, context?.tripStartDate, context?.timezone, itemKey, tripId]);
   return weatherById;
 }
 
@@ -91,7 +134,7 @@ export function segmentsForItems(items: ItineraryItem[]) {
 }
 export function orderPayload(items: ItineraryItem[]) { return items.map(({ id, position }) => ({ id, position })); }
 
-export function useRouteSegments(items: ItineraryItem[], modes: Record<string, TravelMode>) {
+export function useRouteSegments(items: ItineraryItem[], modes: Record<string, TravelMode>, scope?: { tripId?: string; day?: number }) {
   const [estimates, setEstimates] = useState<Record<string, RouteEstimate>>({});
   const routeOrderKeyRef = useRef<string | null>(null);
   const itemKey = items.map((item) => `${item.id}:${item.position}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
@@ -102,11 +145,29 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
     let active = true;
     if (routeOrderKeyRef.current !== null && routeOrderKeyRef.current !== orderKey) {
       routeEstimator.cache.clear();
+      routeEstimator.sequenceCache.clear();
+      routeBatchCache.clear();
     }
     routeOrderKeyRef.current = orderKey;
     const byId = new Map(items.map((item) => [item.id, item]));
     const baseSegments = segmentsForItems(items);
     setEstimates({});
+
+    const segmentModes = [...new Set(baseSegments.map((segment) => modes[segment.fromId] ?? 'DRIVING'))];
+    if (baseSegments.length > 0 && segmentModes.length === 1) {
+      const mode = segmentModes[0] as TravelMode;
+      const batchKey = `${routeBatchCacheKey(items, modes, scope)}:${mode}`;
+      let request = routeBatchCache.get(batchKey);
+      if (!request) {
+        request = routeEstimator.getRouteSequence(items.map(toRoutePoint), mode).then((sequence) => Object.fromEntries(
+          sequence.legs.map((estimate, index) => [baseSegments[index]?.fromId, estimate]).filter(([id]) => Boolean(id)),
+        ) as Record<string, RouteEstimate>);
+        routeBatchCache.set(batchKey, request);
+      }
+      void request.then((batch) => { if (active) setEstimates(batch); });
+      return () => { active = false; };
+    }
+
     void Promise.all(baseSegments.map(async (segment) => {
       const from = byId.get(segment.fromId);
       const to = byId.get(segment.toId);
@@ -118,7 +179,7 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
       if (active) setEstimates(Object.fromEntries(results.flatMap((entry) => entry ? [entry] : [])) as Record<string, RouteEstimate>);
     });
     return () => { active = false; };
-  }, [itemKey, modeKey, orderKey]);
+  }, [itemKey, modeKey, orderKey, scope?.day, scope?.tripId]);
 
   return estimates;
 }

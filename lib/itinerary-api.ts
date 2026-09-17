@@ -55,20 +55,24 @@ export async function updateItineraryItemsOrder(items: { id: string; position: n
   const scope = await resolveOfflineScope(options.offlineScope?.tripId ?? '', options.offlineScope);
   const store = options.store ?? offlineStore;
   try {
-    const results = await Promise.all(items.map(({ id, position }) => supabase.from('itinerary_items').update({ position }).eq('id', id)));
-    const failed = results.find((result) => result.error);
-    if (failed?.error) throw failed.error;
-    await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => current.map((item) => {
+    // Reordering is a single transaction in Supabase. This prevents the
+    // intermediate positions produced by several independent PATCH calls from
+    // leaking to collaborators or leaving a partially reordered day behind.
+    const rpc = (supabase as unknown as { rpc?: (name: string, args: Record<string, unknown>) => PromiseLike<{ error?: unknown }> }).rpc;
+    if (typeof rpc !== 'function') throw new Error('The itinerary order RPC is unavailable.');
+    const result = await rpc('update_itinerary_items_order', { p_items: items });
+    if (result?.error) throw result.error;
+    await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => [...current.map((item) => {
       const next = items.find((entry) => entry.id === item.id);
       return next ? { ...item, position: next.position } : item;
-    }));
+    })].sort((left, right) => Number(left.position ?? 0) - Number(right.position ?? 0)));
   } catch (error) {
     if (!options.replaying && shouldQueueOffline(error)) {
       await enqueueOfflineMutation(store, { scope, entity: 'itinerary', operation: 'reorder', resourceId: items.map((item) => item.id).sort().join(','), payload: items });
-      await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => current.map((item) => {
+      await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => [...current.map((item) => {
         const next = items.find((entry) => entry.id === item.id);
         return next ? { ...item, position: next.position } : item;
-      }));
+      })].sort((left, right) => Number(left.position ?? 0) - Number(right.position ?? 0)));
       return;
     }
     throw error;

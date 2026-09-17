@@ -168,10 +168,19 @@ function parseRouteEstimate(payload: unknown, mode: TravelMode, fallback: RouteE
   };
 }
 
-function routesRequestBody(origin: Coordinate, destination: Coordinate, mode: TravelMode, routingPreference: 'TRAFFIC_AWARE' | 'TRAFFIC_UNAWARE'): string {
+function routesRequestBody(
+  origin: Coordinate,
+  destination: Coordinate,
+  mode: TravelMode,
+  routingPreference: 'TRAFFIC_AWARE' | 'TRAFFIC_UNAWARE',
+  intermediates: Coordinate[] = [],
+): string {
   return JSON.stringify({
     origin: { location: { latLng: { latitude: origin.latitude, longitude: origin.longitude } } },
     destination: { location: { latLng: { latitude: destination.latitude, longitude: destination.longitude } } },
+    ...(intermediates.length ? {
+      intermediates: intermediates.map((coordinate) => ({ location: { latLng: { latitude: coordinate.latitude, longitude: coordinate.longitude } } })),
+    } : {}),
     travelMode: routesApiTravelMode(mode),
     ...(mode === 'DRIVING' ? { routingPreference } : {}),
     languageCode: 'zh-TW',
@@ -191,57 +200,148 @@ async function readErrorBody(response: Response): Promise<string> {
 
 export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
   const cache = options.cache ?? new Map<string, RouteEstimate>();
+  const sequenceCache = new Map<string, RouteSequenceEstimate>();
+  const sequenceRequests = new Map<string, Promise<RouteSequenceEstimate>>();
   const endpoint = options.endpoint ?? DEFAULT_ROUTES_ENDPOINT;
   const apiKey = options.apiKey ?? (typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY : undefined);
   const fetcher = options.fetcher ?? (typeof fetch === 'function' ? fetch.bind(globalThis) : undefined);
   const routingPreference = options.routingPreference ?? 'TRAFFIC_UNAWARE';
 
+  function sequenceKey(points: readonly RoutePoint[], mode: TravelMode): string {
+    return `${mode}:${points.map(pointKey).join('>')}`;
+  }
+
+  function fallbackSequence(points: readonly RoutePoint[], mode: TravelMode): RouteSequenceEstimate {
+    const legs = points.slice(0, -1).map((point, index) => fallbackEstimate(point, points[index + 1], mode));
+    return {
+      legs,
+      totalDistanceKm: legs.reduce((sum, leg) => sum + leg.distanceKm, 0),
+      totalDurationMinutes: legs.reduce((sum, leg) => sum + leg.durationMinutes, 0),
+    };
+  }
+
+  async function getRoute(origin: RoutePoint, destination: RoutePoint, mode: TravelMode): Promise<RouteEstimate> {
+    const key = routeCacheKey(origin, destination, mode);
+    const cached = cache.get(key);
+    if (cached) return cached;
+
+    const fallback = fallbackEstimate(origin, destination, mode);
+    const originCoordinate = pointCoordinates(origin);
+    const destinationCoordinate = pointCoordinates(destination);
+    if (!apiKey || !fetcher || !originCoordinate || !destinationCoordinate) {
+      cache.set(key, fallback);
+      return fallback;
+    }
+
+    try {
+      const response = await fetcher(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration',
+        },
+        body: routesRequestBody(originCoordinate, destinationCoordinate, mode, routingPreference),
+      });
+      if (!response.ok) {
+        const body = await readErrorBody(response);
+        console.error('[Routes] API request failed', {
+          endpoint,
+          status: response.status,
+          statusText: response.statusText,
+          body,
+          origin: originCoordinate,
+          destination: destinationCoordinate,
+          mode,
+        });
+        throw new Error(`Routes API request failed (${response.status})${body ? `: ${body}` : ''}`);
+      }
+      const parsed = parseRouteEstimate(await response.json(), mode, fallback) ?? fallback;
+      cache.set(key, parsed);
+      return parsed;
+    } catch {
+      cache.set(key, fallback);
+      return fallback;
+    }
+  }
+
+  async function loadRouteSequence(points: readonly RoutePoint[], mode: TravelMode, key: string): Promise<RouteSequenceEstimate> {
+    const fallback = fallbackSequence(points, mode);
+    const coordinates = points.map(pointCoordinates);
+    if (!apiKey || !fetcher || coordinates.some((coordinate) => coordinate === null)) {
+      sequenceCache.set(key, fallback);
+      return fallback;
+    }
+
+    try {
+      const response = await fetcher(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration',
+        },
+        body: routesRequestBody(coordinates[0] as Coordinate, coordinates[coordinates.length - 1] as Coordinate, mode, routingPreference, coordinates.slice(1, -1) as Coordinate[]),
+      });
+      if (!response.ok) {
+        const body = await readErrorBody(response);
+        console.error('[Routes] batch API request failed', {
+          endpoint,
+          status: response.status,
+          statusText: response.statusText,
+          body,
+          mode,
+        });
+        throw new Error(`Routes API request failed (${response.status})${body ? `: ${body}` : ''}`);
+      }
+      const parsed = parseRouteEstimate(await response.json(), mode, fallbackEstimate(points[0], points[points.length - 1], mode));
+      if (!parsed || !parsed.legs || parsed.legs.length !== points.length - 1) {
+        sequenceCache.set(key, fallback);
+        return fallback;
+      }
+      const legs = parsed.legs.map((leg, index) => ({
+        ...fallbackEstimate(points[index], points[index + 1], mode),
+        distanceKm: leg.distanceKm,
+        durationMinutes: leg.durationMinutes,
+        legs: [leg],
+        mode,
+        source: 'google' as const,
+        navigationUrl: buildGoogleMapsRouteUrl(points[index], points[index + 1], mode),
+      }));
+      const result = {
+        legs,
+        totalDistanceKm: legs.reduce((sum, leg) => sum + leg.distanceKm, 0),
+        totalDurationMinutes: legs.reduce((sum, leg) => sum + leg.durationMinutes, 0),
+      };
+      sequenceCache.set(key, result);
+      return result;
+    } catch {
+      sequenceCache.set(key, fallback);
+      return fallback;
+    }
+  }
+
+  async function getRouteSequence(points: readonly RoutePoint[], mode: TravelMode): Promise<RouteSequenceEstimate> {
+    if (points.length < 2) return { legs: [], totalDistanceKm: 0, totalDurationMinutes: 0 };
+    const key = sequenceKey(points, mode);
+    const cached = sequenceCache.get(key);
+    if (cached) return cached;
+    const inFlight = sequenceRequests.get(key);
+    if (inFlight) return inFlight;
+    const request = loadRouteSequence(points, mode, key);
+    sequenceRequests.set(key, request);
+    try {
+      return await request;
+    } finally {
+      sequenceRequests.delete(key);
+    }
+  }
+
   return {
     cache,
-    async getRoute(origin: RoutePoint, destination: RoutePoint, mode: TravelMode): Promise<RouteEstimate> {
-      const key = routeCacheKey(origin, destination, mode);
-      const cached = cache.get(key);
-      if (cached) return cached;
-
-      const fallback = fallbackEstimate(origin, destination, mode);
-      const originCoordinate = pointCoordinates(origin);
-      const destinationCoordinate = pointCoordinates(destination);
-      if (!apiKey || !fetcher || !originCoordinate || !destinationCoordinate) {
-        cache.set(key, fallback);
-        return fallback;
-      }
-
-      try {
-        const response = await fetcher(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration',
-          },
-          body: routesRequestBody(originCoordinate, destinationCoordinate, mode, routingPreference),
-        });
-        if (!response.ok) {
-          const body = await readErrorBody(response);
-          console.error('[Routes] API request failed', {
-            endpoint,
-            status: response.status,
-            statusText: response.statusText,
-            body,
-            origin: originCoordinate,
-            destination: destinationCoordinate,
-            mode,
-          });
-          throw new Error(`Routes API request failed (${response.status})${body ? `: ${body}` : ''}`);
-        }
-        const parsed = parseRouteEstimate(await response.json(), mode, fallback) ?? fallback;
-        cache.set(key, parsed);
-        return parsed;
-      } catch {
-        cache.set(key, fallback);
-        return fallback;
-      }
-    },
+    sequenceCache,
+    getRoute,
+    getRouteSequence,
   };
 }
 
