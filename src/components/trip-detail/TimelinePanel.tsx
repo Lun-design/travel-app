@@ -48,6 +48,7 @@ type Props = {
   onSwitchToBackupPlan?: (primaryItemId: string, backupItemId: string) => void | Promise<void>;
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => Promise<void>;
+  onUpdateImage?: (item: ItineraryItem, imageUrl: string) => void | Promise<void>;
   onReorder: (order: { id: string; position: number }[]) => Promise<void>;
   onApplyRouteOptimization?: (items: ItineraryItem[]) => Promise<void>;
   onAddAtPosition?: (position: number) => void;
@@ -70,7 +71,7 @@ function toRoutePoint(item: ItineraryItem): RoutePoint {
   };
 }
 
-export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onReorder, onApplyRouteOptimization, onAddAtPosition, onAdd, onImport, onClearAll }: Props) {
+export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onUpdateImage, onReorder, onApplyRouteOptimization, onAddAtPosition, onAdd, onImport, onClearAll }: Props) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
   const [optimizationBusy, setOptimizationBusy] = useState(false);
@@ -178,7 +179,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     <Pressable style={[styles.mapToggle, { alignSelf: 'flex-start', width: 'auto', minHeight: 38, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, marginVertical: 8 }]} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線'}</Text></Pressable>
     {isMapOpen && <View style={[styles.mapPane, { height: Math.min(layout.mapMinHeight, 220), maxHeight: 220 }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
     <TimelineViewport width={width} height={height}>
-      {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onReorder={onReorder} onInsertAtPosition={onAddAtPosition} />}
+      {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onUpdateImage={onUpdateImage} onReorder={onReorder} onInsertAtPosition={onAddAtPosition} />}
     </TimelineViewport>
     <Modal visible={Boolean(optimizationPreview)} transparent animationType="fade" onRequestClose={() => { if (!optimizationBusy) setOptimizationPreview(null); }}>
       <View style={styles.modalBackdrop}><View style={styles.modalCard}>

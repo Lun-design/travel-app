@@ -28,6 +28,7 @@ export type ItineraryTimelineProps = {
   vouchers?: Voucher[];
   onPreviewVoucher?: (voucher: Voucher) => void;
   onInsertAtPosition?: (position: number) => void;
+  onUpdateImage?: (item: ItineraryItem, imageUrl: string) => void | Promise<void>;
 };
 
 export type TimelineRouteSegment = RouteSegment & {
@@ -162,6 +163,7 @@ type TimelineCardProps = {
   canMoveDown?: boolean;
   themeMode?: ThemeMode;
   onRouteModeChange?: (fromId: string, mode: TravelMode) => void;
+  onUpdateImage?: (item: ItineraryItem, imageUrl: string) => void | Promise<void>;
 };
 
 const routeModes: Array<{ mode: TravelMode; label: string; icon: string }> = [
@@ -186,7 +188,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const { width: viewportWidth } = useWindowDimensions();
   const isMobile = viewportWidth < 600;
@@ -219,6 +221,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
     try {
       const result = await searchSpotImage(query);
       if (!result) throw new Error('查無可用照片，請換個景點關鍵字。');
+      if (typeof onUpdateImage === 'function') await onUpdateImage(item, result.url);
       setResolvedImageUrl(result.url);
       imageFallbackAttemptedRef.current = false;
       setImageLoadFailed(false);
@@ -243,7 +246,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
     return () => {
       cancelled = true;
     };
-  }, [item.id, item.image_url, item.photo_reference, item.photoReference, item.address, item.location_name, item.placeId, item.googlePlaceId, item.google_place_id]);
+  }, [item.id, item.image_url, item.preview_url, item.photo_reference, item.photoReference, item.address, item.location_name, item.placeId, item.googlePlaceId, item.google_place_id]);
   return (
     <View style={timelineCardContainerStyle}>
       <View style={styles.row}>

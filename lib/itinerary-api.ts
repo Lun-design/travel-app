@@ -26,6 +26,7 @@ function optimisticItineraryItem(payload: ItineraryItemSaveInput, existing: Itin
     duration_minutes: payload.duration_minutes ?? existing?.duration_minutes ?? null,
     difficulty: payload.difficulty ?? existing?.difficulty ?? null,
     opening_hours: payload.opening_hours ?? existing?.opening_hours ?? null,
+    preview_url: payload.preview_url ?? existing?.preview_url ?? null,
     photo_reference: payload.photo_reference ?? existing?.photo_reference ?? null,
     is_backup: payload.is_backup ?? existing?.is_backup ?? false,
     backup_for_id: payload.backup_for_id ?? existing?.backup_for_id ?? null,
@@ -119,3 +120,46 @@ export async function deleteItineraryItem(id: string, options: OfflineApiOptions
     throw error;
   }
 }
+
+/**
+ * Persist a user-selected image URL without sending the rest of the item.
+ * Keeping this as a narrow update prevents an image change from overwriting
+ * concurrent edits to the itinerary item.
+ */
+export async function updateItineraryItemImage(
+  id: string,
+  previewUrl: string | null,
+  options: OfflineApiOptions = {},
+): Promise<void> {
+  const normalizedUrl = typeof previewUrl === 'string' ? previewUrl.trim() || null : null;
+  const store = options.store ?? offlineStore;
+  const scope = await resolveOfflineScope(options.offlineScope?.tripId ?? '', options.offlineScope);
+  try {
+    const { error } = await supabase
+      .from('itinerary_items')
+      .update({ preview_url: normalizedUrl })
+      .eq('id', id);
+    if (error) throw error;
+    await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (items) => items.map((item) => (
+      item.id === id ? { ...item, preview_url: normalizedUrl } : item
+    )));
+  } catch (error) {
+    if (!options.replaying && shouldQueueOffline(error)) {
+      await enqueueOfflineMutation(store, {
+        scope,
+        entity: 'itinerary',
+        operation: 'update',
+        resourceId: id,
+        payload: { id, preview_url: normalizedUrl },
+      });
+      await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (items) => items.map((item) => (
+        item.id === id ? { ...item, preview_url: normalizedUrl } : item
+      )));
+      return;
+    }
+    throw error;
+  }
+}
+
+/** Alias that makes the persisted column name explicit for API consumers. */
+export const updateItineraryItemPreviewUrl = updateItineraryItemImage;

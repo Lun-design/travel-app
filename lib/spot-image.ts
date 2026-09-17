@@ -20,6 +20,7 @@ export type SpotImageInput = {
   category?: SpotImageCategory | null;
   imageUrl?: string | null;
   image_url?: string | null;
+  preview_url?: string | null;
   photoReference?: string | null;
   photo_reference?: string | null;
 };
@@ -359,7 +360,7 @@ export async function searchSpotImage(query: string, apiKey?: string): Promise<S
 export function getSpotImageUrl(spot: SpotImageInput | null | undefined): string {
   if (!spot) return DEFAULT_FALLBACK;
 
-  const explicit = nonEmpty(spot.imageUrl) ?? nonEmpty(spot.image_url);
+  const explicit = nonEmpty(spot.preview_url) ?? nonEmpty(spot.imageUrl) ?? nonEmpty(spot.image_url);
   if (explicit) return explicit;
 
   const photoReference = nonEmpty(spot.photoReference) ?? nonEmpty(spot.photo_reference);
@@ -391,6 +392,16 @@ export function getSpotImageLightboxUrl(
   resolvedUrl?: string | null,
 ): string {
   if (!spot) return upscaleStaticImage(DEFAULT_FALLBACK);
+  const persistedPreview = nonEmpty(spot.preview_url);
+  if (persistedPreview) {
+    if (persistedPreview.includes('maps.googleapis.com/maps/api/place/photo')) {
+      return persistedPreview.replace(/([?&]maxwidth=)\d+/u, (_match, prefix: string) => `${prefix}1600`);
+    }
+    if (persistedPreview.includes('places.googleapis.com/v1/')) {
+      return persistedPreview.replace(/([?&]maxWidthPx=)\d+/u, (_match, prefix: string) => `${prefix}1600`);
+    }
+    return upscaleStaticImage(persistedPreview);
+  }
   const explicit = nonEmpty(spot.imageUrl) ?? nonEmpty(spot.image_url);
   if (explicit) return explicit;
   const reference = nonEmpty(spot.photoReference) ?? nonEmpty(spot.photo_reference);

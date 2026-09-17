@@ -18,6 +18,8 @@ export type ItineraryItem = {
   start_time?: string | null;
   reservation_tags?: string[];
   image_url?: string | null;
+  /** Persisted full/preview image URL selected by the user. */
+  preview_url?: string | null;
   photo_reference?: string | null;
   /** CamelCase alias used by Google Places responses before persistence. */
   photoReference?: string | null;
@@ -168,6 +170,7 @@ export function normalizeItineraryItemPayload(item: ItineraryItemSaveInput): Iti
   }
   if ('address' in item) payload.address = normalizeOptionalText(item.address);
   if ('notes' in item) payload.notes = normalizeOptionalText(item.notes);
+  if ('preview_url' in item) payload.preview_url = normalizeOptionalText(item.preview_url);
   if ('latitude' in item) payload.latitude = normalizeCoordinateValue(item.latitude, -90, 90);
   if ('longitude' in item) payload.longitude = normalizeCoordinateValue(item.longitude, -180, 180);
   if ('opening_hours' in item) payload.opening_hours = normalizeOpeningHoursValue(item.opening_hours);

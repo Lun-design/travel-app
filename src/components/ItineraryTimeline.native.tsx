@@ -26,6 +26,7 @@ export function ItineraryTimeline({
   onPreviewVoucher,
   focusedItemId,
   onInsertAtPosition,
+  onUpdateImage,
 }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByPosition(items));
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
@@ -98,6 +99,7 @@ export function ItineraryTimeline({
               onDelete={onDelete}
               onMoveUp={moveHandlers.get(item.id)?.up}
               onMoveDown={moveHandlers.get(item.id)?.down}
+              onUpdateImage={onUpdateImage}
               canMoveUp={index > 0}
               canMoveDown={index < localItems.length - 1}
             />

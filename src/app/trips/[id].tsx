@@ -36,6 +36,7 @@ import { useTripDetailData } from '@/hooks/useTripDetailData';
 import { ActiveTripContext } from '@/contexts/ActiveTripContext';
 import { createReminderScheduler, getNotificationPermission, loadReminderPreference, registerNotificationServiceWorker, requestNotificationPermission, saveReminderPreference, showReminderNotification, type NotificationPermissionState } from '@/lib/notifications';
 import { replaceOptimizedRouteItems } from '@/lib/route-optimizer';
+import { updateItineraryItemImage } from '@/lib/itinerary-api';
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -206,6 +207,33 @@ export default function TripDetailScreen() {
     }
   }
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
+  async function updateItemImage(item: ItineraryItem, imageUrl: string) {
+    const previousUrl = item.preview_url ?? item.image_url ?? null;
+    data.setItems((currentItems) => currentItems.map((currentItem) => currentItem.id === item.id
+      ? { ...currentItem, preview_url: imageUrl }
+      : currentItem));
+    try {
+      await updateItineraryItemImage(item.id, imageUrl, { offlineScope: data.offlineScope });
+    } catch (error: any) {
+      data.setItems((currentItems) => currentItems.map((currentItem) => currentItem.id === item.id
+        ? { ...currentItem, preview_url: previousUrl }
+        : currentItem));
+      Alert.alert('照片更新失敗', error?.message ?? '照片無法儲存，請稍後再試。');
+      throw error;
+    }
+    try {
+      await data.reload();
+    } catch (error) {
+      // The update is already persisted (or queued offline); keep the
+      // optimistic URL visible if the follow-up read is temporarily offline.
+      console.warn('[TripDetail] image reload failed; retaining saved URL', error);
+    }
+    // Reconcile the confirmed value after reload as well. A replica can briefly
+    // return the pre-update row; the saved URL must remain visible immediately.
+    data.setItems((currentItems) => currentItems.map((currentItem) => currentItem.id === item.id
+      ? { ...currentItem, preview_url: imageUrl }
+      : currentItem));
+  }
   async function saveExpense(input: Parameters<typeof data.saveExpenseRecord>[0], splits: Parameters<typeof data.saveExpenseRecord>[1]) { await data.saveExpenseRecord(input, splits); setExpenseModal(false); await data.reload(); }
   async function deleteExpense(expense: any) { await data.removeExpense(expense.id); await data.reload(); }
   async function refreshPlaces() { await data.reloadPlaces(); }
@@ -280,7 +308,7 @@ export default function TripDetailScreen() {
     <TripDetailTabs value={tab} onChange={setTab} theme={theme} />
     {/* 📥 一鍵匯入行程 is available from the timeline's more-actions menu. */}
     {/* Map toggle labels: 🗺️ 查看地圖路線 (點擊展開) / 🗺️ 隱藏地圖 */}
-    {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setInsertPosition(null); setItemModal(true); }} onDelete={deleteItem} onReorder={data.reorderItems} onApplyRouteOptimization={applyRouteOptimization} onAddAtPosition={(position) => { setEditingItem(null); setInsertPosition(position); setItemModal(true); }} onAdd={() => { setEditingItem(null); setInsertPosition(null); setItemModal(true); }} onImport={() => { setImportAction('import'); setImportVisible(true); }} onClearAll={() => { setImportAction('clear'); setImportVisible(true); }} />}
+    {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setInsertPosition(null); setItemModal(true); }} onDelete={deleteItem} onUpdateImage={updateItemImage} onReorder={data.reorderItems} onApplyRouteOptimization={applyRouteOptimization} onAddAtPosition={(position) => { setEditingItem(null); setInsertPosition(position); setItemModal(true); }} onAdd={() => { setEditingItem(null); setInsertPosition(null); setItemModal(true); }} onImport={() => { setImportAction('import'); setImportVisible(true); }} onClearAll={() => { setImportAction('clear'); setImportVisible(true); }} />}
     {tab === 'expenses' && <ExpensesPanel tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} refreshToken={data.packingRevision} /></ScrollView></View>}
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} onChanged={data.reload} /></View>}

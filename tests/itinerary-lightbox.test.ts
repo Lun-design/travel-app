@@ -14,6 +14,16 @@ describe('itinerary spot image lightbox', () => {
     expect(source).toContain('getSpotImageLightboxUrl');
     expect(source).toContain('更換照片');
     expect(source).toContain('searchSpotImage');
+    expect(source).toContain('onUpdateImage');
     expect(source).toContain('setResolvedImageUrl(result.url)');
+  });
+
+  it('delegates manual replacement to the parent persistence callback', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const screen = readFileSync(path.resolve(process.cwd(), 'src', 'app', 'trips', '[id].tsx'), 'utf8');
+    expect(source).toContain('await onUpdateImage(item, result.url)');
+    expect(screen).toContain('updateItineraryItemImage(item.id, imageUrl');
+    expect(screen).toContain('await data.reload()');
+    expect(screen).toContain('retaining saved URL');
   });
 });

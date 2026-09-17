@@ -21,6 +21,7 @@ describe('spot image resolver', () => {
   it('prefers an explicitly supplied image URL, including the API snake_case field', () => {
     expect(getSpotImageUrl({ name: '清水寺', imageUrl: 'https://cdn.example/temple.jpg' })).toBe('https://cdn.example/temple.jpg');
     expect(getSpotImageUrl({ location_name: '清水寺', image_url: 'https://cdn.example/legacy.jpg' })).toBe('https://cdn.example/legacy.jpg');
+    expect(getSpotImageUrl({ location_name: '清水寺', preview_url: 'https://cdn.example/persisted.jpg', imageUrl: 'https://cdn.example/old.jpg' })).toBe('https://cdn.example/persisted.jpg');
   });
 
   it('uses the Google Places Photo endpoint with the public key and a 400px width', () => {
@@ -45,6 +46,11 @@ describe('spot image resolver', () => {
     expect(getSpotImageLightboxUrl({ photoReference: 'photo-ref' })).toBe(
       'https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference=photo-ref&key=test-key',
     );
+  });
+
+  it('upscales a persisted Google preview URL for the lightbox', () => {
+    const previewUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=photo-ref&key=test-key';
+    expect(getSpotImageLightboxUrl({ preview_url: previewUrl })).toContain('maxwidth=1600');
   });
 
   it('searches a replacement photo and returns its Google media URL', async () => {
