@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { listItineraryItems, saveItineraryItem, deleteItineraryItem, updateItineraryItemsOrder } from './itinerary-api';
+import { listItineraryItems, saveItineraryItem, deleteItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule } from './itinerary-api';
 import { buildTripPayload } from './trip-validation';
 import { normalizeTimezone } from './timezone';
 import { createLocalId, enqueueOfflineMutation, patchOfflineSnapshot, resolveOfflineScope, shouldQueueOffline, type OfflineApiOptions } from './offline-data';
@@ -179,4 +179,4 @@ export async function updateTrip(id: string, changes: TripUpdateInput, options: 
   }
 }
 
-export { listItineraryItems, saveItineraryItem, deleteItineraryItem, updateItineraryItemsOrder };
+export { listItineraryItems, saveItineraryItem, deleteItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule };

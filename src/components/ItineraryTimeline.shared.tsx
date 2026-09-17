@@ -26,6 +26,8 @@ export type ItineraryTimelineProps = {
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => void;
   onReorder?: (items: { id: string; position: number }[]) => Promise<void>;
+  /** Persist a group of shifted times in one transaction. */
+  onShiftSubsequent?: (items: { id: string; time: string | null }[]) => Promise<void>;
   focusedItemId?: string | null;
   scheduleContext?: ScheduleContext;
   vouchers?: Voucher[];
@@ -226,6 +228,7 @@ type TimelineCardProps = {
   themeMode?: ThemeMode;
   onRouteModeChange?: (fromId: string, mode: TravelMode) => void;
   onUpdateImage?: (item: ItineraryItem, imageUrl: string) => void | Promise<void>;
+  onShiftSubsequent?: (delayMinutes: number) => void | Promise<void>;
 };
 
 const routeModes: Array<{ mode: TravelMode; label: string; icon: string }> = [
@@ -250,7 +253,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const { width: viewportWidth } = useWindowDimensions();
   const isMobile = viewportWidth < 600;
@@ -316,7 +319,12 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
         <View style={[styles.card, { backgroundColor: '#FFFFFF', borderWidth: 0, borderColor: 'transparent', borderTopWidth: 2, borderTopColor: 'rgba(74,62,61,0.15)', padding: 18, borderRadius: 16, marginBottom: 16, shadowColor: '#4A3E3D', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, active && styles.cardActive]}>
           {(scheduled?.openingWarning || scheduled?.overlapWarning) ? <View style={styles.warningStack}>
             {scheduled.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
-            {scheduled.overlapWarning ? <Text style={styles.overlapWarning}>🚨 時間衝突</Text> : null}
+            {scheduled.overlapWarning ? <>
+              <Text style={styles.overlapWarning}>{`⚠️ 時間重疊 ${scheduled.conflictMinutes ?? 0} 分鐘`}</Text>
+              {onShiftSubsequent && (scheduled.conflictMinutes ?? 0) > 0
+                ? <Pressable accessibilityRole="button" style={styles.shiftButton} onPress={() => { void onShiftSubsequent(scheduled.conflictMinutes ?? 0); }}><Text style={styles.shiftButtonText}>⚡ 一鍵順延後續行程</Text></Pressable>
+                : null}
+            </> : null}
           </View> : null}
           <Modal visible={lightboxVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxVisible(false)}>
             <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxVisible(false)}>
@@ -487,6 +495,8 @@ const styles = {
     warningStack: { position: 'absolute', top: 10, right: 10, zIndex: 2, alignItems: 'flex-end', gap: 4, maxWidth: '72%' },
     openingWarning: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' },
     overlapWarning: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' },
+    shiftButton: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 8, backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+    shiftButtonText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
     address: { fontSize: 13 },
     notes: { fontSize: 13, fontStyle: 'italic' },
     navigation: { alignSelf: 'flex-start', color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', minHeight: 44, paddingVertical: 14 },

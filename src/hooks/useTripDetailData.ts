@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getTrip, listTripMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
-import { deleteItineraryItem, listItineraryItems, saveItineraryItem, updateItineraryItemsOrder } from '@/lib/itinerary-api';
+import { deleteItineraryItem, listItineraryItems, saveItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule } from '@/lib/itinerary-api';
 import type { ItineraryItem, ItineraryItemSaveInput } from '@/lib/itinerary';
 import { applyItineraryOrder, sortItineraryItemsByStartTime } from '@/lib/itinerary';
 import { calculateBalances, deleteExpense, listExpenses, saveExpense, type Expense, type ExpenseSplit } from '@/lib/expenses-api';
@@ -182,6 +182,19 @@ export function useTripDetailData(tripId: string | undefined) {
     }
   }, [items, reload, saveOrder]);
 
+  const shiftSchedule = useCallback(async (changes: { id: string; time: string | null }[]) => {
+    const previous = items;
+    const byId = new Map(changes.map((change) => [change.id, change.time]));
+    setItems((current) => sortItineraryItemsByStartTime(current.map((item) => byId.has(item.id) ? { ...item, time: byId.get(item.id) ?? null } : { ...item })));
+    try {
+      await updateItineraryItemsSchedule(changes, { offlineScope });
+      await reload();
+    } catch (cause) {
+      setItems(previous);
+      throw cause;
+    }
+  }, [items, offlineScope, reload]);
+
   const saveTripSettings = useCallback(async (changes: Parameters<typeof updateTrip>[1]) => {
     if (!trip) throw new Error('找不到此行程。');
     const updated = await updateTrip(trip.id, changes, { offlineScope });
@@ -207,7 +220,7 @@ export function useTripDetailData(tripId: string | undefined) {
   return {
     trip, setTrip, members, setMembers, items, setItems, expenses, setExpenses, vouchers, setVouchers, places, setPlaces, profile, setProfile, userId,
     rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, realtimeNotice, packingRevision, offlineScope,
-    reload, reloadPlaces, resolveConflict, saveItem, removeItem, reorderItems, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
+    reload, reloadPlaces, resolveConflict, saveItem, removeItem, reorderItems, shiftSchedule, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
   };
 }
 

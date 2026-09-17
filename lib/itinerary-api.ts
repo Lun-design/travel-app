@@ -100,6 +100,48 @@ export async function updateItineraryItemsOrder(items: { id: string; position: n
   }
 }
 
+export type ItineraryScheduleChange = { id: string; time: string | null };
+
+function normalizeScheduleChanges(items: ItineraryScheduleChange[]): ItineraryScheduleChange[] {
+  return items.map((item) => ({
+    id: String(item.id ?? '').trim(),
+    time: typeof item.time === 'string' ? item.time.trim() || null : null,
+  })).filter((item) => item.id.length > 0);
+}
+
+function applyScheduleChanges(items: ItineraryItem[], changes: ItineraryScheduleChange[]): ItineraryItem[] {
+  const byId = new Map(changes.map((change) => [change.id, change.time]));
+  return items.map((item) => byId.has(item.id) ? { ...item, time: byId.get(item.id) ?? null } : item);
+}
+
+/** Persist all shifted start times in one atomic Supabase RPC transaction. */
+export async function updateItineraryItemsSchedule(items: ItineraryScheduleChange[], options: OfflineApiOptions = {}): Promise<void> {
+  const changes = normalizeScheduleChanges(items);
+  if (!changes.length) return;
+  if (changes.length !== items.length) throw new Error('Invalid itinerary schedule payload');
+  const scope = await resolveOfflineScope(options.offlineScope?.tripId ?? '', options.offlineScope);
+  const store = options.store ?? offlineStore;
+  try {
+    const result = await supabase.rpc('update_itinerary_items_schedule', { p_items: changes });
+    if (result?.error) throw result.error;
+    await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => applyScheduleChanges(current, changes));
+  } catch (error) {
+    console.error('[Itinerary] schedule RPC failed', { error, payload: changes });
+    if (!options.replaying && shouldQueueOffline(error)) {
+      await enqueueOfflineMutation(store, {
+        scope,
+        entity: 'itinerary',
+        operation: 'schedule',
+        resourceId: changes.map((item) => item.id).sort().join(','),
+        payload: changes,
+      });
+      await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => applyScheduleChanges(current, changes));
+      return;
+    }
+    throw error;
+  }
+}
+
 export async function saveItineraryItem(item: ItineraryItemSaveInput, options: OfflineApiOptions = {}): Promise<ItineraryItem> {
   const payload = normalizeItineraryItemPayload(item);
   const store = options.store ?? offlineStore;

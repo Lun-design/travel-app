@@ -11,7 +11,7 @@ export type OfflineSnapshot = {
 };
 export type OfflineMutationStatus = 'pending' | 'conflict';
 export type OfflineEntity = 'trip' | 'itinerary' | 'packing' | 'expense';
-export type OfflineMutationOperation = 'create' | 'update' | 'delete' | 'reorder';
+export type OfflineMutationOperation = 'create' | 'update' | 'delete' | 'reorder' | 'schedule';
 export type OfflineMutation = {
   id: string;
   scope: OfflineScope;

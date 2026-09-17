@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { reorderItineraryItems, sortItineraryItemsByPosition } from '@/lib/itinerary';
+import { shiftSubsequentItems } from '@/lib/time-buffer';
 import { buildDaySchedule } from '@/lib/schedule';
 import { describeItineraryOrderError, updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import {
@@ -22,6 +23,7 @@ export function ItineraryTimeline({
   onEdit,
   onDelete,
   onReorder,
+  onShiftSubsequent,
   scheduleContext,
   vouchers,
   onPreviewVoucher,
@@ -75,6 +77,21 @@ export function ItineraryTimeline({
     }
   }
 
+  async function shiftItems(fromIndex: number, delayMinutes: number) {
+    const previous = localItems;
+    const shifted = shiftSubsequentItems(previous, fromIndex, delayMinutes);
+    const changes = shifted.flatMap((item, index) => item.time !== previous[index]?.time ? [{ id: item.id, time: item.time }] : []);
+    if (!changes.length) return;
+    setLocalItems(shifted);
+    try {
+      await onShiftSubsequent?.(changes);
+      Alert.alert('行程已順延', `後續行程已順延 ${delayMinutes} 分鐘。`);
+    } catch (error) {
+      setLocalItems(previous);
+      Alert.alert('時間順延失敗', error instanceof Error ? error.message : '請稍後再試。');
+    }
+  }
+
   const moveHandlers = useMemo(
     () => new Map(localItems.map((item) => [item.id, {
       up: () => { void moveItem(item.id, -1); },
@@ -104,6 +121,10 @@ export function ItineraryTimeline({
               onMoveUp={moveHandlers.get(item.id)?.up}
               onMoveDown={moveHandlers.get(item.id)?.down}
               onUpdateImage={onUpdateImage}
+              // The warning belongs to the current stop, so shift it and all
+              // following stops (the pure helper intentionally excludes its
+              // `fromIndex` item).
+              onShiftSubsequent={(delay) => shiftItems(index - 1, delay)}
               canMoveUp={index > 0}
               canMoveDown={index < localItems.length - 1}
             />
