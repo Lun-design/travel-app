@@ -1,11 +1,89 @@
 import { describe, expect, it } from 'vitest';
 import { applyOptimizedSchedule, optimizeRoute, replaceOptimizedRouteItems, type OptimizableStop } from '../lib/route-optimizer';
+import { optimizeItineraryOrder, type ItineraryOptimizationStop } from '../lib/route-optimization';
 
 function stop(id: string, latitude: number, longitude: number): OptimizableStop {
   return { id, latitude, longitude };
 }
 
 describe('route optimization', () => {
+  it('reorders an unordered day into a geographically efficient route while keeping the first stop fixed', () => {
+    const result = optimizeItineraryOrder([
+      { id: 'taipei', latitude: 25.033, longitude: 121.565, duration_minutes: 30, start_time: '09:00' },
+      { id: 'tainan', latitude: 22.997, longitude: 120.213, duration_minutes: 60, start_time: '10:00' },
+      { id: 'xin-zhuang', latitude: 25.036, longitude: 121.45, duration_minutes: 45, start_time: '11:00' },
+    ]);
+
+    expect(result.items.map((item) => item.id)).toEqual(['taipei', 'xin-zhuang', 'tainan']);
+    expect(result.items[0]?.id).toBe('taipei');
+    expect(result.totalDistanceKm).toBeLessThan(result.originalDistanceKm);
+    expect(result.items.every((item) => typeof item.start_time === 'string')).toBe(true);
+  });
+
+  it('keeps a fixed-time reservation at its original slot and preserves its start time', () => {
+    const result = optimizeItineraryOrder([
+      { id: 'taipei', latitude: 25.033, longitude: 121.565, duration_minutes: 30, start_time: '09:00' },
+      { id: 'reservation', latitude: 22.997, longitude: 120.213, duration_minutes: 60, start_time: '12:00' },
+      { id: 'xin-zhuang', latitude: 25.036, longitude: 121.45, duration_minutes: 45, start_time: '13:00' },
+      { id: 'keelung', latitude: 25.128, longitude: 121.74, duration_minutes: 45, start_time: '14:00' },
+    ], { fixedTimeAnchors: [{ id: 'reservation', start_time: '12:00' }] });
+
+    expect(result.items.map((item) => item.id).indexOf('reservation')).toBe(1);
+    expect(result.items.find((item) => item.id === 'reservation')?.start_time).toBe('12:00');
+  });
+
+  it('can optimize the full route when the first destination is not fixed', () => {
+    const result = optimizeItineraryOrder([
+      { id: 'origin', latitude: 25.033, longitude: 121.565, duration_minutes: 30 },
+      { id: 'tainan', latitude: 22.997, longitude: 120.213, duration_minutes: 30 },
+      { id: 'xin-zhuang', latitude: 25.036, longitude: 121.45, duration_minutes: 30 },
+    ], {
+      fixFirstDestination: false,
+      distanceMatrix: [
+        [0, 10, 10],
+        [10, 0, 100],
+        [10, 100, 0],
+      ],
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual(['tainan', 'origin', 'xin-zhuang']);
+    expect(result.items[0]?.id).not.toBe('origin');
+  });
+
+  it('returns the original order for zero, one, and two stops', () => {
+    const cases: readonly (readonly ItineraryOptimizationStop[])[] = [
+      [],
+      [{ id: 'only', latitude: 25, longitude: 121 }],
+      [
+        { id: 'first', latitude: 25, longitude: 121 },
+        { id: 'second', latitude: 25.01, longitude: 121.01 },
+      ],
+    ];
+
+    cases.forEach((items) => {
+      const result = optimizeItineraryOrder(items);
+      expect(result.items).toEqual(items);
+      expect(result.strategy).toBe('none');
+      expect(result.optimized).toBe(false);
+    });
+  });
+
+  it('uses original item indexes when evaluating an array distance matrix after reordering', () => {
+    const matrix = [
+      [0, 100, 1],
+      [100, 0, 100],
+      [1, 100, 0],
+    ];
+    const result = optimizeItineraryOrder([
+      { id: 'first', latitude: 25, longitude: 121 },
+      { id: 'far', latitude: 25.01, longitude: 121.01 },
+      { id: 'near', latitude: 25.02, longitude: 121.02 },
+    ], { distanceMatrix: matrix });
+
+    expect(result.items.map((item) => item.id)).toEqual(['first', 'near', 'far']);
+    expect(result.totalDistanceKm).toBe(101);
+  });
+
   it('keeps the first stop fixed and finds the shortest order for the remaining stops', () => {
     const stops = [
       stop('start', 0, 0),
