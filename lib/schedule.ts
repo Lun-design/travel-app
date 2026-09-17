@@ -161,6 +161,13 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     const conflict = previous && explicitStart !== null && !explicitHandoff
       ? calculateTimeConflict(previous.startMinutes, previous.durationMinutes, travel, explicitStart)
       : null;
+    console.log('[TimeConflict Debug]', {
+      prevItem: previous?.item ?? null,
+      currentItem: current,
+      transitMinutes: travel,
+      expectedArrival: earliestArrival,
+      conflictMinutes: conflict?.conflictMinutes ?? 0,
+    });
     if (conflict?.isConflict && previous && explicitStart !== null) {
       conflicts.push({
         id: current.id,

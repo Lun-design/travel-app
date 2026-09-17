@@ -58,6 +58,34 @@ describe('smart time buffers and alerts', () => {
     expect(conflicts[0]?.expectedArrivalMinutes).toBe(18 * 60 + 27);
   });
 
+  it('emits the complete time-conflict calculation context for browser debugging', () => {
+    const from = { latitude: 25.0109, longitude: 121.464 };
+    const to = { latitude: 25.06, longitude: 121.464 };
+    const speed = haversineDistanceKm(from, to) * 60 / 204;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    detectTimeConflictsDetailed([
+      item({ id: 'first', time: '14:03', duration_minutes: 60, ...from }),
+      item({ id: 'second', position: 1, time: '19:28', duration_minutes: 45, ...to }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, averageSpeedKmh: speed });
+
+    const debugCall = log.mock.calls.find(([label, context]) => label === '[TimeConflict Debug]' && (context as { currentItem?: { id?: string } } | undefined)?.currentItem?.id === 'second');
+    expect(debugCall?.[1]).toMatchObject({
+      transitMinutes: 204,
+      expectedArrival: 18 * 60 + 27,
+      conflictMinutes: 0,
+      currentItem: expect.objectContaining({ id: 'second', time: '19:28' }),
+    });
+    log.mockRestore();
+  });
+
+  it('reconciles parent time updates before rendering conflict badges', () => {
+    const web = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.web.tsx'), 'utf8');
+    const native = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.native.tsx'), 'utf8');
+    expect(web).toContain('incomingRevision !== parentRevision.current ? incomingItems : localItems');
+    expect(native).toContain('incomingRevision !== parentRevision.current ? incomingItems : localItems');
+  });
+
   it('reports the overlap minutes after adding the previous stop travel time', () => {
     const conflicts = detectTimeConflictsDetailed([
       item({ id: 'first', time: '09:00', duration_minutes: 60, latitude: 25.0109, longitude: 121.464 }),

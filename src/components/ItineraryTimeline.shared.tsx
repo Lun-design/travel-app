@@ -45,6 +45,33 @@ export type TimelineRouteSegment = RouteSegment & {
   loading?: boolean;
 };
 
+/**
+ * Keep the local optimistic timeline in step with parent/realtime updates.
+ * Time and duration are part of the revision because they directly affect
+ * conflict badges; route fields are included so adjacent segments refresh in
+ * the same render as a persisted edit.
+ */
+export function timelineItemsRevision(items: readonly ItineraryItem[]): string {
+  return items.map((item) => JSON.stringify({
+    id: item.id,
+    day_number: item.day_number,
+    position: item.position,
+    time: item.time,
+    start_time: item.start_time,
+    duration_minutes: item.duration_minutes,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    location_name: item.location_name,
+    address: item.address,
+    category: item.category,
+    notes: item.notes,
+    reservation_tags: item.reservation_tags,
+    is_backup: item.is_backup,
+    opening_hours: item.opening_hours,
+    updated_at: item.updated_at,
+  })).join('|');
+}
+
 const timelineCardContainerStyle = {
   position: 'relative',
   display: 'flex',

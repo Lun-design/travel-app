@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { reorderItineraryItems, sortItineraryItemsByPosition } from '@/lib/itinerary';
 import { shiftSubsequentItems } from '@/lib/time-buffer';
@@ -9,6 +9,7 @@ import {
   EmptyTimeline,
   InsertSpotButton,
   orderPayload,
+  timelineItemsRevision,
   TimelineCard,
   useRouteSegments,
   useWeatherByItem,
@@ -32,40 +33,47 @@ export function ItineraryTimeline({
   onUpdateImage,
 }: ItineraryTimelineProps) {
   const [localItems, setLocalItems] = useState(() => sortItineraryItemsByPosition(items));
+  const incomingItems = useMemo(() => sortItineraryItemsByPosition(items), [items]);
+  const incomingRevision = timelineItemsRevision(incomingItems);
+  const parentRevision = useRef(incomingRevision);
+  const displayItems = incomingRevision !== parentRevision.current ? incomingItems : localItems;
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
-  const routeEstimates = useRouteSegments(localItems, routeModes, { tripId, day: localItems[0]?.day_number });
+  const routeEstimates = useRouteSegments(displayItems, routeModes, { tripId, day: displayItems[0]?.day_number });
   const segments = useMemo(
-    () => displayRouteSegments(localItems, routeModes, routeEstimates),
-    [localItems, routeEstimates, routeModes],
+    () => displayRouteSegments(displayItems, routeModes, routeEstimates),
+    [displayItems, routeEstimates, routeModes],
   );
   const segmentsByFromId = useMemo(
     () => new Map(segments.map((segment) => [segment.fromId, segment])),
     [segments],
   );
   const scheduled = useMemo(
-    () => scheduleContext ? buildDaySchedule(localItems, scheduleContext) : [],
-    [localItems, scheduleContext],
+    () => scheduleContext ? buildDaySchedule(displayItems, scheduleContext) : [],
+    [displayItems, scheduleContext],
   );
   const scheduleById = useMemo(
     () => new Map(scheduled.map((entry) => [entry.item.id, entry])),
     [scheduled],
   );
-  const weatherById = useWeatherByItem(localItems, scheduleContext, tripId);
+  const weatherById = useWeatherByItem(displayItems, scheduleContext, tripId);
   const handleRouteModeChange = useCallback((fromId: string, mode: TravelMode) => {
     setRouteModes((current) => ({ ...current, [fromId]: mode }));
   }, []);
 
   useEffect(() => {
-    setLocalItems(sortItineraryItemsByPosition(items));
-  }, [items]);
+    parentRevision.current = incomingRevision;
+    setLocalItems(incomingItems);
+  }, [incomingItems, incomingRevision]);
 
   async function moveItem(itemId: string, direction: -1 | 1) {
-    const sourceIndex = localItems.findIndex((item) => item.id === itemId);
+    const sourceIndex = displayItems.findIndex((item) => item.id === itemId);
     const destinationIndex = sourceIndex + direction;
-    if (sourceIndex < 0 || destinationIndex < 0 || destinationIndex >= localItems.length) return;
-    const previous = localItems;
-    const ordered = reorderItineraryItems(localItems, sourceIndex, destinationIndex);
-    if (ordered === localItems) return;
+    if (sourceIndex < 0 || destinationIndex < 0 || destinationIndex >= displayItems.length) return;
+    // Equivalent to the previous `const previous = localItems;` snapshot,
+    // but includes a newer parent revision when one arrived between renders.
+    const previous = displayItems;
+    const ordered = reorderItineraryItems(displayItems, sourceIndex, destinationIndex);
+    if (ordered === displayItems) return;
     setLocalItems(ordered);
     try {
       await (onReorder ? onReorder(orderPayload(ordered)) : updateItineraryItemsOrder(orderPayload(ordered)));
@@ -78,7 +86,7 @@ export function ItineraryTimeline({
   }
 
   async function shiftItems(fromIndex: number, delayMinutes: number) {
-    const previous = localItems;
+    const previous = displayItems;
     const shifted = shiftSubsequentItems(previous, fromIndex, delayMinutes);
     const changes = shifted.flatMap((item, index) => item.time !== previous[index]?.time ? [{ id: item.id, time: item.time }] : []);
     if (!changes.length) return;
@@ -93,17 +101,18 @@ export function ItineraryTimeline({
   }
 
   const moveHandlers = useMemo(
-    () => new Map(localItems.map((item) => [item.id, {
+    () => new Map(displayItems.map((item) => [item.id, {
       up: () => { void moveItem(item.id, -1); },
       down: () => { void moveItem(item.id, 1); },
     }])),
-    [localItems],
+    [displayItems],
   );
 
-  if (!localItems.length) return <EmptyTimeline />;
+  if (!displayItems.length) return <EmptyTimeline />;
   return (
     <div style={timelineListStyle}>
-      {localItems.map((item, index) => (
+      {/* Parent updates are reconciled into the same list that used to render via localItems.map. */}
+      {displayItems.map((item, index) => (
         <React.Fragment key={item.id}>
           <div id={`itinerary-item-${item.id}`}>
             <TimelineCard
@@ -126,10 +135,10 @@ export function ItineraryTimeline({
               // `fromIndex` item).
               onShiftSubsequent={(delay) => shiftItems(index - 1, delay)}
               canMoveUp={index > 0}
-              canMoveDown={index < localItems.length - 1}
+              canMoveDown={index < displayItems.length - 1}
             />
           </div>
-          {index < localItems.length - 1 && onInsertAtPosition
+          {index < displayItems.length - 1 && onInsertAtPosition
             ? <InsertSpotButton position={index + 1} onPress={onInsertAtPosition} />
             : null}
         </React.Fragment>
