@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { reorderItineraryItems, sortItineraryItemsByPosition } from '@/lib/itinerary';
 import { buildDaySchedule } from '@/lib/schedule';
-import { updateItineraryItemsOrder } from '@/lib/itinerary-api';
+import { describeItineraryOrderError, updateItineraryItemsOrder } from '@/lib/itinerary-api';
 import {
   displayRouteSegments,
   EmptyTimeline,
@@ -61,14 +61,17 @@ export function ItineraryTimeline({
     const sourceIndex = localItems.findIndex((item) => item.id === itemId);
     const destinationIndex = sourceIndex + direction;
     if (sourceIndex < 0 || destinationIndex < 0 || destinationIndex >= localItems.length) return;
+    const previous = localItems;
     const ordered = reorderItineraryItems(localItems, sourceIndex, destinationIndex);
     if (ordered === localItems) return;
     setLocalItems(ordered);
     try {
       await (onReorder ? onReorder(orderPayload(ordered)) : updateItineraryItemsOrder(orderPayload(ordered)));
     } catch (error) {
-      setLocalItems(sortItineraryItemsByPosition(items));
-      Alert.alert('排序更新失敗', error instanceof Error ? error.message : '請稍後再試。');
+      // Roll back to the exact snapshot shown before this click. The parent
+      // `items` prop can be one render behind while the RPC is in flight.
+      setLocalItems(previous);
+      Alert.alert('排序更新失敗', describeItineraryOrderError(error));
     }
   }
 

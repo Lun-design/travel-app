@@ -9,6 +9,24 @@ function isLocalId(value: string | undefined): boolean {
   return Boolean(value?.startsWith('offline-'));
 }
 
+/** Convert PostgREST errors into a useful message for the reorder menu. */
+export function describeItineraryOrderError(error: unknown): string {
+  const record = typeof error === 'object' && error !== null
+    ? error as { code?: unknown; message?: unknown }
+    : null;
+  const code = typeof record?.code === 'string' ? record.code : '';
+  const message = error instanceof Error
+    ? error.message
+    : (typeof record?.message === 'string' ? record.message : '');
+  const migrationMissing = code === '42883'
+    || code === 'PGRST202'
+    || (/update_itinerary_items_order/i.test(message) && /not find|does not exist|unavailable|missing/i.test(message));
+  if (migrationMissing) {
+    return '排序更新失敗：請先套用 Supabase migration 20260918000000_atomic_itinerary_order.sql。';
+  }
+  return message || '排序更新失敗，請稍後再試。';
+}
+
 function optimisticItineraryItem(payload: ItineraryItemSaveInput, existing: ItineraryItem | undefined, id: string): ItineraryItem {
   return {
     id,
@@ -58,15 +76,18 @@ export async function updateItineraryItemsOrder(items: { id: string; position: n
     // Reordering is a single transaction in Supabase. This prevents the
     // intermediate positions produced by several independent PATCH calls from
     // leaking to collaborators or leaving a partially reordered day behind.
-    const rpc = (supabase as unknown as { rpc?: (name: string, args: Record<string, unknown>) => PromiseLike<{ error?: unknown }> }).rpc;
-    if (typeof rpc !== 'function') throw new Error('The itinerary order RPC is unavailable.');
-    const result = await rpc('update_itinerary_items_order', { p_items: items });
+    // Keep the method call attached to `supabase`. SupabaseClient.rpc uses the
+    // client instance internally; extracting it into a local variable loses
+    // `this` in Web builds and makes every reorder fail before any request is
+    // sent.
+    const result = await supabase.rpc('update_itinerary_items_order', { p_items: items });
     if (result?.error) throw result.error;
     await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => [...current.map((item) => {
       const next = items.find((entry) => entry.id === item.id);
       return next ? { ...item, position: next.position } : item;
     })].sort((left, right) => Number(left.position ?? 0) - Number(right.position ?? 0)));
   } catch (error) {
+    console.error('[Itinerary] order RPC failed', { error, payload: items });
     if (!options.replaying && shouldQueueOffline(error)) {
       await enqueueOfflineMutation(store, { scope, entity: 'itinerary', operation: 'reorder', resourceId: items.map((item) => item.id).sort().join(','), payload: items });
       await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => [...current.map((item) => {
