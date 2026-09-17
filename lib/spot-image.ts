@@ -317,7 +317,7 @@ export async function resolveSpotImage(spot: SpotImageInput | null | undefined, 
       const url = resolvedReference ? getGooglePhotoUrl(resolvedReference, key) : null;
       return url ? { url, photoReference: resolvedReference ?? null } : null;
     } catch (error) {
-      console.warn('[SpotImage] dynamic photo lookup failed', error);
+      console.error('[SpotImage] dynamic photo lookup failed', error);
       return null;
     }
   })();
@@ -342,7 +342,7 @@ export async function searchSpotImage(query: string, apiKey?: string): Promise<S
     const url = photoReference ? getGooglePhotoUrl(photoReference, key) : null;
     return url ? { url, photoReference: photoReference ?? null } : null;
   } catch (error) {
-    console.warn('[SpotImage] manual photo search failed', error);
+    console.error('[SpotImage] manual photo search failed', error);
     return null;
   }
 }

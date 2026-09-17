@@ -151,7 +151,7 @@ describe('weather helpers', () => {
   });
 
   it('returns a mock weather summary when Open-Meteo fails', async () => {
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const fetchMock = vi.fn().mockRejectedValue(new Error('network unavailable'));
     const service = createWeatherService(fetchMock);
 
@@ -164,7 +164,7 @@ describe('weather helpers', () => {
       isSimulated: true,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(warning).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith('[Weather] forecast lookup skipped', expect.any(Error));
   });
 
   it('does not request Open-Meteo for a date beyond the 16-day forecast window', async () => {

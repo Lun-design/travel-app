@@ -63,7 +63,6 @@ export function useTripDetailData(tripId: string | undefined) {
         listTripPlaces(tripId).catch(() => null),
       ]);
       if (requestId !== reloadRequestRef.current) {
-        console.debug('[TripDetail] ignored stale reload response', { requestId, latestRequestId: reloadRequestRef.current });
         return;
       }
       const cached = await offlineStore.getSnapshot(scope);
@@ -141,7 +140,7 @@ export function useTripDetailData(tripId: string | undefined) {
       const refreshed = await listExpenses(tripId, { offlineScope });
       setExpenses(refreshed);
     } catch (cause) {
-      console.warn('[TripDetail] realtime expense refresh failed', cause);
+      console.error('[TripDetail] realtime expense refresh failed', cause);
     }
   }, [offlineScope, tripId]);
 

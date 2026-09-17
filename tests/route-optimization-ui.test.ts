@@ -5,10 +5,10 @@ const timelineSource = () => readFileSync('src/components/trip-detail/TimelinePa
 const tripDetailSource = () => readFileSync('src/app/trips/[id].tsx', 'utf8');
 
 describe('route optimization UI callback chain', () => {
-  it('binds the visible button to the real entry handler and logs every click', () => {
+  it('binds the visible button to the real entry handler', () => {
     const timeline = timelineSource();
 
-    expect(timeline).toMatch(/async function openOptimizationPreview\(\) \{\s*console\.log\('\[OptimizeRoute\] Clicked!'\);/);
+    expect(timeline).toContain('async function openOptimizationPreview()');
     expect(timeline).toContain('onPress={openOptimizationPreview}');
     expect(timeline).toContain("optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線'");
   });

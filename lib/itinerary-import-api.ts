@@ -34,7 +34,7 @@ async function purgeBeforeOverwrite(tripId: string) {
 async function cacheResult(scope: Awaited<ReturnType<typeof readyScope>>, result: ImportWriteResult) {
   try {
     await patchOfflineSnapshot(offlineStore, scope, { itineraryItems: result.items, ...(result.trip ? { trip: result.trip } : {}) });
-  } catch (error) { console.warn('[ItineraryImport] 已儲存，但本機快取更新失敗', error); }
+  } catch (error) { console.error('[ItineraryImport] 已儲存，但本機快取更新失敗', error); }
   return result;
 }
 

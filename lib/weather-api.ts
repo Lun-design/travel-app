@@ -546,18 +546,16 @@ export function createWeatherService(fetcher: WeatherFetcher = fetch.bind(global
       `_t=${encodeURIComponent(String(now()))}`,
     ].join('&');
     const requestUrl = `https://api.open-meteo.com/v1/forecast?${params}`;
-    console.debug('[Weather] Open-Meteo request', requestUrl);
     const request = fetcher(requestUrl, { cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status})`);
         const payload = await response.json() as OpenMeteoPayload;
-        console.debug('[Weather] Open-Meteo response', payload);
         const weather = parseOpenMeteoResponse(payload, date, 'live', targetTime) ?? createMockWeatherSummary(date);
         if (weather.source === 'live' && !weather.isSimulated) writeWeatherCache(key, weather);
         return weather;
       })
       .catch((error) => {
-        console.warn('[Weather] forecast lookup skipped', error);
+        console.error('[Weather] forecast lookup skipped', error);
         const cached = readWeatherCache(key);
         if (cached) return cached;
         return createMockWeatherSummary(date);

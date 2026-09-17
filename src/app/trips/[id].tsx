@@ -140,12 +140,10 @@ export default function TripDetailScreen() {
     const saved = await saveItineraryItemAndRefresh({
       save: () => data.saveItem(input),
       apply: (savedItem) => data.setItems((prevItems) => {
-        console.log('[DEBUG] 儲存成功，準備更新 items State, 舊長度:', prevItems.length);
         const updated = prevItems.some((entry) => entry.id === savedItem.id)
           ? prevItems.map((entry) => entry.id === savedItem.id ? savedItem : entry)
           : [...prevItems, savedItem];
         const updatedItems = [...sortItineraryItemsByStartTime(updated)];
-        console.log('[DEBUG] setItems 執行完畢，新陣列:', updatedItems);
         return updatedItems;
       }),
       refresh: data.reload,
@@ -158,7 +156,6 @@ export default function TripDetailScreen() {
         ? currentItems.map((entry) => entry.id === saved.id ? saved : entry)
         : [...currentItems, saved];
       const reconciledItems = [...sortItineraryItemsByStartTime(reconciled)];
-      console.log('[DEBUG] reload 後重新同步已儲存景點:', reconciledItems);
       return reconciledItems;
     });
     setRefreshKey((current) => current + 1);
@@ -177,7 +174,6 @@ export default function TripDetailScreen() {
           ? currentItems.map((entry) => entry.id === saved.id ? saved : entry)
           : [...currentItems, saved];
         const reconciledItems = [...sortItineraryItemsByStartTime(reconciled)];
-        console.log('[DEBUG] Modal GET 後重新同步已儲存景點:', reconciledItems);
         return reconciledItems;
       });
       pendingSavedItemRef.current = null;
@@ -226,7 +222,7 @@ export default function TripDetailScreen() {
     } catch (error) {
       // The update is already persisted (or queued offline); keep the
       // optimistic URL visible if the follow-up read is temporarily offline.
-      console.warn('[TripDetail] image reload failed; retaining saved URL', error);
+      console.error('[TripDetail] image reload failed; retaining saved URL', error);
     }
     // Reconcile the confirmed value after reload as well. A replica can briefly
     // return the pre-update row; the saved URL must remain visible immediately.
@@ -244,7 +240,6 @@ export default function TripDetailScreen() {
     // can shift day numbers when the target trip dates differ.
     const mapped = previewPayloads.length ? previewPayloads : mapDraftToTargetTrip(draft, { startDate: target.start_date, dayOffset });
     const dayCount = mapped.reduce((max, item) => Math.max(max, item.day_number), 1);
-    console.debug('[TripDetail] final import payload', mapped.map(item => ({ title: item.location_name, day_number: item.day_number })));
     const result = await importTripItems({ tripId: targetTripId, mode, items: mapped, destination: destination || draft.destination || target.destination || '', dayCount });
     if (targetTripId === trip.id) {
       const importedItems = sortItineraryItemsByStartTime(result.items);
@@ -252,7 +247,7 @@ export default function TripDetailScreen() {
       if (result.trip) data.setTrip(result.trip);
       // Reload for server truth, then re-apply the successful RPC response so
       // a stale cache response cannot overwrite the visible itinerary.
-      try { await data.reload(); } catch (error) { console.warn('[TripDetail] import reload failed; retaining RPC result', error); }
+      try { await data.reload(); } catch (error) { console.error('[TripDetail] import reload failed; retaining RPC result', error); }
       data.setItems(importedItems);
       setRefreshKey(current => current + 1);
       setDay(mapped[0]?.day_number ?? 1);

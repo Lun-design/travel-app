@@ -32,7 +32,6 @@ type Props = {
 };
 
 export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezone, themeMode = 'system', completedIds, onComplete, onPreviewVoucher, onSwitchToBackupPlan, persistedWeather, compact = false }: Props) {
-  console.log('REAL RENDER COMPONENT WEATHER:', persistedWeather);
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [now, setNow] = useState(() => new Date());
   const sanitizedPersistedWeather = useMemo(() => sanitizePersistedWeather(persistedWeather), [persistedWeather]);
@@ -77,7 +76,6 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
     if (!weatherTarget || !focusDate) return () => { active = false; };
     const latitude = weatherTarget.latitude == null ? null : Number(weatherTarget.latitude);
     const longitude = weatherTarget.longitude == null ? null : Number(weatherTarget.longitude);
-    console.debug('[Weather UI] fetching latest forecast', { itemId: weatherTarget.id, date: focusDate, latitude, longitude });
     const request = latitude !== null && longitude !== null && Number.isFinite(latitude) && Number.isFinite(longitude)
       ? fetchWeatherForecast(latitude, longitude, focusDate, timezone, focus.scheduled?.arrivalTime)
       : Promise.resolve(createMockWeatherSummary(focusDate));
@@ -109,10 +107,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
     if (!weather) return;
     const rawWeather = persistedWeather ?? weather;
     const sanitizedForecast = sanitizeWeatherForecast(weather.forecast, weather.precipitationProbability);
-    console.log('TodayFocusCard Raw Weather:', rawWeather);
-    console.log('TodayFocusCard Sanitized Forecast:', sanitizedForecast);
     const finalForecast = sanitizeWeatherForecast(weather.forecast, weather.precipitationProbability);
-    console.log('Final Forecast Pop:', finalForecast.map((day) => day.precipitationProbability));
   }, [persistedWeather, weather]);
 
   return <>

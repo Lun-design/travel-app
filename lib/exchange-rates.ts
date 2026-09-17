@@ -199,7 +199,7 @@ export function createExchangeRateService(fetcher: typeof fetch = fetch.bind(glo
       writeStorage(storage, EXCHANGE_RATE_CACHE_KEY, JSON.stringify(live));
       return applyManualRates(live, manualRates, manualUpdatedAt);
     } catch (error) {
-      console.warn('[ExchangeRates] live lookup skipped', error);
+      console.error('[ExchangeRates] live lookup skipped', error);
       const fallback = cached ?? defaultSnapshot();
       memorySnapshot = fallback;
       return applyManualRates({ ...fallback, source: cached ? 'cache' : 'default' }, manualRates, manualUpdatedAt);

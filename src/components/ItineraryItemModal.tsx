@@ -155,7 +155,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       try {
         selectedResult = await fetchGooglePlaceDetails(result.googlePlaceId);
       } catch (error) {
-        console.warn('[ItineraryItemModal] Google Place details lookup failed', error);
+        console.error('[ItineraryItemModal] Google Place details lookup failed', error);
         setSearching(false);
         setSearchMessage('Google 景點詳細資料取得失敗，請稍後再試或改用其他結果。');
         return false;
@@ -191,7 +191,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         setSearchMessage('已自動帶入地圖位置；未找到營業時間，可手動設定。');
       }
     } catch (error) {
-      console.warn('[ItineraryItemModal] Overpass opening-hours lookup skipped', error);
+      console.error('[ItineraryItemModal] Overpass opening-hours lookup skipped', error);
       setAutoHoursStatus('missing');
       setSearchMessage('已帶入地圖位置；營業時間查詢暫時不可用，可手動設定。');
     }
@@ -199,7 +199,6 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   }
 
   async function save() {
-    console.debug('[ItineraryItemModal] save click', { titleValid, saving, hasTripId: Boolean(tripId ?? item?.trip_id), selectedDay });
     if (saving) return;
     if (!titleValid) {
       setSaveMessage('\u8acb\u5148\u8f38\u5165\u666f\u9ede\u540d\u7a31\u518d\u5132\u5b58');
@@ -237,9 +236,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         await saveItineraryItem({ ...safePayload, created_by: item?.created_by || data.user.id }, { offlineScope: { tripId: safePayload.trip_id, userId: data.user.id } });
       });
       if (!submitted) { setSaveMessage('請輸入景點名稱。'); return; }
-      console.log('[DEBUG] Modal 儲存成功，開始 GET itinerary_items 全頁重載');
       await onRefresh?.();
-      console.log('[DEBUG] Modal GET itinerary_items 完成');
       setSavedAndClosed(true);
       if (typeof onClose === 'function') {
         try { onClose(); } catch (closeError) { console.error('[ItineraryItemModal] close failed after save', closeError); }
@@ -328,7 +325,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         setAiMessage(`已解析「${locationName}」，但無法取得地點詳細資料`);
       }
     } catch (error) {
-      console.warn('[ItineraryItemModal] AI place lookup failed', error);
+      console.error('[ItineraryItemModal] AI place lookup failed', error);
       setAiMessage('景點搜尋失敗，請檢查網路或改用手動搜尋');
     } finally {
       setSearching(false);

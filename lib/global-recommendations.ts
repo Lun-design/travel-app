@@ -227,7 +227,7 @@ async function defaultRecommendationPageProvider(query: string, pageToken?: stri
       const page = await searchGooglePlacesTextPage(query, undefined, pageToken);
       if (page.results.length || pageToken) return page;
     } catch (error) {
-      console.warn('[recommendations] Google Text Search unavailable; falling back to geocoding', error);
+      console.error('[recommendations] Google Text Search unavailable; falling back to geocoding', error);
       if (pageToken) return { results: [], nextPageToken: null };
     }
   }

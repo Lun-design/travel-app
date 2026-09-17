@@ -80,7 +80,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setStatus('signedOut');
     });
 
-    void pingSupabase().then((result) => console.info('[Supabase] ping result', result));
     void restoreSession();
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;

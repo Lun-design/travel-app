@@ -93,7 +93,6 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   function toggleMap() { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); onToggleMap(); }
   function completeSpot(itemId: string) { setCompletedIds((current) => new Set(current).add(itemId)); }
   async function openOptimizationPreview() {
-    console.log('[OptimizeRoute] Clicked!');
     if (optimizationBusy) return;
     const result = optimizeRoute(visibleItems);
     if (result.strategy === 'none') {

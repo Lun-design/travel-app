@@ -200,7 +200,7 @@ export const searchPlaces = createCachedGeocodingSearch(async (query) => {
     try {
       return await searchGooglePlaces(query);
     } catch (error) {
-      console.warn('[geocoding] Google Places unavailable, falling back to Nominatim', error);
+      console.error('[geocoding] Google Places unavailable, falling back to Nominatim', error);
     }
   }
   return requestNominatim(query);

@@ -409,7 +409,7 @@ export async function searchGooglePlaces(query: string, apiKey?: string): Promis
     const results = await searchGooglePlacesAutocomplete(normalizedQuery, key);
     if (results.length) return results;
   } catch (error) {
-    console.warn('[Google Places] autocomplete failed; trying Text Search', error);
+    console.error('[Google Places] autocomplete failed; trying Text Search', error);
   }
   return searchGooglePlacesText(normalizedQuery, key);
 }

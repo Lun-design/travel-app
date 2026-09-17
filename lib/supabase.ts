@@ -21,9 +21,8 @@ export const SUPABASE_CONFIGURATION_MESSAGE = config.configured
   : `Supabase 尚未設定：${config.missing.join('、')}。請在 Vercel 專案環境變數補齊後重新部署。`;
 
 if (config.configured) {
-  console.info('[Supabase] public environment loaded', { url: true, anonKey: true });
 } else {
-  console.warn(`[Supabase] ${SUPABASE_CONFIGURATION_MESSAGE}`);
+  console.error(`[Supabase] ${SUPABASE_CONFIGURATION_MESSAGE}`);
 }
 
 let supabaseClient: SupabaseClient | null = null;
