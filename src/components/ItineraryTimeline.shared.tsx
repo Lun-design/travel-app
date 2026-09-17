@@ -124,15 +124,25 @@ export function useWeatherByItem(
   items: ItineraryItem[],
   context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>,
   tripId?: string,
+  transitMinutesByFromId?: Readonly<Record<string, number | null | undefined>>,
 ) {
   const [weatherById, setWeatherById] = useState<Record<string, WeatherSummary>>({});
   const itemKey = weatherBatchCacheKey(items, context, tripId);
+  const transitKey = Object.entries(transitMinutesByFromId ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, minutes]) => `${id}:${minutes ?? ''}`)
+    .join('|');
   useEffect(() => {
     let active = true;
     const date = context ? tripDateForDay(context.tripStartDate, context.dayNumber) : null;
     setWeatherById({});
     if (!date || !items.length) return () => { active = false; };
-    const scheduledById = new Map(buildDaySchedule(items, { ...context, tripStartDate: context!.tripStartDate, dayNumber: context!.dayNumber }).map((entry) => [entry.item.id, entry]));
+    const scheduledById = new Map(buildDaySchedule(items, {
+      ...context,
+      tripStartDate: context!.tripStartDate,
+      dayNumber: context!.dayNumber,
+      transitMinutesByFromId,
+    }).map((entry) => [entry.item.id, entry]));
     const locations: WeatherBatchLocation[] = items.flatMap((item) => {
       const latitude = item.latitude == null ? null : Number(item.latitude);
       const longitude = item.longitude == null ? null : Number(item.longitude);
@@ -154,7 +164,7 @@ export function useWeatherByItem(
       setWeatherById(Object.fromEntries(entries.filter(([, weather]) => Boolean(weather))) as Record<string, WeatherSummary>);
     });
     return () => { active = false; };
-  }, [context?.dayNumber, context?.tripStartDate, context?.timezone, itemKey, tripId]);
+  }, [context?.dayNumber, context?.tripStartDate, context?.timezone, itemKey, transitKey, tripId]);
   return weatherById;
 }
 
@@ -232,6 +242,14 @@ export function displayRouteSegments(items: ItineraryItem[], modes: Record<strin
       loading: !estimate,
     };
   });
+}
+
+/** Adapt the route-pill estimates into the schedule engine's transit map. */
+export function routeDurationsForSchedule(estimates: Readonly<Record<string, RouteEstimate>>): Record<string, number> {
+  return Object.fromEntries(Object.entries(estimates).flatMap(([fromId, estimate]) => {
+    const minutes = Number(estimate?.durationMinutes);
+    return Number.isFinite(minutes) && minutes >= 0 ? [[fromId, Math.round(minutes)] as const] : [];
+  }));
 }
 
 function toRoutePoint(item: ItineraryItem): RoutePoint {

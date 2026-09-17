@@ -9,6 +9,7 @@ import {
   EmptyTimeline,
   InsertSpotButton,
   orderPayload,
+  routeDurationsForSchedule,
   timelineItemsRevision,
   TimelineCard,
   useRouteSegments,
@@ -39,6 +40,7 @@ export function ItineraryTimeline({
   const displayItems = incomingRevision !== parentRevision.current ? incomingItems : localItems;
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeEstimates = useRouteSegments(displayItems, routeModes, { tripId, day: displayItems[0]?.day_number });
+  const routeTransitMinutes = useMemo(() => routeDurationsForSchedule(routeEstimates), [routeEstimates]);
   const segments = useMemo(
     () => displayRouteSegments(displayItems, routeModes, routeEstimates),
     [displayItems, routeEstimates, routeModes],
@@ -48,14 +50,16 @@ export function ItineraryTimeline({
     [segments],
   );
   const scheduled = useMemo(
-    () => scheduleContext ? buildDaySchedule(displayItems, scheduleContext) : [],
-    [displayItems, scheduleContext],
+    () => scheduleContext
+      ? buildDaySchedule(displayItems, { ...scheduleContext, transitMinutesByFromId: routeTransitMinutes })
+      : [],
+    [displayItems, routeTransitMinutes, scheduleContext],
   );
   const scheduleById = useMemo(
     () => new Map(scheduled.map((entry) => [entry.item.id, entry])),
     [scheduled],
   );
-  const weatherById = useWeatherByItem(displayItems, scheduleContext, tripId);
+  const weatherById = useWeatherByItem(displayItems, scheduleContext, tripId, routeTransitMinutes);
   const handleRouteModeChange = useCallback((fromId: string, mode: TravelMode) => {
     setRouteModes((current) => ({ ...current, [fromId]: mode }));
   }, []);

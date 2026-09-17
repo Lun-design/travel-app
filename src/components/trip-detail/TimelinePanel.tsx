@@ -15,7 +15,7 @@ import { SkeletonCard } from '@/components/SkeletonCard';
 import type { ThemeMode } from '@/lib/theme';
 import type { getTripDetailLayout } from '@/lib/trip-detail-layout';
 import { DAY_ACTIVE_COLOR, EDITORIAL_COLORS } from '@/lib/theme';
-import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
+import type { ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
 import { createRouteEstimator, type RoutePoint } from '@/lib/routes';
@@ -79,7 +79,6 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const [exportVisible, setExportVisible] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
   const scheduleContext = useMemo<ScheduleContext>(() => ({ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time, timezone: trip.timezone }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
-  const scheduled = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
   const metrics = useMemo(() => calculateTimelineMetrics(visibleItems), [visibleItems]);
   const scheduleDate = useMemo(() => tripDateForDay(trip.start_date, day), [day, trip.start_date]);
   const exportData = useMemo<ItineraryExportData>(() => ({ title: trip.title, destination: trip.destination, dayNumber: day, date: scheduleDate, items: visibleItems }), [day, scheduleDate, trip.destination, trip.title, visibleItems]);

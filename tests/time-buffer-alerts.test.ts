@@ -93,6 +93,8 @@ describe('smart time buffers and alerts', () => {
     const native = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.native.tsx'), 'utf8');
     expect(web).toContain('incomingRevision !== parentRevision.current ? incomingItems : localItems');
     expect(native).toContain('incomingRevision !== parentRevision.current ? incomingItems : localItems');
+    expect(web).toContain('useWeatherByItem(displayItems, scheduleContext, tripId, routeTransitMinutes)');
+    expect(native).toContain('useWeatherByItem(displayItems, scheduleContext, tripId, routeTransitMinutes)');
   });
 
   it('reports the overlap minutes after adding the previous stop travel time', () => {
@@ -104,6 +106,20 @@ describe('smart time buffers and alerts', () => {
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0]).toMatchObject({ id: 'second', previousId: 'first' });
     expect(conflicts[0]?.conflictMinutes).toBeGreaterThan(0);
+  });
+
+  it('uses the latest route estimate and a safe duration fallback for conflict checks', () => {
+    const previous = item({ id: 'first', time: '15:03', duration_minutes: 60 });
+    previous.duration_minutes = null;
+    const current = item({ id: 'second', position: 1, time: '19:30', duration_minutes: 45 });
+    const schedule = buildDaySchedule([previous, current], {
+      tripStartDate: '2026-01-20',
+      dayNumber: 1,
+      transitMinutesByFromId: { first: 204 },
+    });
+
+    expect(schedule[1]).toMatchObject({ travelMinutes: 204, conflictMinutes: 0, overlapWarning: false });
+    expect(schedule[0]?.durationMinutes).toBe(60);
   });
 
   it('renders conflict warnings only for positive overlap minutes and logs the rendered values', () => {

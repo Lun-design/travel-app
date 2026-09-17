@@ -15,6 +15,12 @@ export type ScheduleContext = {
   defaultDepartureTime?: string | null;
   averageSpeedKmh?: number;
   timezone?: string | null;
+  /**
+   * Route durations keyed by the originating item id.  Timeline consumers
+   * populate this from the same route estimates shown in the route pill so
+   * conflict calculations cannot fall back to a different (stale) estimate.
+   */
+  transitMinutesByFromId?: Readonly<Record<string, number | null | undefined>>;
 };
 export type ScheduledItem = {
   item: ScheduleItem;
@@ -121,7 +127,10 @@ export function isOpenAt(openingHours: OpeningHours | null | undefined, date: st
   });
 }
 
-function travelMinutes(from: ScheduleItem, to: ScheduleItem, averageSpeedKmh: number): number {
+function travelMinutes(from: ScheduleItem, to: ScheduleItem, averageSpeedKmh: number, routeMinutes?: number | null): number {
+  if (routeMinutes !== null && routeMinutes !== undefined && Number.isFinite(routeMinutes) && routeMinutes >= 0) {
+    return Math.round(routeMinutes);
+  }
   if (from.latitude === null || from.longitude === null || to.latitude === null || to.longitude === null) return 0;
   const distanceKm = haversineDistanceKm(
     { latitude: from.latitude, longitude: from.longitude },
@@ -148,7 +157,9 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     // first item or an accumulated route elsewhere in the list.
     const previousItem = ordered[index - 1] ?? null;
     const explicitStart = parseTime(itineraryStartTime(current));
-    const travel = previous ? travelMinutes(previous.item, current, speed) : 0;
+    const travel = previous
+      ? travelMinutes(previous.item, current, speed, context.transitMinutesByFromId?.[previous.item.id])
+      : 0;
     const earliestArrival: number = previous ? previous.departureMinutes + travel : fallbackStart;
     const arrival: number = explicitStart ?? earliestArrival;
     const duration = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0 ? current.duration_minutes as number : DEFAULT_DURATION_MINUTES;
@@ -167,6 +178,7 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
       : null;
     console.log('[TimeConflict Debug]', {
       prevItem: previousItem,
+      prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
       currentItem: current,
       transitMinutes: travel,
       expectedArrival: earliestArrival,
@@ -175,7 +187,9 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     console.log(`[Conflict Debug] Station ${index}:`, {
       prevName: previousItem?.location_name,
       prevStartTime: previousItem ? itineraryStartTime(previousItem) : null,
-      prevDuration: previousItem?.duration_minutes,
+      // Log the normalised value used by the calculation rather than a raw
+      // nullable DB field, so debugging reflects the real formula inputs.
+      prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
       transitMinutes: travel,
       expectedArrivalMinutes: earliestArrival,
       currentName: current.location_name,
@@ -214,7 +228,9 @@ export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext
   return ordered.map((current, index) => {
     const explicitStart = parseTime(itineraryStartTime(current));
     const fallbackStart = parseTime(context.defaultDepartureTime) ?? parseTime(DEFAULT_DEPARTURE_TIME)!;
-    const travel = index && previous ? travelMinutes(previous.item, current, speed) : 0;
+    const travel = index && previous
+      ? travelMinutes(previous.item, current, speed, context.transitMinutesByFromId?.[previous.item.id])
+      : 0;
     const earliestArrival = previous ? previous.departureMinutes + travel : fallbackStart;
     const arrivalMinutes = explicitStart ?? earliestArrival;
     const durationMinutes = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0
