@@ -313,7 +313,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   // Compatibility marker for consumers that still inspect the legacy field:
   // scheduled.conflictMinutes remains the source value, while the normalised
   // conflictMinutes below is the only value used for rendering.
-  if (hasTimeConflict) {
+  if (hasTimeConflict && typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
     console.warn('[UI RENDER CONFLICT]', {
       itemName: item.location_name,
       conflictMinutes,

@@ -7,6 +7,7 @@ const DEFAULT_DURATION_MINUTES = 60;
 const DEFAULT_DEPARTURE_TIME = '09:00';
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const weekdays: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const shouldLogTimeConflictDebug = typeof process !== 'undefined' && process.env.NODE_ENV !== 'production';
 
 export type ScheduleItem = Pick<ItineraryItem, 'id' | 'day_number' | 'position' | 'time' | 'duration_minutes' | 'latitude' | 'longitude' | 'opening_hours'> & { start_time?: string | null; location_name?: string | null };
 export type ScheduleContext = {
@@ -176,26 +177,28 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     const conflict = previous && explicitStart !== null && !explicitHandoff
       ? calculateTimeConflict(previous.startMinutes, previous.durationMinutes, travel, explicitStart)
       : null;
-    console.log('[TimeConflict Debug]', {
-      prevItem: previousItem,
-      prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
-      currentItem: current,
-      transitMinutes: travel,
-      expectedArrival: earliestArrival,
-      conflictMinutes: conflict?.conflictMinutes ?? 0,
-    });
-    console.log(`[Conflict Debug] Station ${index}:`, {
-      prevName: previousItem?.location_name,
-      prevStartTime: previousItem ? itineraryStartTime(previousItem) : null,
-      // Log the normalised value used by the calculation rather than a raw
-      // nullable DB field, so debugging reflects the real formula inputs.
-      prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
-      transitMinutes: travel,
-      expectedArrivalMinutes: earliestArrival,
-      currentName: current.location_name,
-      currentStartTime: itineraryStartTime(current),
-      conflictMinutes: conflict?.conflictMinutes ?? 0,
-    });
+    if (shouldLogTimeConflictDebug) {
+      console.log('[TimeConflict Debug]', {
+        prevItem: previousItem,
+        prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
+        currentItem: current,
+        transitMinutes: travel,
+        expectedArrival: earliestArrival,
+        conflictMinutes: conflict?.conflictMinutes ?? 0,
+      });
+      console.log(`[Conflict Debug] Station ${index}:`, {
+        prevName: previousItem?.location_name,
+        prevStartTime: previousItem ? itineraryStartTime(previousItem) : null,
+        // Log the normalised value used by the calculation rather than a raw
+        // nullable DB field, so debugging reflects the real formula inputs.
+        prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
+        transitMinutes: travel,
+        expectedArrivalMinutes: earliestArrival,
+        currentName: current.location_name,
+        currentStartTime: itineraryStartTime(current),
+        conflictMinutes: conflict?.conflictMinutes ?? 0,
+      });
+    }
     if (conflict?.isConflict && previous && explicitStart !== null) {
       conflicts.push({
         id: current.id,

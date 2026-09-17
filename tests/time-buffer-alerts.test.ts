@@ -122,10 +122,29 @@ describe('smart time buffers and alerts', () => {
     expect(schedule[0]?.durationMinutes).toBe(60);
   });
 
+  it('shifts the conflicting stop to the estimated arrival and clears its warning', () => {
+    const previous = item({ id: 'meal', time: '12:56', duration_minutes: 60 });
+    const current = item({ id: 'xin-zhuang', position: 1, time: '14:03', duration_minutes: 60 });
+    const context = {
+      tripStartDate: '2026-01-20',
+      dayNumber: 1,
+      transitMinutesByFromId: { meal: 16 },
+    };
+
+    const before = buildDaySchedule([previous, current], context);
+    expect(before[1]).toMatchObject({ arrivalTime: '14:03', conflictMinutes: 9, overlapWarning: true });
+
+    const shifted = shiftSubsequentItems([previous, current], 0, before[1]?.conflictMinutes ?? 0);
+    const after = buildDaySchedule(shifted, context);
+    expect(shifted[1]?.time).toBe('14:12');
+    expect(after[1]).toMatchObject({ arrivalTime: '14:12', conflictMinutes: 0, overlapWarning: false });
+  });
+
   it('renders conflict warnings only for positive overlap minutes and logs the rendered values', () => {
     const shared = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.shared.tsx'), 'utf8');
 
     expect(shared).toContain("console.warn('[UI RENDER CONFLICT]'");
+    expect(shared).toContain("process.env.NODE_ENV !== 'production'");
     expect(shared).toContain('const hasTimeConflict = conflictMinutes > 0;');
     expect(shared).toContain('{hasTimeConflict ? <>');
   });
