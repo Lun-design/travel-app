@@ -8,7 +8,7 @@ const DEFAULT_DEPARTURE_TIME = '09:00';
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const weekdays: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-export type ScheduleItem = Pick<ItineraryItem, 'id' | 'day_number' | 'position' | 'time' | 'duration_minutes' | 'latitude' | 'longitude' | 'opening_hours'> & { start_time?: string | null };
+export type ScheduleItem = Pick<ItineraryItem, 'id' | 'day_number' | 'position' | 'time' | 'duration_minutes' | 'latitude' | 'longitude' | 'opening_hours'> & { start_time?: string | null; location_name?: string | null };
 export type ScheduleContext = {
   tripStartDate: string;
   dayNumber: number;
@@ -142,7 +142,11 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     departureMinutes: number;
   } | null = null;
   const conflicts: TimeConflict[] = [];
-  for (const current of ordered) {
+  for (const [index, current] of ordered.entries()) {
+    // `ordered` is the single source of truth: the previous stop for station
+    // i is always the immediately preceding sorted entry, never the global
+    // first item or an accumulated route elsewhere in the list.
+    const previousItem = ordered[index - 1] ?? null;
     const explicitStart = parseTime(itineraryStartTime(current));
     const travel = previous ? travelMinutes(previous.item, current, speed) : 0;
     const earliestArrival: number = previous ? previous.departureMinutes + travel : fallbackStart;
@@ -162,10 +166,20 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
       ? calculateTimeConflict(previous.startMinutes, previous.durationMinutes, travel, explicitStart)
       : null;
     console.log('[TimeConflict Debug]', {
-      prevItem: previous?.item ?? null,
+      prevItem: previousItem,
       currentItem: current,
       transitMinutes: travel,
       expectedArrival: earliestArrival,
+      conflictMinutes: conflict?.conflictMinutes ?? 0,
+    });
+    console.log(`[Conflict Debug] Station ${index}:`, {
+      prevName: previousItem?.location_name,
+      prevStartTime: previousItem ? itineraryStartTime(previousItem) : null,
+      prevDuration: previousItem?.duration_minutes,
+      transitMinutes: travel,
+      expectedArrivalMinutes: earliestArrival,
+      currentName: current.location_name,
+      currentStartTime: itineraryStartTime(current),
       conflictMinutes: conflict?.conflictMinutes ?? 0,
     });
     if (conflict?.isConflict && previous && explicitStart !== null) {

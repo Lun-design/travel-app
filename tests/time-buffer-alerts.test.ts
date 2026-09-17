@@ -76,6 +76,15 @@ describe('smart time buffers and alerts', () => {
       conflictMinutes: 0,
       currentItem: expect.objectContaining({ id: 'second', time: '19:28' }),
     });
+    const stationCall = log.mock.calls.find(([label]) => label === '[Conflict Debug] Station 1:');
+    expect(stationCall?.[1]).toMatchObject({
+      prevStartTime: '14:03',
+      prevDuration: 60,
+      transitMinutes: 204,
+      expectedArrivalMinutes: 18 * 60 + 27,
+      currentStartTime: '19:28',
+      conflictMinutes: 0,
+    });
     log.mockRestore();
   });
 
