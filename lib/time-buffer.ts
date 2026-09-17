@@ -8,6 +8,49 @@ export type TimeShiftable = {
   start_time?: string | null;
 };
 
+export type TimeConflictCalculation = {
+  expectedArrivalMinutes: number;
+  conflictMinutes: number;
+  isConflict: boolean;
+};
+
+/**
+ * Calculate the overlap between a previous activity and the next activity.
+ *
+ * The previous activity's departure is intentionally derived from its start
+ * and duration here, so every caller uses the same unit-safe formula. A
+ * schedule is only conflicting when the next activity starts before the
+ * estimated arrival; touching boundaries are valid hand-offs and return zero.
+ */
+export function calculateTimeConflict(
+  previousStartMinutes: number,
+  previousDurationMinutes: number,
+  transitMinutes: number,
+  currentStartMinutes: number,
+): TimeConflictCalculation {
+  const values = [previousStartMinutes, previousDurationMinutes, transitMinutes, currentStartMinutes];
+  if (!values.every((value) => Number.isFinite(value))) {
+    return { expectedArrivalMinutes: currentStartMinutes, conflictMinutes: 0, isConflict: false };
+  }
+  const expectedArrivalMinutes = previousStartMinutes + previousDurationMinutes + transitMinutes;
+  const conflictMinutes = Math.max(0, expectedArrivalMinutes - currentStartMinutes);
+  return {
+    expectedArrivalMinutes,
+    conflictMinutes,
+    isConflict: conflictMinutes > 0,
+  };
+}
+
+/** Return only the positive overlap duration for lightweight callers. */
+export function calculateTimeConflictMinutes(
+  previousStartMinutes: number,
+  previousDurationMinutes: number,
+  transitMinutes: number,
+  currentStartMinutes: number,
+): number {
+  return calculateTimeConflict(previousStartMinutes, previousDurationMinutes, transitMinutes, currentStartMinutes).conflictMinutes;
+}
+
 /** Parse a PostgreSQL/form clock value into minutes after midnight. */
 export function parseClockMinutes(value: unknown): number | null {
   if (typeof value !== 'string') return null;
@@ -56,4 +99,3 @@ export function shiftSubsequentItems<T extends TimeShiftable>(
     return { ...item, start_time: shifted };
   });
 }
-

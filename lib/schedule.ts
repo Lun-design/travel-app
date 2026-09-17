@@ -1,5 +1,6 @@
 import { haversineDistanceKm, itineraryStartTime, sortItineraryItemsByStartTime, type OpeningHours, type ItineraryItem, type Weekday } from './itinerary';
 import { addCalendarDays, getWeekdayForIsoDate, normalizeTimezone } from './timezone';
+import { calculateTimeConflict } from './time-buffer';
 
 const MINUTES_PER_DAY = 24 * 60;
 const DEFAULT_DURATION_MINUTES = 60;
@@ -134,7 +135,12 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
   const ordered = sortItineraryItemsByStartTime(items);
   const speed = context.averageSpeedKmh && context.averageSpeedKmh > 0 ? context.averageSpeedKmh : 35;
   const fallbackStart = parseTime(context.defaultDepartureTime) ?? parseTime(DEFAULT_DEPARTURE_TIME)!;
-  let previous: { item: ScheduleItem; departureMinutes: number } | null = null;
+  let previous: {
+    item: ScheduleItem;
+    startMinutes: number;
+    durationMinutes: number;
+    departureMinutes: number;
+  } | null = null;
   const conflicts: TimeConflict[] = [];
   for (const current of ordered) {
     const explicitStart = parseTime(itineraryStartTime(current));
@@ -152,17 +158,20 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     // because a route estimate would add a buffer. Other starts are checked
     // against departure plus the estimated travel time.
     const explicitHandoff = previous && explicitStart !== null && explicitStart === previous.departureMinutes;
-    if (previous && explicitStart !== null && !explicitHandoff && explicitStart < earliestArrival) {
+    const conflict = previous && explicitStart !== null && !explicitHandoff
+      ? calculateTimeConflict(previous.startMinutes, previous.durationMinutes, travel, explicitStart)
+      : null;
+    if (conflict?.isConflict && previous && explicitStart !== null) {
       conflicts.push({
         id: current.id,
         previousId: previous.item.id,
-        conflictMinutes: earliestArrival - explicitStart,
-        expectedArrivalMinutes: earliestArrival,
+        conflictMinutes: conflict.conflictMinutes,
+        expectedArrivalMinutes: conflict.expectedArrivalMinutes,
         actualStartMinutes: explicitStart,
         travelMinutes: travel,
       });
     }
-    previous = { item: current, departureMinutes: arrival + duration };
+    previous = { item: current, startMinutes: arrival, durationMinutes: duration, departureMinutes: arrival + duration };
   }
   return conflicts;
 }

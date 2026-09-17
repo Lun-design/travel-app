@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { buildDaySchedule, detectTimeConflictsDetailed, type ScheduleItem } from '../lib/schedule';
-import { shiftSubsequentItems } from '../lib/time-buffer';
+import { haversineDistanceKm } from '../lib/itinerary';
+import { calculateTimeConflictMinutes, shiftSubsequentItems } from '../lib/time-buffer';
 
 const supabaseMock = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: supabaseMock }));
@@ -20,6 +21,42 @@ const item = (overrides: Partial<ScheduleItem>): ScheduleItem => ({
 
 describe('smart time buffers and alerts', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('does not report a conflict when expected arrival is before the next start', () => {
+    // 14:03 start + 60m stay + 204m transit = 18:27; next starts at 19:30.
+    expect(calculateTimeConflictMinutes(14 * 60 + 3, 60, 204, 19 * 60 + 30)).toBe(0);
+  });
+
+  it('reports the exact overlap when the next start precedes expected arrival', () => {
+    // 14:03 start + 60m stay + 204m transit = 18:27; next starts at 18:00.
+    expect(calculateTimeConflictMinutes(14 * 60 + 3, 60, 204, 18 * 60)).toBe(27);
+  });
+
+  it('keeps the detailed schedule conflict-free when arrival is 18:27 and the next stop starts at 19:30', () => {
+    const from = { latitude: 25.0109, longitude: 121.464 };
+    const to = { latitude: 25.06, longitude: 121.464 };
+    const speed = haversineDistanceKm(from, to) * 60 / 204;
+    const conflicts = detectTimeConflictsDetailed([
+      item({ id: 'first', time: '14:03', duration_minutes: 60, ...from }),
+      item({ id: 'second', position: 1, time: '19:30', duration_minutes: 45, ...to }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, averageSpeedKmh: speed });
+
+    expect(conflicts).toEqual([]);
+  });
+
+  it('reports 27 minutes when arrival is 18:27 and the next stop starts at 18:00', () => {
+    const from = { latitude: 25.0109, longitude: 121.464 };
+    const to = { latitude: 25.06, longitude: 121.464 };
+    const speed = haversineDistanceKm(from, to) * 60 / 204;
+    const conflicts = detectTimeConflictsDetailed([
+      item({ id: 'first', time: '14:03', duration_minutes: 60, ...from }),
+      item({ id: 'second', position: 1, time: '18:00', duration_minutes: 45, ...to }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, averageSpeedKmh: speed });
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]?.conflictMinutes).toBe(27);
+    expect(conflicts[0]?.expectedArrivalMinutes).toBe(18 * 60 + 27);
+  });
 
   it('reports the overlap minutes after adding the previous stop travel time', () => {
     const conflicts = detectTimeConflictsDetailed([
