@@ -15,11 +15,10 @@ import { SkeletonCard } from '@/components/SkeletonCard';
 import type { ThemeMode } from '@/lib/theme';
 import type { getTripDetailLayout } from '@/lib/trip-detail-layout';
 import { DAY_ACTIVE_COLOR, EDITORIAL_COLORS } from '@/lib/theme';
-import type { ScheduleContext } from '@/lib/schedule';
+import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
-import { applyOptimizedSchedule, optimizeRoute, type RouteOptimizationResult } from '@/lib/route-optimizer';
-import { createRouteEstimator, type RoutePoint } from '@/lib/routes';
-import { formatRouteDuration, formatRouteLegContext, getRouteOptimizationStatus } from '@/lib/route-connector';
+import { optimizeItineraryOrder, type RouteOptimizationResult } from '@/lib/route-optimization';
+import { RouteOptimizeModal } from '@/components/RouteOptimizeModal';
 import { ItineraryCardExport } from '@/components/ItineraryCardExport';
 import type { ItineraryExportData } from '@/lib/export-image';
 import { DashboardMetricsBar } from '@/components/DashboardMetricsBar';
@@ -58,19 +57,7 @@ type Props = {
   onClearAll?: () => void;
 };
 
-type OptimizationPreview = { result: RouteOptimizationResult<ItineraryItem>; scheduledItems: ItineraryItem[] };
-const routeSequenceEstimator = createRouteEstimator();
-
-function toRoutePoint(item: ItineraryItem): RoutePoint {
-  const latitude = Number(item.latitude);
-  const longitude = Number(item.longitude);
-  return {
-    latitude: Number.isFinite(latitude) ? latitude : undefined,
-    longitude: Number.isFinite(longitude) ? longitude : undefined,
-    title: item.location_name,
-    address: item.address,
-  };
-}
+type OptimizationPreview = { result: RouteOptimizationResult<ItineraryItem> };
 
 export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onUpdateImage, onReorder, onShiftSubsequent, onApplyRouteOptimization, onAddAtPosition, onAdd, onImport, onClearAll }: Props) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
@@ -80,6 +67,12 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const [moreVisible, setMoreVisible] = useState(false);
   const scheduleContext = useMemo<ScheduleContext>(() => ({ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time, timezone: trip.timezone }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const metrics = useMemo(() => calculateTimelineMetrics(visibleItems), [visibleItems]);
+  const daySchedule = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
+  const conflictMinutes = useMemo(() => daySchedule.reduce((max, entry) => Math.max(max, entry.conflictMinutes ?? 0), 0), [daySchedule]);
+  const totalTravelMinutes = useMemo(() => daySchedule.reduce((sum, entry) => sum + entry.travelMinutes, 0), [daySchedule]);
+  // The optimizer intentionally leaves 0–2 stops untouched; avoid showing a
+  // dead-end action for a day that cannot produce a meaningful reorder.
+  const showOptimizationSuggestion = visibleItems.length > 2 && (conflictMinutes > 0 || totalTravelMinutes > 120);
   const scheduleDate = useMemo(() => tripDateForDay(trip.start_date, day), [day, trip.start_date]);
   const exportData = useMemo<ItineraryExportData>(() => ({ title: trip.title, destination: trip.destination, dayNumber: day, date: scheduleDate, items: visibleItems }), [day, scheduleDate, trip.destination, trip.title, visibleItems]);
   const persistedWeather = useMemo(() => {
@@ -94,32 +87,27 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   function completeSpot(itemId: string) { setCompletedIds((current) => new Set(current).add(itemId)); }
   async function openOptimizationPreview() {
     if (optimizationBusy) return;
-    const result = optimizeRoute(visibleItems);
+    setOptimizationBusy(true);
+    const fixedTimeAnchors = visibleItems
+      .filter((item) => {
+        const candidate = item as ItineraryItem & { is_fixed_time?: boolean; fixed_time?: string | null };
+        return candidate.is_fixed_time === true || candidate.fixed_time != null;
+      })
+      .map((item) => ({ id: item.id, start_time: item.time }));
+    const result = optimizeItineraryOrder(visibleItems, {
+      fixFirstDestination: true,
+      fixedTimeAnchors,
+      defaultStartTime: trip.default_departure_time ?? '09:00',
+    });
     if (result.strategy === 'none') {
       Alert.alert('無法最佳化路線', result.reason === 'missing-coordinates'
         ? '需至少 2 個具備經緯度的景點才能進行路線最佳化，請先補齊景點座標。'
         : '需至少 2 個具備經緯度的景點才能進行路線最佳化。');
+      setOptimizationBusy(false);
       return;
     }
-    setOptimizationBusy(true);
     try {
-      const originalRoute = await routeSequenceEstimator.getRouteSequence(visibleItems.map(toRoutePoint), 'DRIVING');
-      const optimizedRoute = await routeSequenceEstimator.getRouteSequence(result.items.map(toRoutePoint), 'DRIVING');
-      const refinedResult: RouteOptimizationResult<ItineraryItem> = {
-        ...result,
-        originalDistanceKm: originalRoute.totalDistanceKm,
-        originalDurationMinutes: originalRoute.totalDurationMinutes,
-        totalDistanceKm: optimizedRoute.totalDistanceKm,
-        totalDurationMinutes: optimizedRoute.totalDurationMinutes,
-        legs: optimizedRoute.legs.map((leg, index) => ({
-          fromId: result.items[index].id,
-          toId: result.items[index + 1].id,
-          distanceKm: leg.distanceKm,
-          durationMinutes: leg.durationMinutes,
-          mode: 'DRIVING',
-        })),
-      };
-      setOptimizationPreview({ result: refinedResult, scheduledItems: applyOptimizedSchedule(refinedResult, { defaultStartTime: trip.default_departure_time ?? '09:00' }) });
+      setOptimizationPreview({ result });
     } catch (error) {
       Alert.alert('Route optimization failed', error instanceof Error ? error.message : 'Unable to estimate routes');
     } finally {
@@ -130,8 +118,9 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     if (!optimizationPreview || optimizationBusy) return;
     setOptimizationBusy(true);
     try {
-      if (onApplyRouteOptimization) await onApplyRouteOptimization(optimizationPreview.scheduledItems);
-      else await onReorder(optimizationPreview.scheduledItems.map((item, position) => ({ id: item.id, position })));
+      const optimizedItems = optimizationPreview.result.items;
+      if (onApplyRouteOptimization) await onApplyRouteOptimization(optimizedItems);
+      else await onReorder(optimizedItems.map((item, position) => ({ id: item.id, position })));
       setOptimizationPreview(null);
       Alert.alert('路線最佳化完成', '今日景點順序與預計時間已更新。');
     } catch (error) {
@@ -162,9 +151,6 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     }
   }
   const { width, height } = useWindowDimensions();
-  const optimizationStatus = optimizationPreview
-    ? getRouteOptimizationStatus(optimizationPreview.result.originalDistanceKm, optimizationPreview.result.totalDistanceKm)
-    : null;
   const firstAddressLabel = visibleItems[0]?.address?.split(/[，,]/)[0]?.trim();
   const heroLabel = (firstAddressLabel && /[\u3400-\u9fff]/.test(firstAddressLabel))
     ? firstAddressLabel
@@ -172,7 +158,8 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   return <>
     <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} ellipsizeMode="tail" style={styles.daySubtitle}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={({ pressed }) => [styles.moreButton, { backgroundColor: pressed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)', borderColor: 'transparent', borderWidth: 0 }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
     <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} />
-    <DashboardMetricsBar metrics={metrics} themeMode={themeMode} action={<Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable>} />
+    <DashboardMetricsBar metrics={metrics} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />
+    {showOptimizationSuggestion ? <Text accessibilityRole="text" style={styles.optimizationSuggestion}>{conflictMinutes > 0 ? `⚠️ 今日有 ${conflictMinutes} 分鐘時間衝突，建議最佳化路線` : '🚗 今日交通時間較長，建議最佳化路線'}</Text> : null}
     {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
     {/* optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線' */}
     <Pressable style={[styles.mapToggle, { alignSelf: 'flex-start', width: 'auto', minHeight: 38, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, marginVertical: 8 }]} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線'}</Text></Pressable>
@@ -180,35 +167,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     <TimelineViewport width={width} height={height}>
       {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} tripId={trip.id} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onUpdateImage={onUpdateImage} onReorder={onReorder} onShiftSubsequent={onShiftSubsequent} onInsertAtPosition={onAddAtPosition} />}
     </TimelineViewport>
-    <Modal visible={Boolean(optimizationPreview)} transparent animationType="fade" onRequestClose={() => { if (!optimizationBusy) setOptimizationPreview(null); }}>
-      <View style={styles.modalBackdrop}><View style={styles.modalCard}>
-        <View style={styles.modalHeader}><Text style={styles.modalTitle}>🧭 今日路線最佳化</Text><Pressable accessibilityRole="button" accessibilityLabel="關閉路線最佳化預覽" onPress={() => { if (!optimizationBusy) setOptimizationPreview(null); }}><Text style={styles.modalClose}>×</Text></Pressable></View>
-        {optimizationPreview ? <>
-          <Text style={styles.modalSummary}>距離 {formatDistance(optimizationPreview.result.originalDistanceKm)} → {formatDistance(optimizationPreview.result.totalDistanceKm)}</Text>
-          {optimizationStatus ? <View style={styles.optimizationStatusRow}><Text style={[styles.optimizationStatusBadge, optimizationStatus.isOptimal ? styles.optimizationStatusOptimal : styles.optimizationStatusSaving]}>{optimizationStatus.label}</Text></View> : null}
-          {optimizationStatus && !optimizationStatus.isOptimal ? <Text style={styles.modalHint}>{optimizationPreview.result.optimized ? '建議順序會固定第一站，重新安排後續景點。' : '目前順序已接近最短路線，仍可套用建議時間。'}</Text> : null}
-           <Text style={styles.modalHint}>{`總車程 ${formatRouteDuration(optimizationPreview.result.originalDurationMinutes)} → ${formatRouteDuration(optimizationPreview.result.totalDurationMinutes)}`}</Text>
-          <ScrollView style={styles.previewList} contentContainerStyle={styles.previewContent}>
-            {optimizationPreview.scheduledItems.map((item, index) => {
-              const previousItem = optimizationPreview.scheduledItems[index - 1];
-              const leg = optimizationPreview.result.legs[index - 1];
-              return <React.Fragment key={item.id}>
-                {previousItem && leg ? <View style={styles.routeConnector}>
-                  <View style={styles.routeRail}><View style={styles.routeDot} /></View>
-                  <View style={styles.routeConnectorBody}>
-                    <Text numberOfLines={1} ellipsizeMode="tail" style={styles.routeConnectorLabel}>{formatRouteLegContext({ fromName: previousItem.location_name, toName: item.location_name, durationMinutes: leg.durationMinutes, mode: leg.mode })}</Text>
-                  </View>
-                </View> : null}
-                <View style={styles.previewRow}>
-              <View style={styles.previewStop}><Text style={styles.previewIndex}>{index + 1}</Text><View style={styles.previewCopy}><Text style={styles.previewTime}>{item.time ?? '未設定'}</Text><Text style={styles.previewName}>{item.location_name}</Text></View></View>
-                </View>
-              </React.Fragment>;
-            })}
-          </ScrollView>
-          <View style={styles.modalActions}><Pressable style={styles.cancelButton} disabled={optimizationBusy} onPress={() => setOptimizationPreview(null)}><Text style={styles.cancelText}>取消</Text></Pressable><Pressable style={styles.applyButton} disabled={optimizationBusy} onPress={() => void applyOptimization()}><Text style={styles.applyText}>{optimizationBusy ? '套用中…' : '確認套用'}</Text></Pressable></View>
-        </> : null}
-      </View></View>
-    </Modal>
+    <RouteOptimizeModal visible={Boolean(optimizationPreview)} originalItems={visibleItems} result={optimizationPreview?.result ?? null} busy={optimizationBusy} onApply={applyOptimization} onCancel={() => { if (!optimizationBusy) setOptimizationPreview(null); }} />
     <ItineraryCardExport visible={exportVisible} data={exportData} themeMode={themeMode} onClose={() => setExportVisible(false)} />
     <Modal visible={moreVisible} transparent animationType="fade" onRequestClose={() => setMoreVisible(false)}>
       <Pressable style={styles.menuBackdrop} onPress={() => setMoreVisible(false)}><View style={styles.moreMenu}>
@@ -220,10 +179,6 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
       </View></Pressable>
     </Modal>
   </>;
-}
-
-function formatDistance(distanceKm: number): string {
-  return distanceKm < 1 ? `${Math.round(distanceKm * 1000)} 公尺` : `${distanceKm.toFixed(1)} 公里`;
 }
 
 const dayHeroStyle = {
@@ -258,6 +213,7 @@ const styles = StyleSheet.create({
   optimizeInlineCompact: { minWidth: 36, paddingHorizontal: 8 },
   optimizeInlineText: { color: '#475569', fontSize: 11, fontWeight: '800' },
   optimizeInlineIconText: { fontSize: 16 },
+  optimizationSuggestion: { marginTop: -2, marginBottom: 6, color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   calendarButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
   calendarText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   exportButton: { flexShrink: 0, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 10, paddingVertical: 8 },
@@ -280,34 +236,4 @@ const styles = StyleSheet.create({
   skeletonStack: { gap: 12 },
   fab: { position: 'absolute', zIndex: 1000, minHeight: 44, justifyContent: 'center', borderRadius: 12, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta },
   buttonText: { color: 'white', fontWeight: '800' },
-  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(31,31,31,.48)' },
-  modalCard: { width: '100%', maxWidth: 560, maxHeight: '88%', alignSelf: 'center', backgroundColor: EDITORIAL_COLORS.paper, borderRadius: 16, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, padding: 18, gap: 12 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  modalTitle: { color: EDITORIAL_COLORS.charcoal, fontSize: 20, fontWeight: '900' },
-  modalClose: { color: EDITORIAL_COLORS.taupe, fontSize: 28, lineHeight: 30, paddingHorizontal: 8 },
-  modalSummary: { color: EDITORIAL_COLORS.charcoal, fontSize: 15, fontWeight: '800' },
-  optimizationStatusRow: { flexDirection: 'row', alignItems: 'center' },
-  optimizationStatusBadge: { alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12, fontWeight: '800' },
-  optimizationStatusOptimal: { color: EDITORIAL_COLORS.taupe, backgroundColor: EDITORIAL_COLORS.sand, borderColor: EDITORIAL_COLORS.line },
-  optimizationStatusSaving: { color: EDITORIAL_COLORS.terracotta, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderColor: EDITORIAL_COLORS.terracottaSoft },
-  modalHint: { color: EDITORIAL_COLORS.taupe, fontSize: 13, lineHeight: 19 },
-  previewList: { maxHeight: 360 },
-  previewContent: { gap: 8, paddingVertical: 4 },
-  previewRow: { borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 10, gap: 7 },
-  previewStop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  routeConnector: { flexDirection: 'row', alignItems: 'stretch', minHeight: 58, paddingHorizontal: 8, gap: 10 },
-  routeRail: { width: 20, alignItems: 'center', justifyContent: 'center' },
-  routeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 2, borderColor: EDITORIAL_COLORS.paper },
-  routeConnectorBody: { flex: 1, minWidth: 0, justifyContent: 'center', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.terracottaSoft, paddingLeft: 10 },
-  routeConnectorLabel: { flex: 1, minWidth: 0, color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 18, fontWeight: '700' },
-  previewIndex: { width: 26, height: 26, borderRadius: 13, textAlign: 'center', paddingTop: 4, color: EDITORIAL_COLORS.paper, backgroundColor: EDITORIAL_COLORS.terracotta, fontWeight: '900' },
-  previewCopy: { flex: 1, gap: 2 },
-  previewTime: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '900' },
-  previewName: { color: EDITORIAL_COLORS.charcoal, fontSize: 16, fontWeight: '800' },
-  previewLeg: { color: EDITORIAL_COLORS.taupe, fontSize: 12, paddingLeft: 36 },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingTop: 4 },
-  cancelButton: { minHeight: 44, justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 16 },
-  cancelText: { color: EDITORIAL_COLORS.charcoal, fontWeight: '800' },
-  applyButton: { minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 16 },
-  applyText: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
 });

@@ -13,6 +13,9 @@ export type ItineraryItem = {
   opening_hours?: OpeningHours | null;
   is_backup?: boolean;
   backup_for_id?: string | null;
+  /** Optional reservation anchor used by route optimization previews. */
+  is_fixed_time?: boolean;
+  fixed_time?: string | null;
   updated_at?: string | null; updated_by?: string | null;
   /** Legacy/API alias used by some clients; `time` remains canonical. */
   start_time?: string | null;
