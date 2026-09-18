@@ -65,7 +65,14 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const [optimizationBusy, setOptimizationBusy] = useState(false);
   const [exportVisible, setExportVisible] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
-  const scheduleContext = useMemo<ScheduleContext>(() => ({ tripStartDate: trip.start_date, dayNumber: day, defaultDepartureTime: trip.default_departure_time, timezone: trip.timezone }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
+  const scheduleContext = useMemo<ScheduleContext>(() => ({
+    tripStartDate: trip.start_date,
+    dayNumber: day,
+    defaultDepartureTime: trip.default_departure_time,
+    timezone: trip.timezone,
+    includeBuffer: true,
+    defaultBufferMinutes: 10,
+  }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const metrics = useMemo(() => calculateTimelineMetrics(visibleItems), [visibleItems]);
   const daySchedule = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
   const conflictMinutes = useMemo(() => daySchedule.reduce((max, entry) => Math.max(max, entry.conflictMinutes ?? 0), 0), [daySchedule]);

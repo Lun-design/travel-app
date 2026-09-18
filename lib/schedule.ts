@@ -1,6 +1,7 @@
 import { haversineDistanceKm, itineraryStartTime, sortItineraryItemsByStartTime, type OpeningHours, type ItineraryItem, type Weekday } from './itinerary';
 import { addCalendarDays, getWeekdayForIsoDate, normalizeTimezone } from './timezone';
 import { calculateTimeConflict } from './time-buffer';
+import { checkOperatingHoursConflict } from './operating-hours';
 
 const MINUTES_PER_DAY = 24 * 60;
 const DEFAULT_DURATION_MINUTES = 60;
@@ -22,6 +23,9 @@ export type ScheduleContext = {
    * conflict calculations cannot fall back to a different (stale) estimate.
    */
   transitMinutesByFromId?: Readonly<Record<string, number | null | undefined>>;
+  /** Enable the user-facing travel safety buffer. Defaults to 10 minutes. */
+  includeBuffer?: boolean;
+  defaultBufferMinutes?: number;
 };
 export type ScheduledItem = {
   item: ScheduleItem;
@@ -32,6 +36,10 @@ export type ScheduledItem = {
   departureMinutes: number;
   durationMinutes: number;
   travelMinutes: number;
+  /** Extra safety time added after the route estimate. */
+  bufferMinutes: number;
+  /** Travel plus safety buffer used for arrival/conflict calculations. */
+  effectiveTravelMinutes: number;
   estimated: boolean;
   openingWarning: boolean;
   overlapWarning: boolean;
@@ -46,7 +54,14 @@ export type TimeConflict = {
   expectedArrivalMinutes: number;
   actualStartMinutes: number;
   travelMinutes: number;
+  bufferMinutes: number;
 };
+
+function resolveBufferMinutes(context: ScheduleContext): number {
+  if (context.includeBuffer !== true) return 0;
+  const configured = Number(context.defaultBufferMinutes ?? 10);
+  return Number.isFinite(configured) && configured >= 0 ? Math.round(configured) : 10;
+}
 
 function parseTime(value: string | null | undefined): number | null {
   if (typeof value !== 'string' || !value) return null;
@@ -161,7 +176,9 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     const travel = previous
       ? travelMinutes(previous.item, current, speed, context.transitMinutesByFromId?.[previous.item.id])
       : 0;
-    const earliestArrival: number = previous ? previous.departureMinutes + travel : fallbackStart;
+    const buffer = previous ? resolveBufferMinutes(context) : 0;
+    const effectiveTravel = travel + buffer;
+    const earliestArrival: number = previous ? previous.departureMinutes + effectiveTravel : fallbackStart;
     const arrival: number = explicitStart ?? earliestArrival;
     const duration = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0 ? current.duration_minutes as number : DEFAULT_DURATION_MINUTES;
     // A conflict means that the activity windows overlap.  Travel time is
@@ -173,9 +190,9 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     // (for example 18:00-19:00 followed by 19:00), so do not flag it merely
     // because a route estimate would add a buffer. Other starts are checked
     // against departure plus the estimated travel time.
-    const explicitHandoff = previous && explicitStart !== null && explicitStart === previous.departureMinutes;
+    const explicitHandoff = previous && buffer === 0 && explicitStart !== null && explicitStart === previous.departureMinutes;
     const conflict = previous && explicitStart !== null && !explicitHandoff
-      ? calculateTimeConflict(previous.startMinutes, previous.durationMinutes, travel, explicitStart)
+      ? calculateTimeConflict(previous.startMinutes, previous.durationMinutes, effectiveTravel, explicitStart)
       : null;
     if (shouldLogTimeConflictDebug) {
       console.log('[TimeConflict Debug]', {
@@ -183,6 +200,7 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
         prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
         currentItem: current,
         transitMinutes: travel,
+        bufferMinutes: buffer,
         expectedArrival: earliestArrival,
         conflictMinutes: conflict?.conflictMinutes ?? 0,
       });
@@ -193,6 +211,7 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
         // nullable DB field, so debugging reflects the real formula inputs.
         prevDuration: previous?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
         transitMinutes: travel,
+        bufferMinutes: buffer,
         expectedArrivalMinutes: earliestArrival,
         currentName: current.location_name,
         currentStartTime: itineraryStartTime(current),
@@ -207,6 +226,7 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
         expectedArrivalMinutes: conflict.expectedArrivalMinutes,
         actualStartMinutes: explicitStart,
         travelMinutes: travel,
+        bufferMinutes: buffer,
       });
     }
     previous = { item: current, startMinutes: arrival, durationMinutes: duration, departureMinutes: arrival + duration };
@@ -234,13 +254,20 @@ export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext
     const travel = index && previous
       ? travelMinutes(previous.item, current, speed, context.transitMinutesByFromId?.[previous.item.id])
       : 0;
-    const earliestArrival = previous ? previous.departureMinutes + travel : fallbackStart;
+    const buffer = index && previous ? resolveBufferMinutes(context) : 0;
+    const effectiveTravel = travel + buffer;
+    const earliestArrival = previous ? previous.departureMinutes + effectiveTravel : fallbackStart;
     const arrivalMinutes = explicitStart ?? earliestArrival;
     const durationMinutes = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0
       ? current.duration_minutes as number
       : DEFAULT_DURATION_MINUTES;
     const arrivalDate = dateForArrival(context.tripStartDate, context.dayNumber, arrivalMinutes);
     const conflict = conflictById.get(current.id);
+    const arrivalTime = formatTime(arrivalMinutes);
+    const departureTime = formatTime(arrivalMinutes + durationMinutes);
+    const openingConflict = arrivalDate
+      ? checkOperatingHoursConflict(current, arrivalTime, departureTime, { date: arrivalDate, timezone: context.timezone })
+      : null;
     const entry: ScheduledItem = {
       item: current,
       scheduledStart: formatTime(arrivalMinutes),
@@ -251,9 +278,11 @@ export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext
       durationMinutes,
       travelMinutes: travel,
       estimated: explicitStart === null,
-      openingWarning: Boolean(current.opening_hours && arrivalDate && !isOpenAt(current.opening_hours, arrivalDate, formatTime(arrivalMinutes), context.timezone)),
+      openingWarning: Boolean(openingConflict?.conflict),
       overlapWarning: Boolean(conflict),
       conflictMinutes: conflict?.conflictMinutes ?? 0,
+      bufferMinutes: buffer,
+      effectiveTravelMinutes: effectiveTravel,
     };
     previous = entry;
     return entry;

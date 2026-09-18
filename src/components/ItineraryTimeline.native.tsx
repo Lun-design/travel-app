@@ -123,6 +123,7 @@ export function ItineraryTimeline({
               item={item}
               themeMode={themeMode}
               scheduled={scheduleById.get(item.id)}
+              nextScheduled={scheduleById.get(segmentsByFromId.get(item.id)?.toId ?? '')}
               weather={weatherById[item.id]}
               vouchers={vouchers}
               onPreviewVoucher={onPreviewVoucher}

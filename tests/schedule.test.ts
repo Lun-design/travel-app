@@ -112,7 +112,9 @@ describe('buildDaySchedule', () => {
     ], { tripStartDate: '2026-01-19', dayNumber: 1, defaultDepartureTime: '09:00' });
 
     expect(schedule[1].arrivalTime).toBe('01:31');
-    expect(schedule[1].openingWarning).toBe(false);
+    // The stop arrives during opening hours but its one-hour stay runs past
+    // the 02:00 closing time, so the new arrival/departure check warns.
+    expect(schedule[1].openingWarning).toBe(true);
   });
 });
 

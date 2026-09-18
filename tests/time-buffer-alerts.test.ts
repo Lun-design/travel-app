@@ -4,6 +4,7 @@ import path from 'node:path';
 import { buildDaySchedule, detectTimeConflictsDetailed, type ScheduleItem } from '../lib/schedule';
 import { haversineDistanceKm } from '../lib/itinerary';
 import { calculateTimeConflictMinutes, shiftSubsequentItems } from '../lib/time-buffer';
+import { checkOperatingHoursConflict } from '../lib/operating-hours';
 
 const supabaseMock = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: supabaseMock }));
@@ -159,6 +160,62 @@ describe('smart time buffers and alerts', () => {
     expect(schedule[1]?.conflictMinutes).toBe(0);
   });
 
+  it('adds the configured default buffer to arrival and conflict calculations without changing raw travel minutes', () => {
+    const context = {
+      tripStartDate: '2026-01-20',
+      dayNumber: 1,
+      transitMinutesByFromId: { first: 30 },
+      includeBuffer: true,
+      defaultBufferMinutes: 10,
+    };
+    const schedule = buildDaySchedule([
+      item({ id: 'first', time: '09:00', duration_minutes: 60 }),
+      item({ id: 'second', position: 1, time: '10:35', duration_minutes: 45 }),
+    ], context);
+
+    expect(schedule[1]).toMatchObject({
+      travelMinutes: 30,
+      bufferMinutes: 10,
+      effectiveTravelMinutes: 40,
+      arrivalTime: '10:35',
+      conflictMinutes: 5,
+      overlapWarning: true,
+    });
+  });
+
+  it('keeps the buffer disabled unless the schedule context opts in', () => {
+    const schedule = buildDaySchedule([
+      item({ id: 'first', time: '09:00', duration_minutes: 60 }),
+      item({ id: 'second', position: 1, time: '10:35', duration_minutes: 45 }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, transitMinutesByFromId: { first: 30 }, defaultBufferMinutes: 10 });
+
+    expect(schedule[1]).toMatchObject({ bufferMinutes: 0, effectiveTravelMinutes: 30, conflictMinutes: 0, overlapWarning: false });
+  });
+
+  it('treats an exact departure hand-off as a conflict when the opt-in buffer is enabled', () => {
+    const schedule = buildDaySchedule([
+      item({ id: 'first', time: '09:00', duration_minutes: 60 }),
+      item({ id: 'second', position: 1, time: '10:00', duration_minutes: 45 }),
+    ], { tripStartDate: '2026-01-20', dayNumber: 1, transitMinutesByFromId: { first: 30 }, includeBuffer: true, defaultBufferMinutes: 10 });
+
+    expect(schedule[1]).toMatchObject({ conflictMinutes: 40, overlapWarning: true, bufferMinutes: 10 });
+  });
+
+  it('flags arrival or departure outside a location opening interval', () => {
+    const openHours = { monday: { closed: false, periods: [{ open: '09:00', close: '18:00' }] } };
+    const target = item({ opening_hours: openHours });
+
+    expect(checkOperatingHoursConflict(target, '10:00', '17:00', { date: '2026-01-19' })).toMatchObject({ conflict: false, reason: null });
+    expect(checkOperatingHoursConflict(target, '17:30', '18:30', { date: '2026-01-19' })).toMatchObject({ conflict: true, reason: 'outside-hours' });
+  });
+
+  it('flags a closed weekday while allowing an item without opening hours', () => {
+    const closed = item({ opening_hours: { tuesday: { closed: true, periods: [] } } });
+
+    expect(checkOperatingHoursConflict(closed, '10:00', '11:00', { date: '2026-01-20' })).toMatchObject({ conflict: true, reason: 'closed' });
+    expect(checkOperatingHoursConflict(item({ opening_hours: null }), '10:00', '11:00', { date: '2026-01-20' })).toMatchObject({ conflict: false, reason: null });
+  });
+
   it('shifts every subsequent item without mutating the source array', () => {
     const items = [
       item({ id: 'first', time: '09:00' }),
@@ -191,5 +248,15 @@ describe('smart time buffers and alerts', () => {
     expect(shared).toContain('一鍵順延後續行程');
     expect(web).toContain('setLocalItems(shifted);');
     expect(web).toContain('onShiftSubsequent?.(changes)');
+  });
+
+  it('enables the default buffer at the timeline boundary and surfaces it in route pills', () => {
+    const panel = readFileSync(path.resolve(process.cwd(), 'src/components/trip-detail/TimelinePanel.tsx'), 'utf8');
+    const shared = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.shared.tsx'), 'utf8');
+
+    expect(panel).toContain('includeBuffer: true');
+    expect(panel).toContain('defaultBufferMinutes: 10');
+    expect(shared).toContain('nextScheduled?.bufferMinutes');
+    expect(shared).toContain('含緩衝');
   });
 });

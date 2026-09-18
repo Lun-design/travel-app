@@ -260,6 +260,7 @@ type TimelineCardProps = {
   item: ItineraryItem;
   segment?: TimelineRouteSegment;
   scheduled?: ScheduledItem;
+  nextScheduled?: ScheduledItem;
   weather?: WeatherSummary;
   vouchers?: Voucher[];
   onPreviewVoucher?: (voucher: Voucher) => void;
@@ -298,7 +299,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const { width: viewportWidth } = useWindowDimensions();
   const isMobile = viewportWidth < 600;
@@ -448,7 +449,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
           <Text style={styles.transitionArrow}>➔</Text>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
         </View>
-        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)})</Text></Pressable>
+        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)}){nextScheduled?.bufferMinutes ? ` · 含緩衝 ${nextScheduled.bufferMinutes} 分鐘` : ''}</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {segment.navigationUrl ? <Pressable accessibilityRole="link" style={styles.routeLink} onPress={() => { void Linking.openURL(segment.navigationUrl as string).catch(() => undefined); }}><Text numberOfLines={1} style={styles.routeLinkText}>🗺️ 導航路線</Text></Pressable> : null}
       </View> : null}
