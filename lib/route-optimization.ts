@@ -44,6 +44,12 @@ export type FixedTimeAnchor = string | {
 export type RouteOptimizationOptions = {
   /** Keep the first item in place. Defaults to true. */
   fixFirstDestination?: boolean;
+  /**
+   * Rebuild the clock schedule after reordering. The default is false: route
+   * optimization is an order-only operation and must not overwrite times the
+   * traveler entered manually. Use this only for an explicit reschedule flow.
+   */
+  recalculateStartTimes?: boolean;
   /** Items or IDs whose original slot/time must be preserved. */
   fixedTimeAnchors?: readonly FixedTimeAnchor[] | ReadonlySet<string> | Record<string, string | null | undefined>;
   /** Alias accepted by callers that call these appointments time anchors. */
@@ -395,6 +401,26 @@ function applySchedule<T extends ItineraryOptimizationStop>(items: readonly T[],
 }
 
 /**
+ * Build a persistence-safe order payload. Route optimization may return a
+ * preview with calculated times; applying that preview must retain the times
+ * already stored on each matching item and only change its position.
+ */
+export function preserveItineraryTimes<T extends { id: string; time?: string | null; start_time?: string | null; startTime?: string | null; position?: number }>(
+  originalItems: readonly T[],
+  orderedItems: readonly T[],
+): T[] {
+  const originalById = new Map(originalItems.map((item) => [item.id, item]));
+  return orderedItems.map((item, position) => {
+    const original = originalById.get(item.id);
+    const next = { ...item, position } as T;
+    if (original && Object.prototype.hasOwnProperty.call(original, 'time')) next.time = original.time;
+    if (original && Object.prototype.hasOwnProperty.call(original, 'start_time')) next.start_time = original.start_time;
+    if (original && Object.prototype.hasOwnProperty.call(original, 'startTime')) next.startTime = original.startTime;
+    return next;
+  });
+}
+
+/**
  * Optimise a day's stops by travel time while preserving explicit anchors.
  * Up to ten stops use an exact permutation search; larger days use a
  * deterministic nearest-neighbour approximation. The input is never mutated.
@@ -421,7 +447,10 @@ export function optimizeItineraryOrder<T extends ItineraryOptimizationStop>(item
     ? exactOrder(items, fixedPositions, options, indexById)
     : nearestOrder(items, fixedPositions, options, indexById);
   const legs = routeLegs(optimized, options, indexById);
-  const scheduled = applySchedule(optimized, legs, options, anchorTimes);
+  const ordered = optimized.map((item, position) => ({ ...item, position })) as OptimizedItineraryItem<T>[];
+  const scheduled = options.recalculateStartTimes
+    ? applySchedule(ordered, legs, options, anchorTimes)
+    : ordered;
   const changed = optimized.some((item, index) => item.id !== items[index]?.id);
   return {
     items: scheduled,

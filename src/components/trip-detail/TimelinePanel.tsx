@@ -96,6 +96,8 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
       .map((item) => ({ id: item.id, start_time: item.time }));
     const result = optimizeItineraryOrder(visibleItems, {
       fixFirstDestination: true,
+      // Preview/apply changes order only. Time shifting is an explicit action.
+      recalculateStartTimes: false,
       fixedTimeAnchors,
       defaultStartTime: trip.default_departure_time ?? '09:00',
     });

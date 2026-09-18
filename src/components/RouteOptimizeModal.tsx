@@ -37,15 +37,21 @@ function formatDistance(distanceKm: number): string {
   return safe < 1 ? `${Math.round(safe * 1000)} 公尺` : `${safe.toFixed(1)} 公里`;
 }
 
-function OrderList({ title, items }: { title: string; items: readonly ItineraryItem[] }) {
+function OrderList({ title, items, originalTimeById, originalPositionById }: {
+  title: string;
+  items: readonly ItineraryItem[];
+  originalTimeById?: ReadonlyMap<string, string | null>;
+  originalPositionById?: ReadonlyMap<string, number>;
+}) {
   return <View style={styles.orderColumn}>
     <Text style={styles.orderTitle}>{title}</Text>
     {items.length ? items.map((item, index) => <View key={item.id} style={styles.orderRow}>
       <Text style={styles.orderIndex}>{index + 1}</Text>
       <View style={styles.orderCopy}>
         <Text numberOfLines={1} style={styles.orderName}>{item.location_name}</Text>
-        {item.time ? <Text style={styles.orderTime}>{item.time}</Text> : null}
+        {(originalTimeById?.has(item.id) ? originalTimeById.get(item.id) : item.time) ? <Text style={styles.orderTime}>{originalTimeById?.has(item.id) ? originalTimeById.get(item.id) : item.time}</Text> : null}
       </View>
+      {originalPositionById?.has(item.id) ? <Text style={styles.positionHint}>原第 {originalPositionById.get(item.id)! + 1} 位</Text> : null}
       {isFixedTimeItem(item) ? <Text style={styles.fixedBadge}>固定時間</Text> : null}
     </View>) : <Text style={styles.emptyText}>尚無景點</Text>}
   </View>;
@@ -53,6 +59,8 @@ function OrderList({ title, items }: { title: string; items: readonly ItineraryI
 
 export function RouteOptimizeModal({ visible, originalItems, result, busy = false, onApply, onCancel }: RouteOptimizeModalProps) {
   const optimizedItems = result?.items ?? [];
+  const originalTimeById = new Map(originalItems.map((item) => [item.id, item.time ?? null]));
+  const originalPositionById = new Map(originalItems.map((item, index) => [item.id, index]));
   const timeSaved = result ? Math.max(0, Math.round(result.originalDurationMinutes - result.totalDurationMinutes)) : 0;
   const distanceSaved = result ? Math.max(0, result.originalDistanceKm - result.totalDistanceKm) : 0;
 
@@ -78,7 +86,7 @@ export function RouteOptimizeModal({ visible, originalItems, result, busy = fals
           <ScrollView style={styles.orders} contentContainerStyle={styles.ordersContent}>
             <View style={styles.orderGrid}>
               <OrderList title="最佳化前" items={originalItems} />
-              <OrderList title="最佳化後" items={optimizedItems} />
+              <OrderList title="最佳化後" items={optimizedItems} originalTimeById={originalTimeById} originalPositionById={originalPositionById} />
             </View>
           </ScrollView>
         </> : <Text style={styles.emptyText}>正在計算路線…</Text>}
@@ -116,6 +124,7 @@ const styles = StyleSheet.create({
   orderCopy: { flex: 1, minWidth: 0, gap: 2 },
   orderName: { color: EDITORIAL_COLORS.charcoal, fontSize: 14, fontWeight: '800' },
   orderTime: { color: EDITORIAL_COLORS.taupe, fontSize: 12 },
+  positionHint: { color: EDITORIAL_COLORS.taupe, fontSize: 10, fontWeight: '700' },
   fixedBadge: { borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, color: EDITORIAL_COLORS.terracotta, backgroundColor: EDITORIAL_COLORS.terracottaSoft, fontSize: 10, fontWeight: '800' },
   emptyText: { color: EDITORIAL_COLORS.taupe, fontSize: 13 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingTop: 2 },

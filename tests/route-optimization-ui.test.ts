@@ -31,7 +31,8 @@ describe('route optimization UI callback chain', () => {
     const detail = tripDetailSource();
     const timeline = timelineSource();
 
-    expect(detail).toContain('replaceOptimizedRouteItems(currentItems, optimizedItems)');
+    expect(detail).toContain('const orderOnlyItems = preserveItineraryTimes(previousItems, optimizedItems);');
+    expect(detail).toContain('replaceOptimizedRouteItems(currentItems, orderOnlyItems)');
     expect(timeline).toContain("Alert.alert('路線最佳化完成'");
   });
 });

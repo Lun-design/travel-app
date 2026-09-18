@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyOptimizedSchedule, optimizeRoute, replaceOptimizedRouteItems, type OptimizableStop } from '../lib/route-optimizer';
-import { optimizeItineraryOrder, type ItineraryOptimizationStop } from '../lib/route-optimization';
+import { optimizeItineraryOrder, preserveItineraryTimes, type ItineraryOptimizationStop } from '../lib/route-optimization';
 
 function stop(id: string, latitude: number, longitude: number): OptimizableStop {
   return { id, latitude, longitude };
@@ -18,6 +18,54 @@ describe('route optimization', () => {
     expect(result.items[0]?.id).toBe('taipei');
     expect(result.totalDistanceKm).toBeLessThan(result.originalDistanceKm);
     expect(result.items.every((item) => typeof item.start_time === 'string')).toBe(true);
+    expect(Object.fromEntries(result.items.map((item) => [item.id, item.start_time]))).toEqual({
+      taipei: '09:00',
+      'xin-zhuang': '11:00',
+      tainan: '10:00',
+    });
+  });
+
+  it('preserves every original start time by default when applying an optimized order', () => {
+    const original = [
+      { id: 'first', latitude: 25.033, longitude: 121.565, time: '09:00' },
+      { id: 'far', latitude: 22.997, longitude: 120.213, time: '13:00' },
+      { id: 'near', latitude: 25.036, longitude: 121.45, time: '10:00' },
+    ];
+
+    const result = optimizeItineraryOrder(original);
+
+    expect(result.items.map((item) => item.id)).toEqual(['first', 'near', 'far']);
+    expect(result.items.map((item) => item.time)).toEqual(['09:00', '10:00', '13:00']);
+  });
+
+  it('only recalculates start times when explicitly requested', () => {
+    const original = [
+      { id: 'first', latitude: 25.033, longitude: 121.565, time: '09:00', duration_minutes: 60 },
+      { id: 'near', latitude: 25.036, longitude: 121.45, time: '18:00', duration_minutes: 60 },
+      { id: 'far', latitude: 22.997, longitude: 120.213, time: '20:00', duration_minutes: 60 },
+    ];
+
+    const result = optimizeItineraryOrder(original, { recalculateStartTimes: true });
+
+    expect(result.items.map((item) => item.time)).not.toEqual(['09:00', '18:00', '20:00']);
+  });
+
+  it('preserves persisted times when applying an order-only payload', () => {
+    const original = [
+      { id: 'a', time: '09:00', start_time: '09:00', position: 0 },
+      { id: 'b', time: '10:00', start_time: '10:00', position: 1 },
+    ];
+    const reordered = [
+      { id: 'b', time: '09:42', start_time: '09:42', position: 0 },
+      { id: 'a', time: '10:42', start_time: '10:42', position: 1 },
+    ];
+
+    const next = preserveItineraryTimes(original, reordered);
+
+    expect(next).toEqual([
+      { id: 'b', time: '10:00', start_time: '10:00', position: 0 },
+      { id: 'a', time: '09:00', start_time: '09:00', position: 1 },
+    ]);
   });
 
   it('keeps a fixed-time reservation at its original slot and preserves its start time', () => {

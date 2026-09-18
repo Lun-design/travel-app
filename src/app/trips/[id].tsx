@@ -36,6 +36,7 @@ import { useTripDetailData } from '@/hooks/useTripDetailData';
 import { ActiveTripContext } from '@/contexts/ActiveTripContext';
 import { createReminderScheduler, getNotificationPermission, loadReminderPreference, registerNotificationServiceWorker, requestNotificationPermission, saveReminderPreference, showReminderNotification, type NotificationPermissionState } from '@/lib/notifications';
 import { replaceOptimizedRouteItems } from '@/lib/route-optimizer';
+import { preserveItineraryTimes } from '@/lib/route-optimization';
 import { updateItineraryItemImage } from '@/lib/itinerary-api';
 
 export default function TripDetailScreen() {
@@ -183,20 +184,19 @@ export default function TripDetailScreen() {
   async function applyRouteOptimization(optimizedItems: ItineraryItem[]) {
     if (!tripId) throw new Error('找不到行程 ID。');
     const previousItems = data.items;
-    data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, optimizedItems));
+    // Route optimization changes order only. Keep persisted times intact;
+    // explicit time shifting is handled by the separate schedule action.
+    const orderOnlyItems = preserveItineraryTimes(previousItems, optimizedItems);
+    data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, orderOnlyItems));
     try {
-      const savedItems = await Promise.all(optimizedItems.map((item) => data.saveItem({
-        ...item,
-        trip_id: tripId,
-        created_by: item.created_by || data.userId,
-      })));
-      data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, savedItems));
-      await data.reload();
-      // A Realtime or replicated GET response may briefly contain the old order.
-      // Re-apply the confirmed server rows as one immutable transition.
-      data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, savedItems));
+      // Persist only positions through the atomic order RPC. This avoids
+      // rewriting start_time, notes, coordinates, or any other item fields.
+      await data.reorderItems(orderOnlyItems.map((item, position) => ({ id: item.id, position })));
+      // Re-apply the confirmed order as one immutable transition in case the
+      // follow-up read was briefly served from a stale replica.
+      data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, orderOnlyItems));
       setRefreshKey((current) => current + 1);
-      setDay(savedItems[0]?.day_number ?? day);
+      setDay(orderOnlyItems[0]?.day_number ?? day);
     } catch (error) {
       data.setItems([...previousItems]);
       throw error;
