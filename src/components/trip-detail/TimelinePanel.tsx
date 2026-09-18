@@ -74,6 +74,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     defaultBufferMinutes: 10,
   }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const metrics = useMemo(() => calculateTimelineMetrics(visibleItems), [visibleItems]);
+  const totalEstimatedCost = useMemo(() => calculateTimelineMetrics(items).estimatedCost, [items]);
   const daySchedule = useMemo(() => buildDaySchedule(visibleItems, scheduleContext), [scheduleContext, visibleItems]);
   const conflictMinutes = useMemo(() => daySchedule.reduce((max, entry) => Math.max(max, entry.conflictMinutes ?? 0), 0), [daySchedule]);
   const totalTravelMinutes = useMemo(() => daySchedule.reduce((sum, entry) => sum + entry.travelMinutes, 0), [daySchedule]);
@@ -167,7 +168,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   return <>
     <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} ellipsizeMode="tail" style={styles.daySubtitle}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={({ pressed }) => [styles.moreButton, { backgroundColor: pressed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)', borderColor: 'transparent', borderWidth: 0 }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
     <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} />
-    <DashboardMetricsBar metrics={metrics} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />
+    <DashboardMetricsBar metrics={metrics} totalEstimatedCost={totalEstimatedCost} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />
     {showOptimizationSuggestion ? <Text accessibilityRole="text" style={styles.optimizationSuggestion}>{conflictMinutes > 0 ? `⚠️ 今日有 ${conflictMinutes} 分鐘時間衝突，建議最佳化路線` : '🚗 今日交通時間較長，建議最佳化路線'}</Text> : null}
     {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
     {/* optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線' */}

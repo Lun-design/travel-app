@@ -59,6 +59,7 @@ export function timelineItemsRevision(items: readonly ItineraryItem[]): string {
     time: item.time,
     start_time: item.start_time,
     duration_minutes: item.duration_minutes,
+    estimated_cost: item.estimated_cost,
     latitude: item.latitude,
     longitude: item.longitude,
     location_name: item.location_name,

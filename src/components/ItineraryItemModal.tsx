@@ -48,6 +48,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   const [time, setTime] = useState('');
   const [category, setCategory] = useState('spot');
   const [duration, setDuration] = useState('');
+  const [estimatedCost, setEstimatedCost] = useState('');
   const [openingHours, setOpeningHours] = useState<OpeningHours | null>(null);
   const [autoHoursStatus, setAutoHoursStatus] = useState<AutoHoursStatus>('idle');
   const [difficulty, setDifficulty] = useState('');
@@ -81,6 +82,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setTime(formatTimeHHmm(item?.time) ?? item?.time ?? '');
     setCategory(item?.category ?? 'spot');
     setDuration(item?.duration_minutes ? String(item.duration_minutes) : '');
+    setEstimatedCost(item?.estimated_cost != null ? String(item.estimated_cost) : '');
     setOpeningHours(item?.opening_hours ?? null);
     setAutoHoursStatus(item?.opening_hours ? 'found' : 'idle');
     setDifficulty(item?.difficulty ?? '');
@@ -217,6 +219,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       time: formatTimeHHmm(time) ?? (time.trim() || null),
       category,
       duration_minutes: duration ? Number(duration) : null,
+      estimated_cost: estimatedCost.trim() ? Number(estimatedCost.replace(/,/g, '')) : null,
       opening_hours: openingHours,
       difficulty: category === 'trail' ? difficulty || null : null,
       notes: notes.trim() || null,
@@ -380,6 +383,8 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         {category === 'trail' ? <><Text style={styles.label}>步道難度</Text><View style={styles.chips}>{['easy', 'moderate', 'hard'].map((value) => <Pressable key={value} onPress={() => setDifficulty(value)} style={[styles.chip, difficulty === value && styles.selected]}><Text style={difficulty === value ? styles.white : styles.chipText}>{value}</Text></Pressable>)}</View></> : null}
         <Text style={styles.label}>預估停留時間（分鐘）</Text>
         <TextInput style={styles.input} placeholder="60" keyboardType="number-pad" value={duration} onChangeText={setDuration} />
+        <Text style={styles.label}>預估費用（TWD）</Text>
+        <TextInput style={styles.input} placeholder="例如 300" keyboardType="decimal-pad" value={estimatedCost} onChangeText={setEstimatedCost} />
         <View style={styles.hoursHeading}><Text style={styles.label}>每週營業時間</Text>{autoHoursStatus === 'loading' ? <Text style={styles.hoursLoading}>正在查詢 OSM 營業時間…</Text> : null}{autoHoursStatus === 'missing' ? <Text style={styles.hoursHint}>ℹ️ 該景點未登錄營業時間，可手動設定</Text> : null}</View>
         <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} />
         <Text style={styles.label}>備註</Text>

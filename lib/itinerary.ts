@@ -11,6 +11,8 @@ export type ItineraryItem = {
   location_name: string; address: string | null; latitude: number | null; longitude: number | null;
   notes: string | null; category: string; created_by: string; duration_minutes?: number | null; difficulty?: string | null;
   opening_hours?: OpeningHours | null;
+  /** Optional per-stop estimated spend, stored in the trip's budget currency (TWD by default). */
+  estimated_cost?: number | null;
   is_backup?: boolean;
   backup_for_id?: string | null;
   /** Optional reservation anchor used by route optimization previews. */
@@ -167,6 +169,12 @@ export function normalizeItineraryItemPayload(item: ItineraryItemSaveInput): Iti
     const duration = item.duration_minutes == null ? null : Number(item.duration_minutes);
     payload.duration_minutes = duration !== null && Number.isFinite(duration) && duration > 0
       ? Math.round(duration)
+      : null;
+  }
+  if ('estimated_cost' in item) {
+    const rawCost = item.estimated_cost == null ? null : Number(String(item.estimated_cost).replace(/,/g, ''));
+    payload.estimated_cost = rawCost !== null && Number.isFinite(rawCost) && rawCost >= 0
+      ? Math.round(rawCost * 100) / 100
       : null;
   }
   if ('address' in item) payload.address = normalizeOptionalText(item.address);
