@@ -4,7 +4,7 @@ import type { ItineraryItem } from '@/lib/itinerary';
 import type { ScheduledItem } from '@/lib/schedule';
 import { createMockWeatherSummary, fetchWeatherForecast, getWearTip, isWeatherAlert, sanitizePersistedWeather, sanitizeWeatherForecast, sanitizeWeatherSummary, type WeatherSummary } from '@/lib/weather-api';
 import { tripDateForDay } from '@/lib/trip-dates';
-import { getGoogleMapsDirectionsUrl } from '@/lib/map-links';
+import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
 import { distanceToFocusSpot, findActiveOrNextSpot, shouldUseCompactTodayBanner } from '@/lib/today-mode';
 import type { Voucher } from '@/lib/vouchers';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -49,7 +49,16 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
   const [expandedHourlyDate, setExpandedHourlyDate] = useState<string | null>(null);
   const [outdoorNoticeExpanded, setOutdoorNoticeExpanded] = useState(false);
   const distanceKm = distanceToFocusSpot(focus.scheduled, schedule);
-  const navigationUrl = getGoogleMapsDirectionsUrl(focusItem?.latitude, focusItem?.longitude);
+  const navigationUrl = focusItem ? getGoogleMapsNavigationUrl({
+    latitude: focusItem.latitude,
+    longitude: focusItem.longitude,
+    place_id: focusItem.place_id,
+    placeId: focusItem.placeId,
+    googlePlaceId: focusItem.googlePlaceId,
+    google_place_id: focusItem.google_place_id,
+    location_name: focusItem.location_name,
+    address: focusItem.address,
+  }) : null;
   const itemVouchers = focusItem ? vouchers.filter((voucher) => voucher.item_id === focusItem.id) : [];
   const backupItem = focusItem ? findBackupPlan(items, focusItem.id) : null;
   const shouldOfferBackup = shouldOfferAlternatePlan(weather);

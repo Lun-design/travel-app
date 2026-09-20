@@ -28,6 +28,7 @@ export type ItineraryItem = {
   photo_reference?: string | null;
   /** CamelCase alias used by Google Places responses before persistence. */
   photoReference?: string | null;
+  place_id?: string | null;
   placeId?: string | null;
   googlePlaceId?: string | null;
   google_place_id?: string | null;

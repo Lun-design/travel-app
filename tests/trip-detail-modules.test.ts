@@ -29,7 +29,7 @@ describe('trip detail module boundaries', () => {
     expect(timeline).toContain('<TodayFocusCard');
     expect(timeline).toContain('onComplete');
     expect(card).toContain('findActiveOrNextSpot');
-    expect(card).toContain('getGoogleMapsDirectionsUrl');
+    expect(card).toContain('getGoogleMapsNavigationUrl');
     expect(card).toContain('OfflineRescueCardModal');
     expect(rescue).toContain('離線備忘／救命卡');
   });

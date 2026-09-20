@@ -308,6 +308,10 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const navigationUrl = getGoogleMapsNavigationUrl({
     latitude: item.latitude,
     longitude: item.longitude,
+    place_id: item.place_id,
+    placeId: item.placeId,
+    googlePlaceId: item.googlePlaceId,
+    google_place_id: item.google_place_id,
     location_name: item.location_name,
     address: item.address,
   });

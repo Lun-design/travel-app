@@ -8,26 +8,48 @@ export function getGoogleMapsDirectionsUrl(latitude: number | null | undefined, 
 }
 
 /**
- * Build a navigation link for an itinerary item.
- *
- * Coordinates give the most precise directions URL.  For manually entered
- * spots that have not been geocoded yet, use a Google Maps title search so
- * the action remains useful and clickable instead of appearing disabled.
+ * Build a precise Google Maps search/navigation link for an itinerary item.
+ * Place IDs are preferred over coordinates, followed by address and title.
  */
 export type NavigationPlace = {
-  latitude?: number | null;
-  longitude?: number | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  place_id?: string | null;
+  placeId?: string | null;
+  googlePlaceId?: string | null;
+  google_place_id?: string | null;
   location_name?: string | null;
   title?: string | null;
   address?: string | null;
 };
 
 export function getGoogleMapsNavigationUrl(place: NavigationPlace): string {
-  const directionsUrl = getGoogleMapsDirectionsUrl(place.latitude, place.longitude);
-  if (directionsUrl) return directionsUrl;
-
-  const query = [place.location_name, place.title, place.address]
+  const placeId = [place.place_id, place.placeId, place.googlePlaceId, place.google_place_id]
     .find((value) => typeof value === 'string' && value.trim())
-    ?.trim() ?? '景點';
+    ?.trim();
+  if (placeId) {
+    return `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(placeId)}`;
+  }
+
+  const latitude = normalizeCoordinate(place.latitude);
+  const longitude = normalizeCoordinate(place.longitude);
+  if (latitude !== null && longitude !== null) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
+  }
+
+  const address = typeof place.address === 'string' ? place.address.trim() : '';
+  if (address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  }
+
+  const query = [place.title, place.location_name]
+    .find((value) => typeof value === 'string' && value.trim())
+    ?.trim() ?? '未命名景點';
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function normalizeCoordinate(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 }
