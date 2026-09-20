@@ -9,6 +9,34 @@ function isLocalId(value: string | undefined): boolean {
   return Boolean(value?.startsWith('offline-'));
 }
 
+/**
+ * PostgREST rejects a request that mentions a column which is not present in
+ * the remote schema cache. Optional editor fields therefore must stay omitted
+ * when no value was provided, rather than being sent as an explicit null.
+ */
+export function buildItineraryWritePayload(item: ItineraryItemSaveInput): ItineraryItemSaveInput {
+  const normalized = normalizeItineraryItemPayload(item);
+  if (normalized.estimated_cost == null) {
+    const { estimated_cost: _estimatedCost, ...withoutEstimatedCost } = normalized;
+    return withoutEstimatedCost;
+  }
+  return normalized;
+}
+
+/** Detect the schema-cache error raised while estimated_cost is not migrated. */
+export function isMissingEstimatedCostColumnError(error: unknown): boolean {
+  const record = typeof error === 'object' && error !== null
+    ? error as { code?: unknown; message?: unknown; details?: unknown }
+    : null;
+  const code = typeof record?.code === 'string' ? record.code : '';
+  const text = [
+    error instanceof Error ? error.message : '',
+    typeof record?.message === 'string' ? record.message : '',
+    typeof record?.details === 'string' ? record.details : '',
+  ].join(' ');
+  return code === 'PGRST204' && /estimated_cost/i.test(text);
+}
+
 /** Convert PostgREST errors into a useful message for the reorder menu. */
 export function describeItineraryOrderError(error: unknown): string {
   const record = typeof error === 'object' && error !== null
@@ -144,15 +172,22 @@ export async function updateItineraryItemsSchedule(items: ItineraryScheduleChang
 }
 
 export async function saveItineraryItem(item: ItineraryItemSaveInput, options: OfflineApiOptions = {}): Promise<ItineraryItem> {
-  const payload = normalizeItineraryItemPayload(item);
+  const payload = buildItineraryWritePayload(item);
   const store = options.store ?? offlineStore;
   const scope = await resolveOfflineScope(payload.trip_id, options.offlineScope);
   try {
     const persistedId = isLocalId(payload.id) ? undefined : payload.id;
-    const query = persistedId
-      ? supabase.from('itinerary_items').update(payload).eq('id', persistedId).select().single()
-      : supabase.from('itinerary_items').insert({ ...payload, id: undefined }).select().single();
-    const { data, error } = await query;
+    const persist = (writePayload: ItineraryItemSaveInput) => persistedId
+      ? supabase.from('itinerary_items').update(writePayload).eq('id', persistedId).select().single()
+      : supabase.from('itinerary_items').insert({ ...writePayload, id: undefined }).select().single();
+    let result = await persist(payload);
+    // Keep clients usable while a migration is rolling out. Once the column is
+    // applied, the first request succeeds and this path is never exercised.
+    if (result.error && 'estimated_cost' in payload && isMissingEstimatedCostColumnError(result.error)) {
+      const { estimated_cost: _estimatedCost, ...fallbackPayload } = payload;
+      result = await persist(fallbackPayload);
+    }
+    const { data, error } = result;
     if (error) throw error;
     const saved = data as ItineraryItem;
     await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (current) => current.some((entry) => entry.id === saved.id) ? current.map((entry) => entry.id === saved.id ? saved : entry) : [...current, saved]);

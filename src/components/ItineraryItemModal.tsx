@@ -220,7 +220,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       // legacy column keeps existing rows from reappearing as constraints in
       // other clients while preserving the column for old imports/exports.
       duration_minutes: null,
-      estimated_cost: estimatedCost.trim() ? Number(estimatedCost.replace(/,/g, '')) : null,
+      ...(estimatedCost.trim() ? { estimated_cost: Number(estimatedCost.replace(/,/g, '')) } : {}),
       opening_hours: openingHours,
       difficulty: category === 'trail' ? difficulty || null : null,
       notes: notes.trim() || null,
