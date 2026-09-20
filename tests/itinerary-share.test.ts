@@ -15,7 +15,7 @@ describe('buildDayItineraryText', () => {
 
     expect(text.indexOf('09:00 成田機場')).toBeLessThan(text.indexOf('14:00 淺草寺'));
     expect(text).toContain('地址：東京都台東區');
-    expect(text).toContain('停留：60 分鐘');
+    expect(text).not.toContain('停留：60 分鐘');
     expect(text).toContain('https://www.google.com/maps/dir/?api=1&destination=35.7148%2C139.7967&travelmode=driving');
   });
 

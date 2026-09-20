@@ -28,7 +28,6 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
   const [selectedPlace, setSelectedPlace] = useState<TripPlace | null>(null);
   const [selectedDay, setSelectedDay] = useState(days[0] ?? 1);
   const [startTime, setStartTime] = useState('10:00');
-  const [duration, setDuration] = useState('60');
   const [customVisible, setCustomVisible] = useState(false);
   const [editingPlace, setEditingPlace] = useState<TripPlace | null>(null);
   const [customTitle, setCustomTitle] = useState('');
@@ -138,7 +137,6 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
       const scheduled = await scheduleTripPlace(selectedPlace.id, {
         dayNumber: selectedDay,
         startTime,
-        durationMinutes: Number(duration) || 60,
         createdBy: userId,
       });
       await onChanged();
@@ -168,7 +166,6 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
       const scheduled = await scheduleTripPlace(created.id, {
         dayNumber: Number(payload.day_number ?? selectedDay),
         startTime: payload.time,
-        durationMinutes: payload.duration_minutes,
         createdBy: userId,
       });
       if (onTimezoneDetected && payload.timezone) await onTimezoneDetected(payload.timezone);
@@ -224,7 +221,6 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
         <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>Day</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>{days.map((value) => <Pressable key={value} onPress={() => setSelectedDay(value)} style={[styles.dayButton, { borderColor: value === selectedDay ? theme.colors.primary : theme.colors.border, backgroundColor: value === selectedDay ? theme.colors.primary : theme.colors.surface }]}><Text style={{ color: value === selectedDay ? '#fff' : theme.colors.text }}>Day {value}</Text></Pressable>)}</ScrollView>
         <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>開始時間</Text><TextInput value={startTime} onChangeText={setStartTime} keyboardType="numbers-and-punctuation" style={[styles.modalInput, { borderColor: theme.colors.border, color: theme.colors.text }]} placeholder="10:00" />
-        <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>停留時間（分鐘）</Text><TextInput value={duration} onChangeText={setDuration} keyboardType="number-pad" style={[styles.modalInput, { borderColor: theme.colors.border, color: theme.colors.text }]} placeholder="60" />
         <View style={styles.modalActions}><Pressable onPress={() => setSelectedPlace(null)} style={[styles.modalButton, { borderColor: theme.colors.border }]}><Text style={{ color: theme.colors.text }}>取消</Text></Pressable><Pressable disabled={busy} onPress={() => void handleSchedule()} style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}><Text style={styles.buttonText}>{busy ? '儲存中' : '確認排入'}</Text></Pressable></View>
       </View></View>
     </Modal>

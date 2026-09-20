@@ -113,7 +113,7 @@ describe('itinerary item form validation', () => {
     expect(source).toContain('await submitItineraryItem(payload, onSave,');
     expect(source).toContain('disabled={!titleValid || saving}');
     expect(source).toContain('setAddress(getFlightDestinationAddress(flight) ?? \'\')');
-    expect(source).toContain('setDuration(flight.durationMinutes === null ? \'\' : String(flight.durationMinutes))');
+    expect(source).not.toContain('setDuration(flight.durationMinutes === null ? \'\' : String(flight.durationMinutes))');
   });
 
   it('submits a complete manually entered form through the save action', async () => {

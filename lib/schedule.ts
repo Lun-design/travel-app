@@ -26,6 +26,13 @@ export type ScheduleContext = {
   /** Enable the user-facing travel safety buffer. Defaults to 10 minutes. */
   includeBuffer?: boolean;
   defaultBufferMinutes?: number;
+  /**
+   * Whether a stop's stored duration should reserve time in the timeline.
+   * Legacy callers keep the historical behaviour by default; the primary
+   * timeline opts out so travellers can move between stops freely without
+   * duration-based overlap warnings.
+   */
+  respectStopDurations?: boolean;
 };
 export type ScheduledItem = {
   item: ScheduleItem;
@@ -61,6 +68,13 @@ function resolveBufferMinutes(context: ScheduleContext): number {
   if (context.includeBuffer !== true) return 0;
   const configured = Number(context.defaultBufferMinutes ?? 10);
   return Number.isFinite(configured) && configured >= 0 ? Math.round(configured) : 10;
+}
+
+function resolveStopDuration(item: ScheduleItem, context: ScheduleContext): number {
+  if (context.respectStopDurations === false) return 0;
+  return Number.isFinite(item.duration_minutes) && (item.duration_minutes ?? 0) > 0
+    ? item.duration_minutes as number
+    : DEFAULT_DURATION_MINUTES;
 }
 
 function parseTime(value: string | null | undefined): number | null {
@@ -158,6 +172,7 @@ function travelMinutes(from: ScheduleItem, to: ScheduleItem, averageSpeedKmh: nu
 /** Return detailed conflicts after comparing departure, travel, and next start. */
 export function detectTimeConflictsDetailed(items: ScheduleItem[], context: ScheduleContext): TimeConflict[] {
   const ordered = sortItineraryItemsByStartTime(items);
+  const respectStopDurations = context.respectStopDurations !== false;
   const speed = context.averageSpeedKmh && context.averageSpeedKmh > 0 ? context.averageSpeedKmh : 35;
   const fallbackStart = parseTime(context.defaultDepartureTime) ?? parseTime(DEFAULT_DEPARTURE_TIME)!;
   let previous: {
@@ -180,7 +195,7 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     const effectiveTravel = travel + buffer;
     const earliestArrival: number = previous ? previous.departureMinutes + effectiveTravel : fallbackStart;
     const arrival: number = explicitStart ?? earliestArrival;
-    const duration = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0 ? current.duration_minutes as number : DEFAULT_DURATION_MINUTES;
+    const duration = resolveStopDuration(current, context);
     // A conflict means that the activity windows overlap.  Travel time is
     // useful when estimating an unset start time, but it must not turn two
     // explicitly adjacent activities (for example 18:00–19:00 followed by
@@ -191,7 +206,7 @@ export function detectTimeConflictsDetailed(items: ScheduleItem[], context: Sche
     // because a route estimate would add a buffer. Other starts are checked
     // against departure plus the estimated travel time.
     const explicitHandoff = previous && buffer === 0 && explicitStart !== null && explicitStart === previous.departureMinutes;
-    const conflict = previous && explicitStart !== null && !explicitHandoff
+    const conflict = respectStopDurations && previous && explicitStart !== null && !explicitHandoff
       ? calculateTimeConflict(previous.startMinutes, previous.durationMinutes, effectiveTravel, explicitStart)
       : null;
     if (shouldLogTimeConflictDebug) {
@@ -244,7 +259,9 @@ export const calculateTimeConflicts = detectTimeConflictsDetailed;
 
 export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext): ScheduledItem[] {
   const ordered = sortItineraryItemsByStartTime(items);
-  const conflictById = new Map(detectTimeConflictsDetailed(ordered, context).map((conflict) => [conflict.id, conflict]));
+  const conflictById = context.respectStopDurations === false
+    ? new Map<string, TimeConflict>()
+    : new Map(detectTimeConflictsDetailed(ordered, context).map((conflict) => [conflict.id, conflict]));
   const speed = context.averageSpeedKmh && context.averageSpeedKmh > 0 ? context.averageSpeedKmh : 35;
   let previous: ScheduledItem | null = null;
 
@@ -258,9 +275,7 @@ export function buildDaySchedule(items: ScheduleItem[], context: ScheduleContext
     const effectiveTravel = travel + buffer;
     const earliestArrival = previous ? previous.departureMinutes + effectiveTravel : fallbackStart;
     const arrivalMinutes = explicitStart ?? earliestArrival;
-    const durationMinutes = Number.isFinite(current.duration_minutes) && (current.duration_minutes ?? 0) > 0
-      ? current.duration_minutes as number
-      : DEFAULT_DURATION_MINUTES;
+    const durationMinutes = resolveStopDuration(current, context);
     const arrivalDate = dateForArrival(context.tripStartDate, context.dayNumber, arrivalMinutes);
     const conflict = conflictById.get(current.id);
     const arrivalTime = formatTime(arrivalMinutes);

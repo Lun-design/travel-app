@@ -47,9 +47,9 @@ export type TimelineRouteSegment = RouteSegment & {
 
 /**
  * Keep the local optimistic timeline in step with parent/realtime updates.
- * Time and duration are part of the revision because they directly affect
- * conflict badges; route fields are included so adjacent segments refresh in
- * the same render as a persisted edit.
+ * Time is part of the revision so route fields refresh in the same render as
+ * a persisted edit. Stored stay duration remains available for legacy export
+ * and import flows, but is not a user-facing timeline constraint.
  */
 export function timelineItemsRevision(items: readonly ItineraryItem[]): string {
   return items.map((item) => JSON.stringify({
@@ -304,24 +304,6 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const theme = getThemeForMode(themeMode, useColorScheme());
   const { width: viewportWidth } = useWindowDimensions();
   const isMobile = viewportWidth < 600;
-  const duration = scheduled?.durationMinutes ?? item.duration_minutes ?? 60;
-  // Treat conflictMinutes as the single source of truth for the warning UI.
-  // Older schedule payloads may still carry overlapWarning=true after the
-  // underlying times have been corrected, so never render from that flag
-  // alone. Normalising here also prevents null/negative values from leaking
-  // into the badge or shift action.
-  const conflictMinutes = Math.max(0, Number(scheduled?.conflictMinutes ?? 0));
-  const hasTimeConflict = conflictMinutes > 0;
-  // Compatibility marker for consumers that still inspect the legacy field:
-  // scheduled.conflictMinutes remains the source value, while the normalised
-  // conflictMinutes below is the only value used for rendering.
-  if (hasTimeConflict && typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
-    console.warn('[UI RENDER CONFLICT]', {
-      itemName: item.location_name,
-      conflictMinutes,
-      itemStartTime: item.time ?? item.start_time ?? null,
-    });
-  }
   const itemVouchers = vouchers?.filter((voucher) => voucher.item_id === item.id) ?? [];
   const navigationUrl = getGoogleMapsNavigationUrl({
     latitude: item.latitude,
@@ -381,14 +363,8 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
       <View style={styles.row}>
         <View style={styles.rail}><View style={[styles.line, { width: 3 }]} /><View style={styles.dot} /></View>
         <View style={[styles.card, { backgroundColor: '#FFFFFF', borderWidth: 0, borderColor: 'transparent', borderTopWidth: 2, borderTopColor: 'rgba(74,62,61,0.15)', padding: 18, borderRadius: 16, marginBottom: 16, shadowColor: '#4A3E3D', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, active && styles.cardActive]}>
-          {(scheduled?.openingWarning || hasTimeConflict) ? <View style={styles.warningStack}>
+          {scheduled?.openingWarning ? <View style={styles.warningStack}>
             {scheduled?.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
-            {hasTimeConflict ? <>
-              <Text style={styles.overlapWarning}>{`⚠️ 時間重疊 ${conflictMinutes} 分鐘`}</Text>
-              {onShiftSubsequent
-                ? <Pressable accessibilityRole="button" style={styles.shiftButton} onPress={() => { void onShiftSubsequent(conflictMinutes); }}><Text style={styles.shiftButtonText}>⚡ 一鍵順延後續行程</Text></Pressable>
-                : null}
-            </> : null}
           </View> : null}
           <Modal visible={lightboxVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxVisible(false)}>
             <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxVisible(false)}>
@@ -427,7 +403,6 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               <View style={cardMenuStyles.triggerRow}><CategoryBadge category={item.category} compact={isMobile} inline /><Pressable accessibilityRole="button" accessibilityLabel="景點更多操作" style={cardMenuStyles.trigger} onPress={() => setMenuVisible(true)}><MoreHorizontalIcon /></Pressable></View>
               <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}><Pressable style={cardMenuStyles.backdrop} onPress={() => setMenuVisible(false)}><View style={cardMenuStyles.menu}><Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onEdit(item); }}><Text style={cardMenuStyles.text}>編輯景點</Text></Pressable>{onMoveUp ? <Pressable style={cardMenuStyles.item} disabled={!canMoveUp} onPress={() => { setMenuVisible(false); onMoveUp(); }}><Text style={[cardMenuStyles.text, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}{onMoveDown ? <Pressable style={cardMenuStyles.item} disabled={!canMoveDown} onPress={() => { setMenuVisible(false); onMoveDown(); }}><Text style={[cardMenuStyles.text, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onDelete(item); }}><Text style={cardMenuStyles.danger}>刪除景點</Text></Pressable>{placeAddress ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void copyCardText(placeAddress, '地址已複製'); }}><Text style={cardMenuStyles.text}>複製地址</Text></Pressable> : null}{navigationUrl ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={cardMenuStyles.text}>開啟導航</Text></Pressable> : null}{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onPreviewVoucher(itemVouchers[0]); }}><Text style={cardMenuStyles.text}>🎫 檢視票券</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setFavorite((current) => !current); setMenuVisible(false); }}><Text style={cardMenuStyles.text}>{favorite ? '取消收藏' : '加入收藏'}</Text></Pressable></View></Pressable></Modal>
               {reservationTagLabels(item.reservation_tags).length > 0 ? <View style={reservationTagStyles.reservationTags}>{reservationTagLabels(item.reservation_tags).map((label) => <Text key={label} style={[reservationTagStyles.reservationTag, { color: theme.colors.primary, borderColor: theme.colors.border }]}>{label}</Text>)}</View> : null}
-              <Text style={[styles.duration, { color: theme.colors.muted }]}>停留 {duration} 分鐘 · 離開 {scheduled?.departureTime ?? '—'}</Text>
               {placeAddress ? <Text style={[styles.address, { color: '#8E8E93', fontSize: 13 }]}>{placeAddress}</Text> : null}
               {item.notes ? <Text style={[styles.notes, { color: '#8E8E93', fontSize: 13 }]}>{item.notes}</Text> : null}
               <Pressable accessibilityRole="link" style={styles.navigationButton} onPress={() => { void Linking.openURL(navigationUrl).catch(() => undefined); }}><PuppyMascot puppy={navigationPuppyId(item.category)} size={20} style={styles.navigationPuppy} accessibilityLabel="導航小狗" /><Text numberOfLines={1} style={styles.navigation}>🧭 開啟 Google Maps 導航</Text></Pressable>

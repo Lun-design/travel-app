@@ -128,7 +128,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
 
       {focusItem && focus.scheduled ? <>
         <Text numberOfLines={2} style={[styles.name, { color: theme.colors.text }]}>{focusItem.location_name}</Text>
-        <Text style={[styles.timeCapsule, { color: theme.colors.primary }]}>⏱️ {focus.scheduled.arrivalTime} 抵達 · {focus.scheduled.departureTime} 離開 · {formatMinutes(focus.mode === 'active' ? focus.minutesRemaining : focus.minutesUntil)}</Text>
+        <Text style={[styles.timeCapsule, { color: theme.colors.primary }]}>⏱️ {focus.scheduled.arrivalTime} 抵達 · {formatMinutes(focus.mode === 'active' ? focus.minutesRemaining : focus.minutesUntil)}</Text>
         {weather ? <View style={styles.weatherRow}><Text style={[styles.weather, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={[styles.rain, { color: weather.precipitationWarning ? theme.colors.warningText : theme.colors.primary }]}>☔ {Math.round(weather.precipitationProbability)}%{isWeatherAlert(weather) ? ' 預警' : ''}</Text> : null}</View> : <Text style={[styles.muted, { color: theme.colors.muted }]}>正在載入天氣…</Text>}
         <View style={styles.metaRow}>{distanceKm !== null ? <Text style={[styles.meta, { color: theme.colors.muted }]}>距離上一站約 {formatDistance(distanceKm)}</Text> : null}{focusItem.address ? <Text numberOfLines={1} style={[styles.meta, styles.address, { color: theme.colors.muted }]}>{focusItem.address}</Text> : null}</View>
         {weather?.currentTemperatureC != null ? <Text style={[styles.muted, { color: theme.colors.text }]}>目前氣溫 {Math.round(weather.currentTemperatureC)}°C</Text> : null}

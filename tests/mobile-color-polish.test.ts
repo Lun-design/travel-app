@@ -41,8 +41,8 @@ describe('mobile visual color polish', () => {
     expect(panel).toContain("backgroundColor: '#F1F5F9'");
     expect(metrics).toContain('iconColor');
     expect(metrics).toContain('#DC4A3D');
-    expect(metrics).toContain('#2563EB');
     expect(metrics).toContain('#16A34A');
+    expect(metrics).not.toContain('停留 ${formatMetricDuration');
   });
 
   it('keeps category badges and compact mobile spacing in the timeline card', () => {

@@ -20,7 +20,6 @@ export function buildDayItineraryText(trip: DayItineraryTrip, items: DayItinerar
   dayItems.forEach((item, index) => {
     lines.push(`${index + 1}. ${formatTime(item)} ${item.location_name.trim() || '未命名景點'}`);
     if (item.address?.trim()) lines.push(`   地址：${item.address.trim()}`);
-    if (Number.isFinite(item.duration_minutes) && (item.duration_minutes ?? 0) > 0) lines.push(`   停留：${Math.round(item.duration_minutes as number)} 分鐘`);
     const navigationUrl = getGoogleMapsDirectionsUrl(item.latitude, item.longitude);
     if (navigationUrl) lines.push(`   導航：${navigationUrl}`);
   });

@@ -41,7 +41,7 @@ function optimisticItineraryItem(payload: ItineraryItemSaveInput, existing: Itin
     notes: payload.notes ?? existing?.notes ?? null,
     category: String(payload.category ?? existing?.category ?? 'spot'),
     created_by: String(payload.created_by ?? existing?.created_by ?? ''),
-    duration_minutes: payload.duration_minutes ?? existing?.duration_minutes ?? null,
+    duration_minutes: 'duration_minutes' in payload ? payload.duration_minutes ?? null : existing?.duration_minutes ?? null,
     estimated_cost: payload.estimated_cost ?? existing?.estimated_cost ?? null,
     difficulty: payload.difficulty ?? existing?.difficulty ?? null,
     opening_hours: payload.opening_hours ?? existing?.opening_hours ?? null,

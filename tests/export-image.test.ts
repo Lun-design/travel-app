@@ -32,7 +32,8 @@ describe('itinerary image/PDF export helpers', () => {
   it('builds a shareable text representation with navigation links', () => {
     const text = buildItineraryExportText(sample);
     expect(text).toContain('Day 1 · 2026-10-01');
-    expect(text).toContain('09:00 淺草寺 · 停留 60 分鐘');
+    expect(text).toContain('09:00 淺草寺');
+    expect(text).not.toContain('停留 60 分鐘');
     expect(text).toContain('地址：東京都台東區淺草 2-3-1');
     expect(text).toContain('https://www.google.com/maps/dir/?api=1&destination=35.7148%2C139.7967&travelmode=driving');
   });

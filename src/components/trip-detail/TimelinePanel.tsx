@@ -72,6 +72,10 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     timezone: trip.timezone,
     includeBuffer: true,
     defaultBufferMinutes: 10,
+    // Keep start times flexible: stored stay duration is retained for legacy
+    // data/export, but it must not reserve time or create overlap warnings in
+    // the primary timeline experience.
+    respectStopDurations: false,
   }), [day, trip.default_departure_time, trip.start_date, trip.timezone]);
   const metrics = useMemo(() => calculateTimelineMetrics(visibleItems), [visibleItems]);
   const totalEstimatedCost = useMemo(() => calculateTimelineMetrics(items).estimatedCost, [items]);

@@ -47,7 +47,6 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   const [address, setAddress] = useState('');
   const [time, setTime] = useState('');
   const [category, setCategory] = useState('spot');
-  const [duration, setDuration] = useState('');
   const [estimatedCost, setEstimatedCost] = useState('');
   const [openingHours, setOpeningHours] = useState<OpeningHours | null>(null);
   const [autoHoursStatus, setAutoHoursStatus] = useState<AutoHoursStatus>('idle');
@@ -81,7 +80,6 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setAddress(item?.address ?? '');
     setTime(formatTimeHHmm(item?.time) ?? item?.time ?? '');
     setCategory(item?.category ?? 'spot');
-    setDuration(item?.duration_minutes ? String(item.duration_minutes) : '');
     setEstimatedCost(item?.estimated_cost != null ? String(item.estimated_cost) : '');
     setOpeningHours(item?.opening_hours ?? null);
     setAutoHoursStatus(item?.opening_hours ? 'found' : 'idle');
@@ -218,7 +216,10 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       address: address.trim() || null,
       time: formatTimeHHmm(time) ?? (time.trim() || null),
       category,
-      duration_minutes: duration ? Number(duration) : null,
+      // Stay duration is intentionally no longer user-editable. Clearing the
+      // legacy column keeps existing rows from reappearing as constraints in
+      // other clients while preserving the column for old imports/exports.
+      duration_minutes: null,
       estimated_cost: estimatedCost.trim() ? Number(estimatedCost.replace(/,/g, '')) : null,
       opening_hours: openingHours,
       difficulty: category === 'trail' ? difficulty || null : null,
@@ -284,7 +285,6 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       setName(formatFlightTitle(flight));
       setTime(formatTimeHHmm(flight.departureTime) ?? '');
       setAddress(getFlightDestinationAddress(flight) ?? '');
-      setDuration(flight.durationMinutes === null ? '' : String(flight.durationMinutes));
       if (flight.confirmationCode) setNotes(`確認碼：${flight.confirmationCode}`);
       const dateLabel = flight.departureDate ? `（${flight.departureDate}）` : '';
       const dateWarning = dateResult.status === 'outside' ? '；日期不在目前行程範圍，請確認 Day' : dateResult.status === 'unavailable' ? '；請確認此日期對應的 Day' : '';
@@ -376,13 +376,11 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       <TextInput style={styles.input} placeholder="09:30" value={time} onChangeText={setTime} />
       {parsedDate ? <Text style={styles.parsedDateHint}>解析日期：{parsedDate}（儲存時將使用 Day {selectedDay}）</Text> : null}
 
-      <Pressable style={styles.moreButton} onPress={() => setShowMore((current) => !current)}><Text style={styles.moreText}>{showMore ? '收合進階設定' : '展開進階設定（類別、停留、營業時間）'}</Text></Pressable>
+      <Pressable style={styles.moreButton} onPress={() => setShowMore((current) => !current)}><Text style={styles.moreText}>{showMore ? '收合進階設定' : '展開進階設定（類別、營業時間）'}</Text></Pressable>
       {showMore ? <View style={styles.morePanel}>
         <Text style={styles.label}>景點類型</Text>
         <View style={styles.chips}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.chip, category === value && styles.selected]}><Text style={category === value ? styles.white : styles.chipText}>{value}</Text></Pressable>)}</View>
         {category === 'trail' ? <><Text style={styles.label}>步道難度</Text><View style={styles.chips}>{['easy', 'moderate', 'hard'].map((value) => <Pressable key={value} onPress={() => setDifficulty(value)} style={[styles.chip, difficulty === value && styles.selected]}><Text style={difficulty === value ? styles.white : styles.chipText}>{value}</Text></Pressable>)}</View></> : null}
-        <Text style={styles.label}>預估停留時間（分鐘）</Text>
-        <TextInput style={styles.input} placeholder="60" keyboardType="number-pad" value={duration} onChangeText={setDuration} />
         <Text style={styles.label}>預估費用（TWD）</Text>
         <TextInput style={styles.input} placeholder="例如 300" keyboardType="decimal-pad" value={estimatedCost} onChangeText={setEstimatedCost} />
         <View style={styles.hoursHeading}><Text style={styles.label}>每週營業時間</Text>{autoHoursStatus === 'loading' ? <Text style={styles.hoursLoading}>正在查詢 OSM 營業時間…</Text> : null}{autoHoursStatus === 'missing' ? <Text style={styles.hoursHint}>ℹ️ 該景點未登錄營業時間，可手動設定</Text> : null}</View>

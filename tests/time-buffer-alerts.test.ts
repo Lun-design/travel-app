@@ -141,13 +141,12 @@ describe('smart time buffers and alerts', () => {
     expect(after[1]).toMatchObject({ arrivalTime: '14:12', conflictMinutes: 0, overlapWarning: false });
   });
 
-  it('renders conflict warnings only for positive overlap minutes and logs the rendered values', () => {
+  it('does not render stay-duration conflict warnings in the flexible timeline', () => {
     const shared = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.shared.tsx'), 'utf8');
 
-    expect(shared).toContain("console.warn('[UI RENDER CONFLICT]'");
-    expect(shared).toContain("process.env.NODE_ENV !== 'production'");
-    expect(shared).toContain('const hasTimeConflict = conflictMinutes > 0;');
-    expect(shared).toContain('{hasTimeConflict ? <>');
+    expect(shared).not.toContain("console.warn('[UI RENDER CONFLICT]'");
+    expect(shared).not.toContain('⚠️ 時間重疊');
+    expect(shared).not.toContain('一鍵順延後續行程');
   });
 
   it('does not report a conflict when the next stop starts at the estimated arrival', () => {
@@ -241,11 +240,11 @@ describe('smart time buffers and alerts', () => {
     expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 
-  it('exposes a minute-specific warning and optimistic shift action in the timeline', () => {
+  it('keeps the legacy batch shift API available without rendering a stay warning', () => {
     const shared = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.shared.tsx'), 'utf8');
     const web = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.web.tsx'), 'utf8');
-    expect(shared).toContain('scheduled.conflictMinutes');
-    expect(shared).toContain('一鍵順延後續行程');
+    expect(shared).not.toContain('scheduled.conflictMinutes');
+    expect(shared).not.toContain('一鍵順延後續行程');
     expect(web).toContain('setLocalItems(shifted);');
     expect(web).toContain('onShiftSubsequent?.(changes)');
   });

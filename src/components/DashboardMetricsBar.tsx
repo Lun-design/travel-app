@@ -9,7 +9,6 @@ export function DashboardMetricsBar({ metrics, totalEstimatedCost, themeMode = '
   const compact = width < 480;
   return <View accessibilityLabel="當天行程摘要" style={[styles.container, compact && styles.containerCompact]}>
     <Metric icon="📍" iconColor="#DC4A3D" label={`${metrics.spotCount} 個景點`} theme={theme} />
-    <Metric icon="⏱️" iconColor="#2563EB" label={`停留 ${formatMetricDuration(metrics.stayMinutes)}`} theme={theme} />
     {metrics.transportMinutes > 0 ? <Metric icon="🚗" iconColor="#16A34A" label={`交通 ${formatMetricDuration(metrics.transportMinutes)}`} theme={theme} /> : null}
     {metrics.estimatedCost > 0 || (totalEstimatedCost ?? 0) > 0 ? <Metric icon="💰" iconColor="#B45309" label={totalEstimatedCost != null && totalEstimatedCost !== metrics.estimatedCost ? `預估本日 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })} · 全程 NT$ ${totalEstimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}` : `預估 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`} theme={theme} /> : null}
     {action ? <View style={[styles.action, compact && styles.actionCompact]}>{action}</View> : null}
