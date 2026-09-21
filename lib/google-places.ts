@@ -388,12 +388,16 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload, apiKey?: string):
 
 export async function searchGooglePlacesTextPage(query: string, apiKey?: string, pageToken?: string): Promise<GooglePlaceSearchPage> {
   const key = getGoogleApiKey(apiKey);
-  const normalizedQuery = sanitizePlaceSearchQuery(query);
+  const normalizedQuery = sanitizePlaceSearchQuery(query)
+    .replace(/[\u0000-\u001F\u007F]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
   const normalizedPageToken = typeof pageToken === 'string' ? pageToken.trim() : '';
   if (!key || !normalizedQuery) return { results: [], nextPageToken: null };
-  const requestBody: { textQuery: string; languageCode: string; pageToken?: string } = {
+  const requestBody: { textQuery: string; languageCode: string; pageSize: number; pageToken?: string } = {
     textQuery: normalizedQuery,
     languageCode: 'zh-TW',
+    pageSize: 20,
   };
   if (normalizedPageToken) requestBody.pageToken = normalizedPageToken;
   const response = await fetch(GOOGLE_TEXT_SEARCH_ENDPOINT, {

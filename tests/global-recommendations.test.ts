@@ -214,6 +214,7 @@ describe('global recommendation helpers', () => {
     const page = await searchDynamicRecommendationsPage('大阪', 'food', { provider, subcategory: 'noodles' });
     expect(calls).toHaveLength(2);
     expect(page.results.length).toBeGreaterThanOrEqual(3);
+    console.log('fallback labels', page.results.map((place) => place.title));
     expect(page.results.map((place) => place.id)).toEqual(expect.arrayContaining(['one', 'two', 'three', 'four']));
   });
 
@@ -236,7 +237,20 @@ describe('global recommendation helpers', () => {
       provider: failingProvider,
     });
 
-    expect(page.results.length).toBeGreaterThan(0);
+    expect(page.results.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('uses human-readable local seed names instead of numbered template labels', async () => {
+    const page = await searchDynamicRecommendationsPage('日本JP', 'food', {
+      provider: async () => { throw new Error('offline'); },
+      subcategory: 'noodles',
+    });
+
+    expect(page.results.length).toBeGreaterThanOrEqual(3);
+    expect(page.results.every((place) => !/拉麵\d+|推薦\d+/.test(place.title))).toBe(true);
+    expect(page.results.map((place) => place.title)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/拉麵|麵食|麵屋|食堂/),
+    ]));
   });
 
   it('preserves API and curated image URLs for recommendation cards', () => {
@@ -256,6 +270,7 @@ describe('global recommendation helpers', () => {
     expect(panelSource).toContain('onError');
     expect(panelSource).toContain('recommendationSkeleton');
     expect(panelSource).toContain('buildExpandedRecommendationQuery');
+    expect(panelSource).toContain('recommendationRequestId');
   });
 
   it('paginates recommendation cards with stable page boundaries', () => {

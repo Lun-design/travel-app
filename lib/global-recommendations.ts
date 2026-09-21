@@ -386,10 +386,22 @@ const LOCAL_FALLBACK_COORDINATES: Array<{ terms: string[]; latitude: number; lon
 ];
 
 const LOCAL_FALLBACK_THEME_LABELS: Record<RecommendationThemeId, string[]> = {
-  'must-see': ['熱門地標', '歷史街區', '城市公園', '觀景台'],
-  food: ['在地餐廳', '市場美食', '拉麵店', '咖啡甜點'],
-  indoor: ['博物館', '水族館', '購物中心', '室內展覽'],
-  'free-time': ['特色街區', '河岸散步', '咖啡休息', '商圈漫遊'],
+  'must-see': ['熱門地標', '歷史街區', '城市公園', '觀景台', '文化展館', '老街散策', '城市天際線', '經典建築'],
+  food: ['在地餐廳', '市場美食', '人氣拉麵店', '咖啡甜點', '家庭料理餐廳', '夜間美食街', '特色小吃店', '高評價餐館'],
+  indoor: ['博物館', '水族館', '購物中心', '室內展覽', '美術館', '室內遊樂場', '手作體驗館', '文化中心'],
+  'free-time': ['特色街區', '河岸散步', '咖啡休息', '商圈漫遊', '城市書店', '在地市集', '夕陽景點', '休閒公園'],
+};
+
+const LOCAL_FALLBACK_SUBCATEGORY_LABELS: Partial<Record<RecommendationSubcategoryId, string[]>> = {
+  bbq: ['炭火燒肉名店', '在地和牛燒肉', '人氣烤肉餐廳', '家庭式燒肉店', '高評價燒肉食堂'],
+  hotpot: ['在地火鍋名店', '涮涮鍋餐廳', '壽喜燒專門店', '人氣鍋物食堂', '季節鍋料理'],
+  noodles: ['人氣拉麵店', '麵屋名店', '在地麵食堂', '豚骨拉麵專門店', '烏龍麵老店'],
+  izakaya: ['人氣居酒屋', '在地酒場', '串燒居酒屋', '深夜小酒館', '日式下酒菜店'],
+  dessert: ['日式甜點店', '咖啡甜點名店', '抹茶茶屋', '手作蛋糕店', '人氣咖啡館'],
+  landmark: ['城市地標', '人氣展覽館', '經典觀景台', '歷史建築', '必訪文化景點'],
+  shrine: ['知名神社', '古蹟寺院', '在地歷史景點', '傳統建築', '人氣參拜景點'],
+  nature: ['城市公園', '自然步道', '河岸景觀', '綠意庭園', '戶外休閒景點'],
+  shopping: ['熱門購物商圈', '百貨商場', '在地市場', '特色商店街', '人氣購物中心'],
 };
 
 /** Stable seed cards used when Places/Nominatim is unavailable or returns no data. */
@@ -402,10 +414,8 @@ export function getLocalRecommendationFallback(
   const coordinate = LOCAL_FALLBACK_COORDINATES.find((item) =>
     item.terms.some((term) => normalizedDestination.toLocaleLowerCase().includes(term.toLocaleLowerCase())),
   ) ?? { latitude: 35.6762, longitude: 139.6503 };
-  const subcategoryTerm = RECOMMENDATION_EXPANSION_TERMS[subcategory];
-  const labels = subcategoryTerm
-    ? Array.from({ length: 8 }, (_, index) => `${subcategoryTerm}${index + 1} 推薦`)
-    : LOCAL_FALLBACK_THEME_LABELS[theme];
+  const labels = LOCAL_FALLBACK_SUBCATEGORY_LABELS[subcategory]
+    ?? LOCAL_FALLBACK_THEME_LABELS[theme];
   const generated = labels.map((label, index) => normalizeGlobalPlace({
     id: `local-${theme}-${subcategory}-${index + 1}`,
     title: `${normalizedDestination} ${label}`,

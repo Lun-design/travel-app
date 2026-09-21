@@ -221,7 +221,7 @@ describe('Google Places search fallback', () => {
     await searchGooglePlacesTextPage('大阪 美食', 'test-key', '   ');
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(body).toEqual({ textQuery: '大阪 美食', languageCode: 'zh-TW' });
+    expect(body).toEqual({ textQuery: '大阪 美食', languageCode: 'zh-TW', pageSize: 20 });
     expect(body).not.toHaveProperty('pageToken');
   });
 

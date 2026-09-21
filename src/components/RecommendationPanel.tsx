@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import {
   buildExpandedRecommendationQuery,
   DEFAULT_RECOMMENDATION_PAGE_SIZE,
   getCuratedRecommendations,
+  getLocalRecommendationFallback,
   getRecommendationSubcategories,
   filterGlobalRecommendationsBySubcategory,
   mergeRecommendationResults,
@@ -72,6 +73,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [bucketAddingId, setBucketAddingId] = useState<string | null>(null);
   const [failedImageIds, setFailedImageIds] = useState<string[]>([]);
   const [searched, setSearched] = useState(false);
+  const recommendationRequestId = useRef(0);
 
   function recommendationImageUrl(place: GlobalPlaceSearchResult): string {
     return place.imageUrl
@@ -118,8 +120,10 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     themeValue: RecommendationThemeId,
     subcategoryValue: RecommendationSubcategoryId,
   ) => {
+    const requestId = ++recommendationRequestId.current;
     const normalized = destinationValue.trim();
     if (normalized.length < 2) {
+      if (requestId !== recommendationRequestId.current) return;
       setRecommendations([]);
       setRecommendationSearched(false);
       setNextPageToken(null);
@@ -130,19 +134,28 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setRecommendationSearched(true);
     setRecommendationError('');
     setRecommendationExpansionIndex(0);
+    // Invalidate the previous query before starting a new destination/theme
+    // request; an old token is tied to the old Text Search body and can yield
+    // a Google 400 if reused.
+    setNextPageToken(null);
+    setRecommendations([]);
+    setRecommendationTotalItems(null);
+    setPage(1);
     try {
       const firstPage = await searchDynamicRecommendationsPage(normalized, themeValue, { subcategory: subcategoryValue });
+      if (requestId !== recommendationRequestId.current) return;
       const curated = filterGlobalRecommendationsBySubcategory(getCuratedRecommendations(normalized), themeValue, subcategoryValue);
       setRecommendations(mergeRecommendationResults(curated, firstPage.results));
       setNextPageToken(firstPage.nextPageToken);
       setRecommendationTotalItems(firstPage.totalItems);
     } catch (error) {
-      setRecommendations(filterGlobalRecommendationsBySubcategory(getCuratedRecommendations(normalized), themeValue, subcategoryValue));
+      if (requestId !== recommendationRequestId.current) return;
+      setRecommendations(getLocalRecommendationFallback(normalized, themeValue, subcategoryValue));
       setNextPageToken(null);
       setRecommendationTotalItems(null);
       setRecommendationError(error instanceof Error ? error.message : '暫時無法取得即時推薦');
     } finally {
-      setRecommendationLoading(false);
+      if (requestId === recommendationRequestId.current) setRecommendationLoading(false);
     }
   }, []);
 
@@ -463,7 +476,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="下一頁推薦"
-                    disabled={!canLoadNextPage || recommendationLoadingMore}
+                    disabled={!canLoadNextPage || recommendationLoading || recommendationLoadingMore}
                     onPress={() => void handleNextPage()}
                     style={[styles.paginationButton, { borderColor: theme.colors.border, opacity: canLoadNextPage ? 1 : 0.45 }]}
                   >
