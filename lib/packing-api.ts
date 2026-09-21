@@ -7,6 +7,37 @@ import { offlineStore } from './offline-store';
 export type PackingItem = { id: string; trip_id: string; category: string; name: string; item_name?: string; is_checked: boolean; is_packed?: boolean; assigned_to: string | null; assigned_to_all?: boolean; created_at: string; updated_at?: string | null; updated_by?: string | null };
 export type PackingMutationOptions = OfflineApiOptions & { existingItems?: PackingItem[] };
 
+/** Exact columns supported by the current packing_items schema. */
+export type PackingWriteInput = {
+  trip_id: string;
+  category: string;
+  name: string;
+  is_checked?: boolean;
+  assigned_to?: string | null;
+  assigned_to_all?: boolean;
+};
+
+export function buildPackingWritePayload(item: PackingWriteInput & { item_name?: string; is_packed?: boolean }): PackingWriteInput {
+  return {
+    trip_id: item.trip_id,
+    category: item.category,
+    name: item.name.trim(),
+    is_checked: item.is_checked ?? item.is_packed ?? false,
+    assigned_to: item.assigned_to ?? null,
+    assigned_to_all: Boolean(item.assigned_to_all),
+  };
+}
+
+export function buildPackingUpdatePayload(patch: Partial<Pick<PackingItem, 'name' | 'item_name' | 'category' | 'is_checked' | 'is_packed' | 'assigned_to' | 'assigned_to_all'>>): Partial<PackingWriteInput> {
+  const payload: Partial<PackingWriteInput> = {};
+  if (patch.name !== undefined || patch.item_name !== undefined) payload.name = (patch.item_name ?? patch.name ?? '').trim();
+  if (patch.is_checked !== undefined || patch.is_packed !== undefined) payload.is_checked = patch.is_checked ?? patch.is_packed ?? false;
+  if (patch.category !== undefined) payload.category = patch.category;
+  if (patch.assigned_to !== undefined) payload.assigned_to = patch.assigned_to;
+  if (patch.assigned_to_all !== undefined) payload.assigned_to_all = Boolean(patch.assigned_to_all);
+  return payload;
+}
+
 export function normalizePackingItem(row: any): PackingItem {
   return {
     ...row,
@@ -51,7 +82,7 @@ export async function createPackingItem(item: Pick<PackingItem, 'trip_id' | 'cat
   if (existing) return existing;
   const normalizedItem = { ...item, name: item.name.trim() };
   try {
-    const { data, error } = await supabase.from('packing_items').insert({ trip_id: normalizedItem.trip_id, category: normalizedItem.category, name: normalizedItem.name, item_name: normalizedItem.name, is_checked: false, is_packed: false, assigned_to: normalizedItem.assigned_to ?? null, assigned_to_all: normalizedItem.assigned_to_all ?? false }).select().single();
+    const { data, error } = await supabase.from('packing_items').insert(buildPackingWritePayload(normalizedItem)).select().single();
     if (error) throw error;
     const saved = normalizePackingItem(data);
     if (store) await updateOfflineCollection<PackingItem>(store, scope, 'packingItems', (items) => [...items, saved]);
@@ -72,12 +103,7 @@ export async function createPackingItem(item: Pick<PackingItem, 'trip_id' | 'cat
 export async function updatePackingItem(id: string, patch: Partial<Pick<PackingItem, 'name' | 'item_name' | 'category' | 'is_checked' | 'is_packed' | 'assigned_to' | 'assigned_to_all'>>, options: OfflineApiOptions = {}): Promise<void> {
   const store = options.store ?? offlineStore;
   const scope = await resolveOfflineScope(options.offlineScope?.tripId ?? '', options.offlineScope);
-  const payload: Record<string, unknown> = {};
-  if (patch.name !== undefined || patch.item_name !== undefined) { const name = patch.item_name ?? patch.name; payload.name = name; payload.item_name = name; }
-  if (patch.is_checked !== undefined || patch.is_packed !== undefined) { const packed = patch.is_packed ?? patch.is_checked; payload.is_checked = packed; payload.is_packed = packed; }
-  if (patch.category !== undefined) payload.category = patch.category;
-  if (patch.assigned_to !== undefined) payload.assigned_to = patch.assigned_to;
-  if (patch.assigned_to_all !== undefined) payload.assigned_to_all = patch.assigned_to_all;
+  const payload = buildPackingUpdatePayload(patch);
   try {
     const { error } = await supabase.from('packing_items').update(payload).eq('id', id);
     if (error) throw error;
@@ -119,7 +145,7 @@ export async function importPackingTemplate(tripId: string, template: PackingTem
   const sourceItems = dedupePackingItems(templateItems(template), await knownPackingItems(store, scope, options));
   if (!sourceItems.length) return;
   try {
-    const { error } = await supabase.from('packing_items').insert(sourceItems.map((item) => ({ ...item, item_name: item.name, is_packed: item.is_checked, trip_id: tripId })));
+    const { error } = await supabase.from('packing_items').insert(sourceItems.map((item) => buildPackingWritePayload({ ...item, trip_id: tripId })));
     if (error) throw error;
     if (store) await updateOfflineCollection<PackingItem>(store, scope, 'packingItems', (items) => [...items, ...sourceItems.map((item) => normalizePackingItem({ ...item, id: createLocalId('offline-template'), trip_id: tripId, created_at: new Date().toISOString() }))]);
   } catch (error) {

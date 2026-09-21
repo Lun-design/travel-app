@@ -9,6 +9,8 @@ export type GeocodingResult = {
   longitude: number;
   openingHours?: OpeningHours | null;
   provider?: 'osm' | 'google';
+  /** ISO 3166-1 alpha-2 country code when the provider exposes it. */
+  countryCode?: string;
   googlePlaceId?: string;
   /** Google Places legacy reference or Places API (New) resource name. */
   photoReference?: string;

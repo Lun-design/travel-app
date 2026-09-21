@@ -97,6 +97,9 @@ describe('vouchers panel UI contract', () => {
     expect(source).toContain('updateVoucher');
     expect(source).toContain('setBindingItemId');
     expect(source).toContain('VoucherMetadataModal');
+    expect(source).toContain('visible={bindingVoucher !== null}');
+    expect(source).toContain('bindingItems.map');
+    expect(source).toContain('resizeMode="cover"');
     expect(source).toContain('updateItineraryItemReservationTags');
     expect(source).toContain("'ticketed'");
     expect(upload).toContain('reservationNumber');

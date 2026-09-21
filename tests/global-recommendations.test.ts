@@ -10,6 +10,7 @@ import {
   paginateRecommendations,
   buildRecommendationQuery,
   getCuratedRecommendations,
+  filterGlobalRecommendationsByDestination,
   searchDynamicRecommendations,
   searchGlobalPlaces,
   type GlobalPlaceSearchResult,
@@ -113,6 +114,31 @@ describe('global recommendation helpers', () => {
     const curated = getCuratedRecommendations('日本 JP');
     expect(curated.map((place) => place.title)).toEqual(expect.arrayContaining(['道頓堀', '黑門市場', '大阪城公園', '大阪燒美津の']));
     expect(curated.every((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude))).toBe(true);
+  });
+
+  it('filters recommendation results to the requested country and city', () => {
+    const japan = normalizeGlobalPlace({ id: 'osaka', title: 'Osaka Castle', displayName: 'Osaka, Japan', latitude: 34.6873, longitude: 135.5262, provider: 'google' });
+    const taiwan = normalizeGlobalPlace({ id: 'taipei', title: 'Japanese Cafe', displayName: 'Linsen Road, Taipei, Taiwan', latitude: 25.0478, longitude: 121.517, provider: 'google' });
+
+    expect(filterGlobalRecommendationsByDestination([japan, taiwan], '日本 JP')).toEqual([japan]);
+    expect(filterGlobalRecommendationsByDestination([japan, taiwan], '大阪')).toEqual([japan]);
+  });
+
+  it('honours provider country codes before coordinate fallback', () => {
+    const japanesePlace = normalizeGlobalPlace({ id: 'jp-1', title: 'Landmark', displayName: 'Landmark', countryCode: 'JP', latitude: 0, longitude: 0, provider: 'google' });
+    const taiwanesePlace = normalizeGlobalPlace({ id: 'tw-1', title: 'Japanese Cafe', displayName: 'Japanese Cafe', countryCode: 'TW', latitude: 35.6, longitude: 139.7, provider: 'google' });
+
+    expect(filterGlobalRecommendationsByDestination([japanesePlace, taiwanesePlace], '日本 JP')).toEqual([japanesePlace]);
+  });
+
+  it('filters injected Places results before returning destination recommendations', async () => {
+    const provider = async (): Promise<GeocodingResult[]> => [
+      { id: 'osaka', title: 'Osaka Castle', displayName: 'Osaka, Japan', latitude: 34.6873, longitude: 135.5262, provider: 'google' },
+      { id: 'taipei', title: 'Japanese Cafe', displayName: 'Linsen Road, Taipei, Taiwan', latitude: 25.0478, longitude: 121.517, provider: 'google' },
+    ];
+    await expect(searchDynamicRecommendations('日本 JP', 'food', provider)).resolves.toEqual([
+      expect.objectContaining({ id: 'osaka' }),
+    ]);
   });
 
   it('exposes all four theme tabs for zero-input recommendations', () => {

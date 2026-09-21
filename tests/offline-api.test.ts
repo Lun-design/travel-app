@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryOfflineStore } from '../lib/offline-store';
 import { buildItineraryWritePayload, listItineraryItems, saveItineraryItem } from '../lib/itinerary-api';
-import { createPackingItem } from '../lib/packing-api';
+import { buildPackingWritePayload, createPackingItem, importPackingTemplate } from '../lib/packing-api';
 import { saveExpense } from '../lib/expenses-api';
 
 const supabaseMock = vi.hoisted(() => ({ from: vi.fn(), auth: { getSession: vi.fn() } }));
@@ -93,6 +93,55 @@ describe('offline-aware itinerary API', () => {
 
     expect(item).toEqual(existing);
     expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
+  it('builds packing writes with only columns supported by packing_items', () => {
+    expect(buildPackingWritePayload({
+      trip_id: 'trip-1',
+      category: '證件',
+      name: '護照',
+      is_checked: true,
+      assigned_to: 'user-1',
+      assigned_to_all: true,
+      item_name: 'legacy name',
+      is_packed: true,
+    })).toEqual({
+      trip_id: 'trip-1',
+      category: '證件',
+      name: '護照',
+      is_checked: true,
+      assigned_to: 'user-1',
+      assigned_to_all: true,
+    });
+  });
+
+  it('uses the schema-safe payload for a real packing insert', async () => {
+    const single = vi.fn().mockResolvedValue({ data: { id: 'packing-2', trip_id: 'trip-1', category: '證件', name: '護照', is_checked: false, assigned_to: null, assigned_to_all: true, created_at: 'now' }, error: null });
+    const insert = vi.fn().mockReturnValue({ select: () => ({ single }) });
+    supabaseMock.from.mockReturnValue({ insert });
+
+    await createPackingItem({ trip_id: 'trip-1', category: '證件', name: '護照', assigned_to_all: true }, { existingItems: [], offlineScope: scope, store: createMemoryOfflineStore() });
+
+    expect(insert).toHaveBeenCalledWith({
+      trip_id: 'trip-1',
+      category: '證件',
+      name: '護照',
+      is_checked: false,
+      assigned_to: null,
+      assigned_to_all: true,
+    });
+  });
+
+  it('imports a template without legacy item_name or is_packed columns', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    supabaseMock.from.mockReturnValue({ insert });
+
+    await importPackingTemplate('trip-1', '日韓都市', { existingItems: [], offlineScope: scope, store: createMemoryOfflineStore() });
+
+    const rows = insert.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(rows.length).toBeGreaterThan(0);
+    expect(Object.keys(rows[0]).sort()).toEqual(['assigned_to', 'assigned_to_all', 'category', 'is_checked', 'name', 'trip_id']);
+    expect(rows.some((row) => row.assigned_to_all === true)).toBe(true);
   });
 
   it('queues a valid expense create without treating UUID validation as offline', async () => {

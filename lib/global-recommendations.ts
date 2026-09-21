@@ -11,6 +11,7 @@ export type GlobalPlaceSearchResult = {
   address: string;
   city: string | null;
   country: string | null;
+  countryCode?: string | null;
   latitude: number;
   longitude: number;
   timezone: string;
@@ -144,6 +145,7 @@ export function normalizeGlobalPlace(place: GeocodingResult): GlobalPlaceSearchR
     address,
     city: location.city,
     country: location.country,
+    countryCode: place.countryCode?.trim().toUpperCase() || null,
     latitude: place.latitude,
     longitude: place.longitude,
     timezone: inferTimezoneFromDestination(address),
@@ -152,6 +154,51 @@ export function normalizeGlobalPlace(place: GeocodingResult): GlobalPlaceSearchR
     provider: place.provider,
     source: place,
   };
+}
+
+function containsAny(value: string, terms: string[]): boolean {
+  const normalized = value.toLocaleLowerCase();
+  return terms.some((term) => normalized.includes(term.toLocaleLowerCase()));
+}
+
+function placeRegionText(place: GlobalPlaceSearchResult): string {
+  // Do not include the place title: a title such as "Place Two" contains the
+  // country-code substring "tw" but is not evidence that the place is in TW.
+  return [place.countryCode, place.country, place.city, place.address, place.source.displayName].filter(Boolean).join(' ');
+}
+
+function isJapanPlace(place: GlobalPlaceSearchResult): boolean {
+  const text = placeRegionText(place);
+  // An explicit Taiwan signal always wins over a Japanese-looking business
+  // name (for example, a Japanese cafe on Taipei's Linsen Road).
+  if (containsAny(text, ['台灣', '臺灣', 'taiwan', 'taipei', 'tw'])) return false;
+  if (containsAny(text, ['日本', 'japan', 'jp'])) return true;
+  return place.latitude >= 24 && place.latitude <= 46 && place.longitude >= 122 && place.longitude <= 154;
+}
+
+function isOsakaPlace(place: GlobalPlaceSearchResult): boolean {
+  if (!isJapanPlace(place)) return false;
+  const text = placeRegionText(place);
+  if (containsAny(text, ['大阪', 'osaka'])) return true;
+  return place.latitude >= 34.2 && place.latitude <= 34.95 && place.longitude >= 134.8 && place.longitude <= 135.95;
+}
+
+/** Keep live recommendation results inside the selected destination boundary. */
+export function filterGlobalRecommendationsByDestination(
+  results: GlobalPlaceSearchResult[],
+  destination: string,
+): GlobalPlaceSearchResult[] {
+  const value = destination.trim();
+  if (!value) return results;
+  if (containsAny(value, ['大阪', 'osaka'])) return results.filter(isOsakaPlace);
+  if (containsAny(value, ['日本', 'japan', 'jp', '東京', 'tokyo', '京都', 'kyoto', '關西', 'kansai'])) {
+    return results.filter(isJapanPlace);
+  }
+  if (containsAny(value, ['台灣', '臺灣', 'taiwan', 'taipei', 'tw'])) {
+    return results.filter((place) => containsAny(placeRegionText(place), ['台灣', '臺灣', 'taiwan', 'taipei', 'tw'])
+      || (place.latitude >= 21.5 && place.latitude <= 25.5 && place.longitude >= 119 && place.longitude <= 122.2));
+  }
+  return results;
 }
 
 /**
@@ -293,9 +340,9 @@ export async function searchDynamicRecommendationsPage(
   return cache.getOrFetch(`${query}|${pageToken}`, async () => {
     const raw = await provider(query, pageToken || undefined);
     return {
-      results: raw.results
+      results: filterGlobalRecommendationsByDestination(raw.results
         .filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude))
-        .map(normalizeGlobalPlace),
+        .map(normalizeGlobalPlace), normalizedDestination),
       nextPageToken: raw.nextPageToken?.trim() || null,
       totalItems: Number.isFinite(raw.totalItems) ? Math.max(0, Math.floor(raw.totalItems as number)) : null,
     };
@@ -312,7 +359,10 @@ export async function searchDynamicRecommendations(
   const normalizedDestination = destination.trim();
   if (normalizedDestination.length < 2) return [];
   const query = buildRecommendationQuery(normalizedDestination, theme, subcategory);
-  if (provider !== searchPlaces) return searchGlobalPlaces(query, provider);
+  if (provider !== searchPlaces) {
+    const results = await searchGlobalPlaces(query, provider);
+    return filterGlobalRecommendationsByDestination(results, normalizedDestination);
+  }
   return (await searchDynamicRecommendationsPage(normalizedDestination, theme, { subcategory })).results;
 }
 
