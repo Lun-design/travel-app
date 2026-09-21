@@ -7,7 +7,7 @@ import type { Voucher } from '@/lib/vouchers';
 import { buildDaySchedule, type ScheduleContext, type ScheduledItem } from '@/lib/schedule';
 import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
 import { formatPlaceAddress } from '@/lib/place-actions';
-import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
+import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, sanitizeRouteEstimateForDisplay, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import type { PuppyId } from '@/lib/puppy';
@@ -99,6 +99,13 @@ const weatherBatchCache = new Map<string, { expiresAt: number; value: Promise<Re
 const routeBatchCache = new Map<string, Promise<Record<string, RouteEstimate>>>();
 const WEATHER_BATCH_CACHE_TTL_MS = 30 * 60 * 1000;
 
+/** Clear in-memory route estimates after a manual refresh or stale-cache report. */
+export function clearRouteEstimateCaches() {
+  routeEstimator.cache.clear();
+  routeEstimator.sequenceCache.clear();
+  routeBatchCache.clear();
+}
+
 export function weatherBatchCacheKey(
   items: readonly ItineraryItem[],
   context?: Pick<ScheduleContext, 'tripStartDate' | 'dayNumber' | 'timezone'>,
@@ -170,7 +177,19 @@ export function useWeatherByItem(
 }
 
 export function segmentsForItems(items: ItineraryItem[]) {
-  return items.length ? buildRouteSegments(items, items[0].day_number, 35, 'position') : [];
+  const routableItems = items.filter((item) => {
+    const latitude = Number(item.latitude);
+    const longitude = Number(item.longitude);
+    return Number.isFinite(latitude)
+      && Number.isFinite(longitude)
+      && latitude >= -90 && latitude <= 90
+      && longitude >= -180 && longitude <= 180
+      && !(latitude === 0 && longitude === 0);
+  });
+  // Keep the original day/position contract explicit: the effective call is
+  // equivalent to buildRouteSegments(items, items[0].day_number, 35, 'position')
+  // after removing non-routable placeholders.
+  return routableItems.length ? buildRouteSegments(routableItems, routableItems[0].day_number, 35, 'position') : [];
 }
 export function orderPayload(items: ItineraryItem[]) { return items.map(({ id, position }) => ({ id, position })); }
 
@@ -184,9 +203,7 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
   useEffect(() => {
     let active = true;
     if (routeOrderKeyRef.current !== null && routeOrderKeyRef.current !== orderKey) {
-      routeEstimator.cache.clear();
-      routeEstimator.sequenceCache.clear();
-      routeBatchCache.clear();
+      clearRouteEstimateCaches();
     }
     routeOrderKeyRef.current = orderKey;
     const byId = new Map(items.map((item) => [item.id, item]));
@@ -200,7 +217,10 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
       let request = routeBatchCache.get(batchKey);
       if (!request) {
         request = routeEstimator.getRouteSequence(items.map(toRoutePoint), mode).then((sequence) => Object.fromEntries(
-          sequence.legs.map((estimate, index) => [baseSegments[index]?.fromId, estimate]).filter(([id]) => Boolean(id)),
+          baseSegments.map((segment, index) => [
+            segment.fromId,
+            sanitizeRouteEstimateForDisplay(sequence.legs[index], segment.distanceKm, mode),
+          ] as const),
         ) as Record<string, RouteEstimate>);
         routeBatchCache.set(batchKey, request);
       }
@@ -214,7 +234,7 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
       if (!from || !to) return null;
       const mode = modes[segment.fromId] ?? 'DRIVING';
       const estimate = await routeEstimator.getRoute(toRoutePoint(from), toRoutePoint(to), mode);
-      return [segment.fromId, estimate] as const;
+      return [segment.fromId, sanitizeRouteEstimateForDisplay(estimate, segment.distanceKm, mode)] as const;
     })).then((results) => {
       if (active) setEstimates(Object.fromEntries(results.flatMap((entry) => entry ? [entry] : [])) as Record<string, RouteEstimate>);
     });
@@ -231,16 +251,16 @@ export function displayRouteSegments(items: ItineraryItem[], modes: Record<strin
     const to = byId.get(segment.toId);
     const mode = modes[segment.fromId] ?? 'DRIVING';
     const fallback = calculateFallbackTravelMinutes(segment.distanceKm, mode);
-    const estimate = estimates[segment.fromId];
+    const estimate = sanitizeRouteEstimateForDisplay(estimates[segment.fromId], segment.distanceKm, mode);
     const labels = resolveRouteSegmentLabels(items, segment);
     return {
       ...segment,
       ...labels,
       mode,
-      durationMinutes: estimate?.durationMinutes ?? fallback,
-      estimatedDriveMinutes: estimate?.durationMinutes ?? fallback,
-      navigationUrl: estimate?.navigationUrl ?? (from && to ? buildGoogleMapsRouteUrl(toRoutePoint(from), toRoutePoint(to), mode) : null),
-      loading: !estimate,
+      durationMinutes: estimate.durationMinutes || fallback,
+      estimatedDriveMinutes: estimate.durationMinutes || fallback,
+      navigationUrl: estimate.navigationUrl ?? (from && to ? buildGoogleMapsRouteUrl(toRoutePoint(from), toRoutePoint(to), mode) : null),
+      loading: !estimates[segment.fromId],
     };
   });
 }
@@ -248,13 +268,16 @@ export function displayRouteSegments(items: ItineraryItem[], modes: Record<strin
 /** Adapt the route-pill estimates into the schedule engine's transit map. */
 export function routeDurationsForSchedule(estimates: Readonly<Record<string, RouteEstimate>>): Record<string, number> {
   return Object.fromEntries(Object.entries(estimates).flatMap(([fromId, estimate]) => {
-    const minutes = Number(estimate?.durationMinutes);
+    const safeEstimate = sanitizeRouteEstimateForDisplay(estimate, Number(estimate?.distanceKm) || 0, estimate?.mode ?? 'DRIVING');
+    const minutes = Number(safeEstimate.durationMinutes);
     return Number.isFinite(minutes) && minutes >= 0 ? [[fromId, Math.round(minutes)] as const] : [];
   }));
 }
 
 function toRoutePoint(item: ItineraryItem): RoutePoint {
-  return { latitude: item.latitude ?? undefined, longitude: item.longitude ?? undefined, title: item.location_name, address: item.address };
+  const latitude = item.latitude == null || !Number.isFinite(Number(item.latitude)) ? undefined : Number(item.latitude);
+  const longitude = item.longitude == null || !Number.isFinite(Number(item.longitude)) ? undefined : Number(item.longitude);
+  return { latitude, longitude, title: item.location_name, address: item.address };
 }
 
 type TimelineCardProps = {

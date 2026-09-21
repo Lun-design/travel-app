@@ -54,6 +54,10 @@ function pointCoordinates(point: RoutePoint): Coordinate | null {
   // Validate them before constructing the request so malformed persisted places
   // transparently use the geometry fallback instead of returning a 400.
   if (point.latitude < -90 || point.latitude > 90 || point.longitude < -180 || point.longitude > 180) return null;
+  // (0, 0) is the usual placeholder for a missing geocode in imported trips.
+  // Treat it as missing instead of sending a valid-but-wrong coordinate to
+  // Routes API and poisoning the route cache with a huge detour.
+  if (point.latitude === 0 && point.longitude === 0) return null;
   return { latitude: point.latitude, longitude: point.longitude };
 }
 
@@ -146,6 +150,46 @@ export function isRouteDurationPlausible(distanceKm: number, durationMinutes: nu
   const minimumMinutes = (distanceKm / bounds.maximumKmh) * 60;
   const maximumMinutes = Math.max(30, (distanceKm / bounds.minimumKmh) * 60 + 15);
   return durationMinutes + 0.001 >= minimumMinutes && durationMinutes <= maximumMinutes;
+}
+
+/**
+ * Sanitize estimates at the presentation boundary as well as at the API
+ * parser. A stale in-memory promise or an older browser cache can otherwise
+ * re-introduce values such as 1 minute for 35 km or 61 minutes for 478 m.
+ * The explicit meter guards mirror the user-facing safety rules and use
+ * conservative geometry speeds when they fire.
+ */
+export function sanitizeRouteEstimateForDisplay(
+  estimate: RouteEstimate | null | undefined,
+  fallbackDistanceKm: number,
+  mode: TravelMode,
+): RouteEstimate {
+  const distanceKm = Number.isFinite(estimate?.distanceKm) && (estimate?.distanceKm ?? 0) >= 0
+    ? Number(estimate?.distanceKm)
+    : Number.isFinite(fallbackDistanceKm) && fallbackDistanceKm >= 0 ? fallbackDistanceKm : 0;
+  const durationMinutes = Number.isFinite(estimate?.durationMinutes) && (estimate?.durationMinutes ?? 0) >= 0
+    ? Number(estimate?.durationMinutes)
+    : calculateFallbackTravelMinutes(distanceKm, mode);
+  const distanceMeters = distanceKm * 1000;
+  const longDistanceTooFast = distanceMeters > 5000 && durationMinutes < 5;
+  const shortDistanceTooSlow = distanceMeters < 1000 && durationMinutes > 40;
+  const duration = longDistanceTooFast
+    ? Math.max(1, Math.round((distanceKm / 40) * 60))
+    : shortDistanceTooSlow
+      ? Math.max(1, Math.round((distanceKm / 5) * 60))
+      : isRouteDurationPlausible(distanceKm, durationMinutes, mode)
+        ? Math.max(1, Math.round(durationMinutes))
+        : calculateFallbackTravelMinutes(distanceKm, mode);
+  const isFallback = longDistanceTooFast || shortDistanceTooSlow || duration !== durationMinutes || estimate?.source === 'fallback';
+  const navigationUrl = estimate?.navigationUrl ?? null;
+  return {
+    distanceKm,
+    durationMinutes: duration,
+    legs: [{ distanceKm, durationMinutes: duration }],
+    mode,
+    source: isFallback ? 'fallback' : (estimate?.source ?? 'fallback'),
+    navigationUrl,
+  };
 }
 
 function isRouteSequencePlausible(points: readonly RoutePoint[], sequence: RouteSequenceEstimate, mode: TravelMode): boolean {

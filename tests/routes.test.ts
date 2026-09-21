@@ -5,6 +5,7 @@ import {
   createRouteEstimator,
   estimateRouteSequence,
   routeCacheKey,
+  sanitizeRouteEstimateForDisplay,
   type RoutePoint,
 } from '../lib/routes';
 
@@ -108,6 +109,34 @@ describe('route estimates', () => {
     expect(result.distanceKm).toBeCloseTo(0.478, 2);
     expect(result.durationMinutes).toBe(calculateFallbackTravelMinutes(result.distanceKm, 'DRIVING'));
     expect(result.durationMinutes).toBeLessThan(30);
+  });
+
+  it('sanitizes a cached long-distance one-minute estimate before UI rendering', () => {
+    const sanitized = sanitizeRouteEstimateForDisplay({
+      distanceKm: 35.5,
+      durationMinutes: 1,
+      mode: 'DRIVING',
+      source: 'google',
+      navigationUrl: null,
+    }, 35.5, 'DRIVING');
+
+    expect(sanitized.source).toBe('fallback');
+    expect(sanitized.durationMinutes).toBe(53);
+    expect(sanitized.durationMinutes).toBeGreaterThan(5);
+  });
+
+  it('sanitizes a cached sub-kilometre sixty-one-minute estimate before UI rendering', () => {
+    const sanitized = sanitizeRouteEstimateForDisplay({
+      distanceKm: 0.478,
+      durationMinutes: 61,
+      mode: 'DRIVING',
+      source: 'google',
+      navigationUrl: null,
+    }, 0.478, 'DRIVING');
+
+    expect(sanitized.source).toBe('fallback');
+    expect(sanitized.durationMinutes).toBe(6);
+    expect(sanitized.durationMinutes).toBeLessThan(40);
   });
 
   it('invalidates a stale cached estimate that fails the duration sanity check', async () => {
@@ -227,6 +256,20 @@ describe('route estimates', () => {
 
     expect(fetcher).not.toHaveBeenCalled();
     expect(result.source).toBe('fallback');
+  });
+
+  it('treats the 0,0 placeholder as missing instead of routing from the Gulf of Guinea', async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 100, duration: '60s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    const result = await estimator.getRoute({ latitude: 0, longitude: 0, title: 'Airport' }, taipei101, 'DRIVING');
+
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(result.source).toBe('fallback');
+    expect(result.distanceKm).toBe(0);
   });
 
   it('logs the full error body and falls back on a 400 response', async () => {
