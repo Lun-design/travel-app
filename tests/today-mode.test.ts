@@ -53,7 +53,7 @@ describe('Today Mode distance and navigation', () => {
 
   it('falls back to a title search when a spot has no coordinates', () => {
     expect(getGoogleMapsNavigationUrl({ location_name: '黑門市場', latitude: null, longitude: null, address: null })).toBe(
-      'https://www.google.com/maps/search/?api=1&query=%E9%BB%91%E9%96%80%E5%B8%82%E5%A0%B4',
+      'https://www.google.com/maps/dir/?api=1&destination=%E9%BB%91%E9%96%80%E5%B8%82%E5%A0%B4&travelmode=driving&dirflg=d',
     );
   });
 });

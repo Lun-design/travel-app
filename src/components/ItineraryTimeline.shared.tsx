@@ -261,7 +261,9 @@ export function displayRouteSegments(items: ItineraryItem[], modes: Record<strin
       mode,
       durationMinutes: estimate.durationMinutes || fallback,
       estimatedDriveMinutes: estimate.durationMinutes || fallback,
-      navigationUrl: estimate.navigationUrl ?? (from && to ? buildGoogleMapsRouteUrl(toRoutePoint(from), toRoutePoint(to), mode) : null),
+      // Route pills always represent the complete leg, so rebuild the URL from
+      // the current adjacent items/mode instead of reusing a stale estimate URL.
+      navigationUrl: from && to ? buildGoogleMapsRouteUrl(toRoutePoint(from), toRoutePoint(to), mode) : estimate.navigationUrl ?? null,
       loading: !estimates[segment.fromId],
     };
   });

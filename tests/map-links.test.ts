@@ -1,41 +1,66 @@
 import { describe, expect, it } from 'vitest';
 import { getGoogleMapsNavigationUrl } from '../lib/map-links';
 
-describe('Google Maps navigation URL priority', () => {
-  it('uses a Google Place ID before coordinates, address, or title', () => {
-    expect(getGoogleMapsNavigationUrl({
+describe('Google Maps card navigation URL', () => {
+  it('uses a destination-only Directions URL for a Place ID', () => {
+    const url = getGoogleMapsNavigationUrl({
       place_id: 'ChIJ-place-123',
       latitude: 25.01,
       longitude: 121.46,
-      address: '台北市某處',
-      title: '自訂住宿名稱',
-    })).toBe('https://www.google.com/maps/search/?api=1&query=Google&query_place_id=ChIJ-place-123');
+      address: '台北市信義區',
+      title: '自訂 Airbnb',
+      mode: 'DRIVING',
+    });
+
+    expect(url).toContain('https://www.google.com/maps/dir/?api=1');
+    expect(url).toContain('destination=Google');
+    expect(url).toContain('destination_place_id=ChIJ-place-123');
+    expect(url).toContain('travelmode=driving');
+    expect(url).toContain('dirflg=d');
+    expect(url).not.toContain('origin=');
   });
 
-  it('uses valid coordinates before an imprecise custom title', () => {
-    expect(getGoogleMapsNavigationUrl({
+  it('uses the precise address as the destination before coordinates', () => {
+    const url = getGoogleMapsNavigationUrl({
       latitude: 25.0109,
       longitude: 121.464,
-      address: '新北市新莊區',
+      address: '大阪府大阪市浪速区大國町 1-2-3',
       title: '大國町 Airbnb',
-    })).toBe('https://www.google.com/maps/search/?api=1&query=25.0109%2C121.464');
+      mode: 'WALKING',
+    });
+
+    expect(url).toContain(`destination=${encodeURIComponent('大阪府大阪市浪速区大國町 1-2-3')}`);
+    expect(url).toContain('travelmode=walking');
+    expect(url).toContain('dirflg=w');
+    expect(url).not.toContain('origin=');
+    expect(url).not.toContain('25.0109%2C121.464');
   });
 
-  it('falls back to the exact address before the title', () => {
-    expect(getGoogleMapsNavigationUrl({
+  it('falls back to the title as a destination when no address exists', () => {
+    const url = getGoogleMapsNavigationUrl({
       latitude: null,
       longitude: null,
-      address: '大阪府大阪市浪速區大國町 1-2-3',
-      title: '大國町 Airbnb',
-    })).toBe('https://www.google.com/maps/search/?api=1&query=%E5%A4%A7%E9%98%AA%E5%BA%9C%E5%A4%A7%E9%98%AA%E5%B8%82%E6%B5%AA%E9%80%9F%E5%8D%80%E5%A4%A7%E5%9C%8B%E7%94%BA%201-2-3');
+      address: null,
+      title: '關西國際機場 第一航廈',
+      mode: 'TRANSIT',
+    });
+
+    expect(url).toContain(`destination=${encodeURIComponent('關西國際機場 第一航廈')}`);
+    expect(url).toContain('travelmode=transit');
+    expect(url).toContain('dirflg=r');
+    expect(url).not.toContain('origin=');
   });
 
-  it('uses the title only when no precise location data exists', () => {
-    expect(getGoogleMapsNavigationUrl({
-      latitude: Number.NaN,
-      longitude: Number.NaN,
+  it('uses coordinates only as the last destination fallback', () => {
+    const url = getGoogleMapsNavigationUrl({
+      latitude: 25.0109,
+      longitude: 121.464,
       address: null,
-      title: '大國町 Airbnb',
-    })).toBe('https://www.google.com/maps/search/?api=1&query=%E5%A4%A7%E5%9C%8B%E7%94%BA%20Airbnb');
+      title: null,
+    });
+
+    expect(url).toContain('destination=25.0109%2C121.464');
+    expect(url).toContain('travelmode=driving');
+    expect(url).not.toContain('origin=');
   });
 });

@@ -328,7 +328,10 @@ describe('route estimates', () => {
     expect(buildGoogleMapsRouteUrl(taipeiMainStation, taipei101, 'DRIVING')).toBe(
       'https://www.google.com/maps/dir/?api=1&origin=25.0478%2C121.517&destination=25.033968%2C121.564468&travelmode=driving',
     );
-    expect(buildGoogleMapsRouteUrl(taipeiMainStation, taipei101, 'TRANSIT')).toContain('&travelmode=transit');
+    const transitUrl = buildGoogleMapsRouteUrl(taipeiMainStation, taipei101, 'TRANSIT');
+    expect(transitUrl).toContain('origin=25.0478%2C121.517');
+    expect(transitUrl).toContain('destination=25.033968%2C121.564468');
+    expect(transitUrl).toContain('&travelmode=transit');
     expect(buildGoogleMapsRouteUrl(taipeiMainStation, taipei101, 'WALKING')).toContain('&travelmode=walking');
   });
 });
