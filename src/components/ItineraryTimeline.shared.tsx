@@ -8,6 +8,7 @@ import { buildDaySchedule, type ScheduleContext, type ScheduledItem } from '@/li
 import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
 import { formatPlaceAddress } from '@/lib/place-actions';
 import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, formatRouteEstimateDuration, sanitizeRouteEstimateForDisplay, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
+import { hasValidRouteCoordinates, resolveMissingRouteCoordinates } from '@/lib/route-geocoding';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import type { PuppyId } from '@/lib/puppy';
@@ -178,13 +179,7 @@ export function useWeatherByItem(
 
 export function segmentsForItems(items: ItineraryItem[]) {
   const routableItems = items.filter((item) => {
-    const latitude = Number(item.latitude);
-    const longitude = Number(item.longitude);
-    return Number.isFinite(latitude)
-      && Number.isFinite(longitude)
-      && latitude >= -90 && latitude <= 90
-      && longitude >= -180 && longitude <= 180
-      && !(latitude === 0 && longitude === 0);
+    return hasValidRouteCoordinates(item);
   });
   // Keep the original day/position contract explicit: the effective call is
   // equivalent to buildRouteSegments(items, items[0].day_number, 35, 'position')
@@ -195,6 +190,7 @@ export function orderPayload(items: ItineraryItem[]) { return items.map(({ id, p
 
 export function useRouteSegments(items: ItineraryItem[], modes: Record<string, TravelMode>, scope?: { tripId?: string; day?: number }) {
   const [estimates, setEstimates] = useState<Record<string, RouteEstimate>>({});
+  const [routeItems, setRouteItems] = useState<ItineraryItem[]>(items);
   const routeOrderKeyRef = useRef<string | null>(null);
   const itemKey = items.map((item) => `${item.id}:${item.position}:${item.latitude ?? ''}:${item.longitude ?? ''}`).join('|');
   const orderKey = items.map((item) => `${item.id}:${item.position}`).join('|');
@@ -206,42 +202,48 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
       clearRouteEstimateCaches();
     }
     routeOrderKeyRef.current = orderKey;
-    const byId = new Map(items.map((item) => [item.id, item]));
-    const baseSegments = segmentsForItems(items);
+    setRouteItems(items);
     setEstimates({});
-
-    const segmentModes = [...new Set(baseSegments.map((segment) => modes[segment.fromId] ?? 'DRIVING'))];
-    if (baseSegments.length > 0 && segmentModes.length === 1) {
-      const mode = segmentModes[0] as TravelMode;
-      const batchKey = `${routeBatchCacheKey(items, modes, scope)}:${mode}`;
-      let request = routeBatchCache.get(batchKey);
-      if (!request) {
-        request = routeEstimator.getRouteSequence(items.map(toRoutePoint), mode).then((sequence) => Object.fromEntries(
-          baseSegments.map((segment, index) => [
-            segment.fromId,
-            sanitizeRouteEstimateForDisplay(sequence.legs[index], segment.distanceKm, mode),
-          ] as const),
-        ) as Record<string, RouteEstimate>);
-        routeBatchCache.set(batchKey, request);
+    void (async () => {
+      const resolved = await resolveMissingRouteCoordinates(items);
+      if (!active) return;
+      setRouteItems(resolved.items);
+      const routeableItems = resolved.items.filter(hasValidRouteCoordinates);
+      const byId = new Map(routeableItems.map((item) => [item.id, item]));
+      const baseSegments = segmentsForItems(routeableItems);
+      const segmentModes = [...new Set(baseSegments.map((segment) => modes[segment.fromId] ?? 'DRIVING'))];
+      if (baseSegments.length > 0 && segmentModes.length === 1) {
+        const mode = segmentModes[0] as TravelMode;
+        const batchKey = `${routeBatchCacheKey(routeableItems, modes, scope)}:${mode}`;
+        let request = routeBatchCache.get(batchKey);
+        if (!request) {
+          request = routeEstimator.getRouteSequence(routeableItems.map(toRoutePoint), mode).then((sequence) => Object.fromEntries(
+            baseSegments.map((segment, index) => [
+              segment.fromId,
+              sanitizeRouteEstimateForDisplay(sequence.legs[index], segment.distanceKm, mode),
+            ] as const),
+          ) as Record<string, RouteEstimate>);
+          routeBatchCache.set(batchKey, request);
+        }
+        const batch = await request;
+        if (active) setEstimates(batch);
+        return;
       }
-      void request.then((batch) => { if (active) setEstimates(batch); });
-      return () => { active = false; };
-    }
 
-    void Promise.all(baseSegments.map(async (segment) => {
-      const from = byId.get(segment.fromId);
-      const to = byId.get(segment.toId);
-      if (!from || !to) return null;
-      const mode = modes[segment.fromId] ?? 'DRIVING';
-      const estimate = await routeEstimator.getRoute(toRoutePoint(from), toRoutePoint(to), mode);
-      return [segment.fromId, sanitizeRouteEstimateForDisplay(estimate, segment.distanceKm, mode)] as const;
-    })).then((results) => {
+      const results = await Promise.all(baseSegments.map(async (segment) => {
+        const from = byId.get(segment.fromId);
+        const to = byId.get(segment.toId);
+        if (!from || !to) return null;
+        const mode = modes[segment.fromId] ?? 'DRIVING';
+        const estimate = await routeEstimator.getRoute(toRoutePoint(from), toRoutePoint(to), mode);
+        return [segment.fromId, sanitizeRouteEstimateForDisplay(estimate, segment.distanceKm, mode)] as const;
+      }));
       if (active) setEstimates(Object.fromEntries(results.flatMap((entry) => entry ? [entry] : [])) as Record<string, RouteEstimate>);
-    });
+    })();
     return () => { active = false; };
   }, [itemKey, modeKey, orderKey, scope?.day, scope?.tripId]);
 
-  return estimates;
+  return { estimates, items: routeItems };
 }
 
 export function displayRouteSegments(items: ItineraryItem[], modes: Record<string, TravelMode>, estimates: Record<string, RouteEstimate>): TimelineRouteSegment[] {
@@ -337,6 +339,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
     google_place_id: item.google_place_id,
     location_name: item.location_name,
     address: item.address,
+    mode: segment?.mode ?? 'DRIVING',
   });
   const placeAddress = formatPlaceAddress(item.address);
   const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));

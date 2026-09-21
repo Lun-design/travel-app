@@ -39,11 +39,12 @@ export function ItineraryTimeline({
   const parentRevision = useRef(incomingRevision);
   const displayItems = incomingRevision !== parentRevision.current ? incomingItems : localItems;
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
-  const routeEstimates = useRouteSegments(displayItems, routeModes, { tripId, day: displayItems[0]?.day_number });
+  const routeState = useRouteSegments(displayItems, routeModes, { tripId, day: displayItems[0]?.day_number });
+  const routeEstimates = routeState.estimates;
   const routeTransitMinutes = useMemo(() => routeDurationsForSchedule(routeEstimates), [routeEstimates]);
   const segments = useMemo(
-    () => displayRouteSegments(displayItems, routeModes, routeEstimates),
-    [displayItems, routeEstimates, routeModes],
+    () => displayRouteSegments(routeState.items, routeModes, routeEstimates),
+    [routeState.items, routeEstimates, routeModes],
   );
   const segmentsByFromId = useMemo(
     () => new Map(segments.map((segment) => [segment.fromId, segment])),

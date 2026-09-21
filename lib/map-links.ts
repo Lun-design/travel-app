@@ -1,3 +1,5 @@
+import type { TravelMode } from './routes';
+
 /** Build a Google Maps directions link when an item has valid coordinates. */
 export function getGoogleMapsDirectionsUrl(latitude: number | null | undefined, longitude: number | null | undefined) {
   if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) return null;
@@ -21,31 +23,34 @@ export type NavigationPlace = {
   location_name?: string | null;
   title?: string | null;
   address?: string | null;
+  mode?: TravelMode;
 };
 
 export function getGoogleMapsNavigationUrl(place: NavigationPlace): string {
   const placeId = [place.place_id, place.placeId, place.googlePlaceId, place.google_place_id]
     .find((value) => typeof value === 'string' && value.trim())
     ?.trim();
+  const directionFlag = place.mode === 'TRANSIT' ? 'r' : place.mode === 'WALKING' ? 'w' : place.mode === 'DRIVING' ? 'd' : null;
+  const withMode = (url: string) => directionFlag ? `${url}&dirflg=${directionFlag}` : url;
   if (placeId) {
-    return `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(placeId)}`;
+    return withMode(`https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(placeId)}`);
   }
 
   const latitude = normalizeCoordinate(place.latitude);
   const longitude = normalizeCoordinate(place.longitude);
   if (latitude !== null && longitude !== null) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
+    return withMode(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`);
   }
 
   const address = typeof place.address === 'string' ? place.address.trim() : '';
   if (address) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    return withMode(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`);
   }
 
   const query = [place.title, place.location_name]
     .find((value) => typeof value === 'string' && value.trim())
     ?.trim() ?? '未命名景點';
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return withMode(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
 }
 
 function normalizeCoordinate(value: number | string | null | undefined): number | null {
