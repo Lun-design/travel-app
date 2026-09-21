@@ -16,6 +16,11 @@ export type GeocodingResult = {
   googlePlaceId?: string;
   /** Google Places legacy reference or Places API (New) resource name. */
   photoReference?: string;
+  /** Resolved image URL when a provider can return one directly. */
+  imageUrl?: string;
+  image_url?: string;
+  photoUrl?: string;
+  photo_url?: string;
   osmType?: 'node' | 'way' | 'relation';
   osmId?: number;
 };

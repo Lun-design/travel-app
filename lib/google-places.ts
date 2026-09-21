@@ -316,6 +316,18 @@ export function extractGooglePhotoReference(photos?: GooglePlacePhotoPayload[] |
   return ranked[0]?.reference;
 }
 
+/** Build a safe public image URL for a Places photo reference. */
+export function buildGooglePlacePhotoUrl(reference: unknown, apiKey?: string, maxWidth = 400): string | null {
+  const key = getGoogleApiKey(apiKey);
+  const value = normalizePhotoValue(reference);
+  if (!key || !value || (!isGooglePhotoResourceName(value) && !LEGACY_PHOTO_REFERENCE_PATTERN.test(value))) return null;
+  const width = Math.max(1, Math.round(maxWidth));
+  if (isGooglePhotoResourceName(value)) {
+    return `https://places.googleapis.com/v1/${value}/media?maxWidthPx=${width}&key=${encodeURIComponent(key)}`;
+  }
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${width}&photo_reference=${encodeURIComponent(value)}&key=${encodeURIComponent(key)}`;
+}
+
 async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {
   const key = getGoogleApiKey(apiKey);
   const sanitizedQuery = sanitizePlaceSearchQuery(query);
@@ -351,7 +363,7 @@ async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): P
   });
 }
 
-function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[] {
+function mapTextSearchPlaces(payload: GoogleTextSearchPayload, apiKey?: string): GeocodingResult[] {
   return (payload.places ?? []).flatMap((place) => {
     const placeId = place.id ? normalizePlaceId(place.id) : '';
     const title = place.displayName?.text?.trim() || place.formattedAddress?.split(',')[0]?.trim();
@@ -359,6 +371,7 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[
     const latitude = Number(place.location?.latitude);
     const longitude = Number(place.location?.longitude);
     const photoReference = extractGooglePhotoReference(place.photos);
+    const imageUrl = photoReference ? buildGooglePlacePhotoUrl(photoReference, apiKey) : null;
     return [{
       id: `google:${placeId}`,
       googlePlaceId: placeId,
@@ -368,6 +381,7 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload): GeocodingResult[
       latitude: Number.isFinite(latitude) ? latitude : Number.NaN,
       longitude: Number.isFinite(longitude) ? longitude : Number.NaN,
       ...(photoReference ? { photoReference } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
     }];
   });
 }
@@ -392,7 +406,7 @@ export async function searchGooglePlacesTextPage(query: string, apiKey?: string,
   if (!response.ok) throw new Error(`Google Places Text Search failed (${response.status})`);
   const payload = await response.json() as GoogleTextSearchPayload;
   return {
-    results: mapTextSearchPlaces(payload),
+    results: mapTextSearchPlaces(payload, key),
     nextPageToken: payload.nextPageToken?.trim() || null,
   };
 }

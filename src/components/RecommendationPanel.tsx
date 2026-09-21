@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -12,6 +13,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
+import { getSpotImageUrl } from '@/lib/spot-image';
 import {
   buildGlobalItineraryPayload,
   DEFAULT_RECOMMENDATION_PAGE_SIZE,
@@ -65,7 +67,37 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [addedIds, setAddedIds] = useState<string[]>([]);
   const [bucketAddedIds, setBucketAddedIds] = useState<string[]>([]);
   const [bucketAddingId, setBucketAddingId] = useState<string | null>(null);
+  const [failedImageIds, setFailedImageIds] = useState<string[]>([]);
   const [searched, setSearched] = useState(false);
+
+  function recommendationImageUrl(place: GlobalPlaceSearchResult): string {
+    return place.imageUrl
+      ?? place.image_url
+      ?? place.photoUrl
+      ?? place.photo_url
+      ?? getSpotImageUrl({
+        id: place.id,
+        name: place.title,
+        address: place.address,
+        category: place.category === 'indoor' ? 'spot' : place.category,
+        photoReference: place.photoReference,
+      });
+  }
+
+  function renderRecommendationImage(place: GlobalPlaceSearchResult) {
+    if (failedImageIds.includes(place.id)) {
+      const isFood = place.types?.some((type) => /restaurant|food|cafe|ramen|noodle/i.test(type)) || /拉麵|麵|烏龍|餐廳|美食|ramen|noodle|cafe|restaurant/i.test(place.title);
+      const icon = isFood ? '🍜' : place.category === 'indoor' ? '🏛️' : '📍';
+      return <View accessibilityLabel={`${place.title} 預設圖片`} style={styles.recommendationImageFallback}><Text style={styles.recommendationImageIcon}>{icon}</Text></View>;
+    }
+    return <Image
+      source={{ uri: recommendationImageUrl(place) }}
+      style={styles.recommendationImage}
+      resizeMode="cover"
+      accessibilityLabel={`${place.title} 景點圖片`}
+      onError={() => setFailedImageIds((current) => current.includes(place.id) ? current : [...current, place.id])}
+    />;
+  }
 
   useEffect(() => {
     const nextDestination = destination?.trim() ?? '';
@@ -362,6 +394,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
               <View style={styles.curatedList}>
                 {recommendationPage.items.map((place) => (
                   <View key={`curated-${place.id}`} style={[styles.curatedCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
+                    {renderRecommendationImage(place)}
                     <View style={styles.copy}>
                       <Text style={[styles.resultTitle, { color: theme.colors.text }]}>{place.title}</Text>
                       <Text numberOfLines={1} style={[styles.address, { color: theme.colors.muted }]}>{place.address}</Text>
@@ -417,6 +450,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
               {results.length > 0 ? <View style={styles.results}>
                 {results.map((place) => (
                   <View key={place.id} style={[styles.result, { borderColor: theme.colors.border }]}>
+                    {renderRecommendationImage(place)}
                     <View style={styles.copy}>
                       <Text style={[styles.resultTitle, { color: theme.colors.text }]}>{place.title}</Text>
                       <Text numberOfLines={2} style={[styles.address, { color: theme.colors.muted }]}>{[place.city, place.country].filter(Boolean).join(' · ') || place.address}</Text>
@@ -469,6 +503,9 @@ const styles = StyleSheet.create({
   loadingRow: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 8 },
   curatedList: { width: '100%', gap: 8 },
   curatedCard: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, padding: 10 },
+  recommendationImage: { width: 96, height: 96, borderRadius: 10, backgroundColor: '#EEEAE4' },
+  recommendationImageFallback: { width: 96, height: 96, borderRadius: 10, backgroundColor: '#EEEAE4', alignItems: 'center', justifyContent: 'center' },
+  recommendationImageIcon: { fontSize: 28 },
   pagination: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingTop: 4 },
   paginationButton: { minHeight: 40, borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   paginationText: { fontSize: 12, fontWeight: '800' },

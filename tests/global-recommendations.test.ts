@@ -13,6 +13,7 @@ import {
   filterGlobalRecommendationsByDestination,
   filterGlobalRecommendationsBySubcategory,
   searchDynamicRecommendations,
+  searchDynamicRecommendationsPage,
   searchGlobalPlaces,
   type GlobalPlaceSearchResult,
 } from '../lib/global-recommendations';
@@ -164,6 +165,7 @@ describe('global recommendation helpers', () => {
     expect(getRecommendationSubcategories('food').map((item) => item.id)).toEqual(['all', 'bbq', 'hotpot', 'noodles', 'izakaya', 'dessert']);
     expect(getRecommendationSubcategories('must-see').map((item) => item.id)).toEqual(['all', 'landmark', 'shrine', 'nature', 'shopping']);
     expect(buildRecommendationQuery('東京', 'food', 'bbq')).toContain('燒肉');
+    expect(buildRecommendationQuery('大阪', 'food', 'hotpot')).toMatch(/火鍋.*涮涮鍋.*壽喜燒.*shabu.*sukiyaki.*しゃぶしゃぶ.*すき焼き/);
     expect(buildRecommendationQuery('東京', 'must-see', 'shrine')).toContain('神社');
   });
 
@@ -187,6 +189,47 @@ describe('global recommendation helpers', () => {
     expect(filterGlobalRecommendationsBySubcategory(curated, 'food', 'noodles')).toEqual([]);
     const panelSource = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
     expect(panelSource).toMatch(/filterGlobalRecommendationsBySubcategory\(\s*getCuratedRecommendations/);
+  });
+
+  it('broadens a sparse subcategory page after strict filtering', async () => {
+    const calls: string[] = [];
+    const provider = async (query: string): Promise<{ results: GeocodingResult[]; nextPageToken: null }> => {
+      calls.push(query);
+      if (calls.length === 1) return {
+        results: [{ id: 'one', title: '大阪のラーメン', displayName: '大阪のラーメン, Osaka, Japan', latitude: 34.67, longitude: 135.51, provider: 'google' }],
+        nextPageToken: null,
+      };
+      return {
+        results: [
+          { id: 'two', title: '道頓堀美食', displayName: '道頓堀美食, Osaka, Japan', latitude: 34.67, longitude: 135.51, provider: 'google' },
+          { id: 'three', title: '大阪城公園', displayName: '大阪城公園, Osaka, Japan', latitude: 34.68, longitude: 135.52, provider: 'google' },
+          { id: 'four', title: '大阪の烏龍麵', displayName: '大阪の烏龍麵, Osaka, Japan', latitude: 34.67, longitude: 135.51, provider: 'google' },
+        ],
+        nextPageToken: null,
+      };
+    };
+
+    const page = await searchDynamicRecommendationsPage('大阪', 'food', { provider, subcategory: 'noodles' });
+    expect(calls).toHaveLength(2);
+    expect(page.results.length).toBeGreaterThanOrEqual(3);
+    expect(page.results.map((place) => place.id)).toEqual(expect.arrayContaining(['one', 'two', 'three', 'four']));
+  });
+
+  it('preserves API and curated image URLs for recommendation cards', () => {
+    const normalized = normalizeGlobalPlace({
+      id: 'photo-place',
+      title: 'Photo Place',
+      displayName: 'Photo Place, Osaka, Japan',
+      latitude: 34.67,
+      longitude: 135.51,
+      imageUrl: 'https://images.example/photo.jpg',
+      provider: 'google',
+    });
+    expect(normalized.imageUrl).toBe('https://images.example/photo.jpg');
+    expect(getCuratedRecommendations('日本 JP 大阪').every((place) => place.imageUrl)).toBe(true);
+    const panelSource = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    expect(panelSource).toContain('resizeMode="cover"');
+    expect(panelSource).toContain('onError');
   });
 
   it('paginates recommendation cards with stable page boundaries', () => {

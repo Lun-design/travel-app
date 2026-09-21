@@ -18,6 +18,11 @@ export type GlobalPlaceSearchResult = {
   category: GlobalPlaceCategory;
   estimatedDurationMinutes: number;
   types?: string[];
+  imageUrl?: string | null;
+  image_url?: string | null;
+  photoUrl?: string | null;
+  photo_url?: string | null;
+  photoReference?: string | null;
   provider?: GeocodingResult['provider'];
   source: GeocodingResult;
 };
@@ -140,6 +145,7 @@ export function normalizeGlobalPlace(place: GeocodingResult): GlobalPlaceSearchR
   const address = place.displayName?.trim() || place.title.trim();
   const location = parseLocationParts(address);
   const category = classifyGlobalPlace({ title: place.title, address });
+  const imageUrl = place.imageUrl ?? place.image_url ?? place.photoUrl ?? place.photo_url ?? null;
   return {
     id: place.id,
     title: place.title.trim(),
@@ -153,6 +159,11 @@ export function normalizeGlobalPlace(place: GeocodingResult): GlobalPlaceSearchR
     category,
     estimatedDurationMinutes: estimateGlobalPlaceDuration(category, { title: place.title }),
     types: place.types,
+    imageUrl,
+    image_url: imageUrl,
+    photoUrl: imageUrl,
+    photo_url: imageUrl,
+    photoReference: place.photoReference ?? null,
     provider: place.provider,
     source: place,
   };
@@ -220,11 +231,12 @@ export function getCuratedRecommendations(destination: string): GlobalPlaceSearc
     longitude: number;
     category: GlobalPlaceCategory;
     estimatedDurationMinutes: number;
+    imageUrl: string;
   }> = [
-    { id: 'curated-dotombori', title: '道頓堀', address: '道頓堀, 大阪府大阪市, 日本', latitude: 34.6687, longitude: 135.5013, category: 'outdoor', estimatedDurationMinutes: 90 },
-    { id: 'curated-kuromon-market', title: '黑門市場', address: '黑門市場, 大阪府大阪市, 日本', latitude: 34.6654, longitude: 135.5063, category: 'indoor', estimatedDurationMinutes: 90 },
-    { id: 'curated-osaka-castle-park', title: '大阪城公園', address: '大阪城公園, 大阪府大阪市, 日本', latitude: 34.6873, longitude: 135.5262, category: 'outdoor', estimatedDurationMinutes: 120 },
-    { id: 'curated-okonomiyaki-mizuno', title: '大阪燒美津の', address: '大阪燒美津の, 大阪府大阪市, 日本', latitude: 34.6686, longitude: 135.5034, category: 'indoor', estimatedDurationMinutes: 60 },
+    { id: 'curated-dotombori', title: '道頓堀', address: '道頓堀, 大阪府大阪市, 日本', latitude: 34.6687, longitude: 135.5013, category: 'outdoor', estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=640&h=360&fit=crop&auto=format' },
+    { id: 'curated-kuromon-market', title: '黑門市場', address: '黑門市場, 大阪府大阪市, 日本', latitude: 34.6654, longitude: 135.5063, category: 'indoor', estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=640&h=360&fit=crop&auto=format' },
+    { id: 'curated-osaka-castle-park', title: '大阪城公園', address: '大阪城公園, 大阪府大阪市, 日本', latitude: 34.6873, longitude: 135.5262, category: 'outdoor', estimatedDurationMinutes: 120, imageUrl: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=640&h=360&fit=crop&auto=format' },
+    { id: 'curated-okonomiyaki-mizuno', title: '大阪燒美津の', address: '大阪燒美津の, 大阪府大阪市, 日本', latitude: 34.6686, longitude: 135.5034, category: 'indoor', estimatedDurationMinutes: 60, imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=640&h=360&fit=crop&auto=format' },
   ];
 
   return entries.map((entry) => {
@@ -270,7 +282,7 @@ const RECOMMENDATION_SUBCATEGORIES: Record<RecommendationThemeId, Recommendation
   food: [
     { id: 'all', label: '全部', keyword: '美食 餐廳' },
     { id: 'bbq', label: '燒肉／烤肉', keyword: '燒肉 烤肉 BBQ' },
-    { id: 'hotpot', label: '火鍋', keyword: '火鍋 涮涮鍋' },
+    { id: 'hotpot', label: '火鍋', keyword: '火鍋 涮涮鍋 壽喜燒 鍋 鍋物 shabu sukiyaki しゃぶしゃぶ すき焼き' },
     { id: 'noodles', label: '拉麵／麵食', keyword: '拉麵 麵食' },
     { id: 'izakaya', label: '居酒屋／酒吧', keyword: '居酒屋 酒吧' },
     { id: 'dessert', label: '甜點咖啡', keyword: '甜點 咖啡' },
@@ -299,7 +311,7 @@ export function buildRecommendationQuery(destination: string, theme: Recommendat
 const RECOMMENDATION_SUBCATEGORY_TERMS: Partial<Record<RecommendationSubcategoryId, string[]>> = {
   bbq: ['燒肉', '烤肉', '焼肉', 'bbq', 'yakiniku'],
   hotpot: ['火鍋', '涮涮鍋', '鍋物', 'しゃぶ', 'hotpot', 'hot pot'],
-  noodles: ['拉麵', '拉面', '麵食', '麺', '麵', '烏龍麵', 'うどん', '蕎麥', 'そば', 'ramen', 'noodle', 'udon', 'soba'],
+  noodles: ['拉麵', '拉面', '麵食', '麺', 'ラーメン', '麵', '烏龍麵', 'うどん', '蕎麥', 'そば', 'ramen', 'noodle', 'udon', 'soba'],
   izakaya: ['居酒屋', '酒吧', '串燒', 'バル', 'izakaya', 'bar', 'pub'],
   dessert: ['甜點', '咖啡', '蛋糕', '甜品', 'dessert', 'cafe', 'coffee', 'cake'],
   landmark: ['地標', '展覽', '博物館', '塔', 'landmark', 'exhibition', 'museum', 'tower'],
@@ -365,6 +377,22 @@ async function defaultRecommendationPageProvider(query: string, pageToken?: stri
   return { results: await searchPlaces(query), nextPageToken: null };
 }
 
+function normalizeRecommendationResults(
+  results: GeocodingResult[],
+  destination: string,
+  theme: RecommendationThemeId,
+  subcategory: RecommendationSubcategoryId,
+): GlobalPlaceSearchResult[] {
+  return filterGlobalRecommendationsBySubcategory(
+    filterGlobalRecommendationsByDestination(
+      results.filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude)).map(normalizeGlobalPlace),
+      destination,
+    ),
+    theme,
+    subcategory,
+  );
+}
+
 export async function searchDynamicRecommendationsPage(
   destination: string,
   theme: RecommendationThemeId,
@@ -378,17 +406,33 @@ export async function searchDynamicRecommendationsPage(
   const provider = options.provider ?? defaultRecommendationPageProvider;
   return cache.getOrFetch(`${query}|${pageToken}`, async () => {
     const raw = await provider(query, pageToken || undefined);
-    return {
-      results: filterGlobalRecommendationsBySubcategory(
-        filterGlobalRecommendationsByDestination(raw.results
-        .filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude))
-        .map(normalizeGlobalPlace), normalizedDestination),
-        theme,
-        options.subcategory ?? 'all',
-      ),
-      nextPageToken: raw.nextPageToken?.trim() || null,
-      totalItems: Number.isFinite(raw.totalItems) ? Math.max(0, Math.floor(raw.totalItems as number)) : null,
-    };
+    const subcategory = options.subcategory ?? 'all';
+    let results = normalizeRecommendationResults(raw.results, normalizedDestination, theme, subcategory);
+    let nextPageToken = raw.nextPageToken?.trim() || null;
+    let totalItems = Number.isFinite(raw.totalItems) ? Math.max(0, Math.floor(raw.totalItems as number)) : null;
+
+    // Once the selected provider page is exhausted, broaden the query so a
+    // sparse deep category still gives the traveler a useful set of cards.
+    const shouldBroaden = subcategory !== 'all'
+      && !pageToken
+      && results.length < 3
+      // For the real Places provider broaden immediately; injected providers
+      // with a next token can continue pagination without duplicate requests.
+      && (!nextPageToken || provider === defaultRecommendationPageProvider);
+    if (shouldBroaden) {
+      const broadQuery = buildRecommendationQuery(normalizedDestination, theme, 'all');
+      if (broadQuery !== query) {
+        const broadRaw = await provider(broadQuery);
+        const broadResults = normalizeRecommendationResults(broadRaw.results, normalizedDestination, theme, 'all');
+        const strictBroadResults = normalizeRecommendationResults(broadRaw.results, normalizedDestination, theme, subcategory);
+        const strictMerged = mergeRecommendationResults(results, strictBroadResults);
+        results = strictMerged.length >= 3 ? strictMerged : mergeRecommendationResults(strictMerged, broadResults);
+        nextPageToken = nextPageToken ?? broadRaw.nextPageToken?.trim() ?? null;
+        totalItems = totalItems ?? (Number.isFinite(broadRaw.totalItems) ? Math.max(0, Math.floor(broadRaw.totalItems as number)) : null);
+      }
+    }
+
+    return { results, nextPageToken, totalItems };
   });
 }
 
