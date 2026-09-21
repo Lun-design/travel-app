@@ -60,6 +60,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
   const [showMore, setShowMore] = useState(false);
+  const [showOpeningHours, setShowOpeningHours] = useState(false);
   const [showAiInput, setShowAiInput] = useState(false);
   const [aiInput, setAiInput] = useState('');
   const [aiParsing, setAiParsing] = useState(false);
@@ -92,6 +93,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setResults([]);
     setSearchMessage('');
     setShowMore(false);
+    setShowOpeningHours(false);
     setShowAiInput(false);
     setAiInput('');
     setAiParsing(false);
@@ -378,13 +380,22 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
 
       <Pressable style={styles.moreButton} onPress={() => setShowMore((current) => !current)}><Text style={styles.moreText}>{showMore ? '收合進階設定' : '展開進階設定（類別、營業時間）'}</Text></Pressable>
       {showMore ? <View style={styles.morePanel}>
-        <Text style={styles.label}>景點類型</Text>
-        <View style={styles.chips}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.chip, category === value && styles.selected]}><Text style={category === value ? styles.white : styles.chipText}>{value}</Text></Pressable>)}</View>
+        <View style={styles.compactFieldRow}>
+          <View style={styles.compactField}>
+            <Text style={styles.label}>景點類型</Text>
+            <View style={styles.chips}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.chip, category === value && styles.selected]}><Text style={category === value ? styles.white : styles.chipText}>{value}</Text></Pressable>)}</View>
+          </View>
+          <View style={[styles.compactField, styles.costField]}>
+            <Text style={styles.label}>預估費用（TWD）</Text>
+            <TextInput style={styles.input} placeholder="例如 300" keyboardType="decimal-pad" value={estimatedCost} onChangeText={setEstimatedCost} />
+          </View>
+        </View>
         {category === 'trail' ? <><Text style={styles.label}>步道難度</Text><View style={styles.chips}>{['easy', 'moderate', 'hard'].map((value) => <Pressable key={value} onPress={() => setDifficulty(value)} style={[styles.chip, difficulty === value && styles.selected]}><Text style={difficulty === value ? styles.white : styles.chipText}>{value}</Text></Pressable>)}</View></> : null}
-        <Text style={styles.label}>預估費用（TWD）</Text>
-        <TextInput style={styles.input} placeholder="例如 300" keyboardType="decimal-pad" value={estimatedCost} onChangeText={setEstimatedCost} />
-        <View style={styles.hoursHeading}><Text style={styles.label}>每週營業時間</Text>{autoHoursStatus === 'loading' ? <Text style={styles.hoursLoading}>正在查詢 OSM 營業時間…</Text> : null}{autoHoursStatus === 'missing' ? <Text style={styles.hoursHint}>ℹ️ 該景點未登錄營業時間，可手動設定</Text> : null}</View>
-        <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} />
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: showOpeningHours }} style={styles.hoursToggle} onPress={() => setShowOpeningHours((current) => !current)}>
+          <View style={styles.hoursHeading}><Text style={styles.label}>每週營業時間</Text>{autoHoursStatus === 'loading' ? <Text style={styles.hoursLoading}>正在查詢 OSM 營業時間…</Text> : null}{autoHoursStatus === 'missing' ? <Text style={styles.hoursHint}>ℹ️ 該景點未登錄營業時間，可手動設定</Text> : null}</View>
+          <Text style={styles.hoursToggleText}>{showOpeningHours ? '收合' : '展開'}</Text>
+        </Pressable>
+        {showOpeningHours ? <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} /> : null}
         <Text style={styles.label}>備註</Text>
         <TextInput style={[styles.input, styles.notes]} placeholder="例如：需要預約" multiline value={notes} onChangeText={setNotes} />
         <Text style={styles.label}>預約與景點狀態</Text>
@@ -392,7 +403,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
           const selected = reservationTags.includes(option.key);
           return <Pressable key={option.key} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} onPress={() => setReservationTags((current) => selected ? current.filter((tag) => tag !== option.key) : [...current, option.key])} style={[styles.chip, selected && styles.selected]}><Text style={selected ? styles.white : styles.chipText}>{option.label}</Text></Pressable>;
         })}</View>
-        <Text style={styles.label}>地圖 Marker（查無結果時可手動微調）</Text>
+        <Text style={styles.label}>地圖座標</Text>
         <ManualLocationMap latitude={lat} longitude={lng} onChange={(latitude, longitude) => { setLat(latitude); setLng(longitude); }} />
       </View> : null}
 
@@ -445,12 +456,17 @@ const styles = StyleSheet.create({
   moreButton: { minHeight: 44, justifyContent: 'center', marginTop: 5, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
   moreText: { color: EDITORIAL_COLORS.terracotta, fontWeight: '800' },
   morePanel: { gap: 10, paddingTop: 2 },
+  compactFieldRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, width: '100%' },
+  compactField: { flex: 1, minWidth: 0, gap: 6 },
+  costField: { flexGrow: 0, flexBasis: 132 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 44, justifyContent: 'center', borderRadius: 10, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: EDITORIAL_COLORS.sand },
   selected: { backgroundColor: EDITORIAL_COLORS.terracotta },
   chipText: { color: EDITORIAL_COLORS.charcoal },
   notes: { minHeight: 90, textAlignVertical: 'top' },
-  hoursHeading: { gap: 4 },
+  hoursToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: EDITORIAL_COLORS.sand, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+  hoursHeading: { flex: 1, minWidth: 0, gap: 4 },
+  hoursToggleText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   hoursLoading: { color: EDITORIAL_COLORS.terracotta, fontSize: 12 },
   hoursHint: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 17 },
   actions: { position: 'relative', zIndex: 9999, elevation: 9999, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 20, marginTop: 12, paddingTop: 8, backgroundColor: EDITORIAL_COLORS.paper, width: '100%', minHeight: 64 },

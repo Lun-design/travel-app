@@ -249,13 +249,13 @@ describe('smart time buffers and alerts', () => {
     expect(web).toContain('onShiftSubsequent?.(changes)');
   });
 
-  it('enables the default buffer at the timeline boundary and surfaces it in route pills', () => {
+  it('keeps the default buffer in scheduling without surfacing redundant route-pill copy', () => {
     const panel = readFileSync(path.resolve(process.cwd(), 'src/components/trip-detail/TimelinePanel.tsx'), 'utf8');
     const shared = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryTimeline.shared.tsx'), 'utf8');
 
     expect(panel).toContain('includeBuffer: true');
     expect(panel).toContain('defaultBufferMinutes: 10');
-    expect(shared).toContain('nextScheduled?.bufferMinutes');
-    expect(shared).toContain('含緩衝');
+    expect(shared).not.toContain('nextScheduled?.bufferMinutes');
+    expect(shared).not.toContain('含緩衝');
   });
 });

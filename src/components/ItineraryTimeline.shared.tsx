@@ -452,9 +452,9 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
           <Text style={styles.transitionArrow}>➔</Text>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
         </View>
-        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)}){nextScheduled?.bufferMinutes ? ` · 含緩衝 ${nextScheduled.bufferMinutes} 分鐘` : ''}</Text></Pressable>
+        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)})</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
-        {segment.navigationUrl ? <Pressable accessibilityRole="link" style={styles.routeLink} onPress={() => { void Linking.openURL(segment.navigationUrl as string).catch(() => undefined); }}><Text numberOfLines={1} style={styles.routeLinkText}>🗺️ 導航路線</Text></Pressable> : null}
+        {/* 導航路線按鈕已整合至景點卡片，交通 Pill 保持單一資訊列。 */}
       </View> : null}
     </View>
   );
@@ -583,8 +583,6 @@ const styles = {
     routeModeButton: { minHeight: 36, justifyContent: 'center', borderRadius: 8, paddingHorizontal: 9, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, backgroundColor: EDITORIAL_COLORS.paper },
     routeModeButtonActive: { borderColor: EDITORIAL_COLORS.terracotta, backgroundColor: EDITORIAL_COLORS.terracottaSoft },
     routeModeText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700', flexShrink: 1 },
-    routeLink: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', marginLeft: 53 },
-    routeLinkText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   }),
   // Mobile-friendly transport presentation: a compact, neutral pill.
   transition: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, gap: 4, marginLeft: 24, marginTop: 4, marginBottom: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, borderColor: 'transparent', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.line } as const,
@@ -606,8 +604,6 @@ const styles = {
   categoryBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3, flexShrink: 1 } as const,
   // Navigation is a compact pill; the linedog sits inside rather than in the
   // category badge so the card header stays clean on narrow screens.
-  routeLink: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6, marginLeft: 0 } as const,
-  routeLinkText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
   navigationButton: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6 } as const,
   navigationPuppy: { width: 20, height: 20, flexShrink: 0, backgroundColor: 'transparent', opacity: 1 } as const,
   navigation: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
