@@ -9,6 +9,7 @@ import {
   normalizeGlobalPlace,
   paginateRecommendations,
   buildRecommendationQuery,
+  getCuratedRecommendations,
   searchDynamicRecommendations,
   searchGlobalPlaces,
   type GlobalPlaceSearchResult,
@@ -98,9 +99,20 @@ describe('global recommendation helpers', () => {
     expect(source).toContain('destinationInput');
     expect(source).toContain('recommendationLoading');
     expect(source).toContain('onAddedToItinerary');
+    expect(source).toContain('onAddToBucket');
+    expect(source).toContain('收藏');
     expect(source).toContain('已帶入');
     expect(placesPanel).toContain('onAddedToItinerary');
+    expect(placesPanel).toContain('onAddToBucket');
+    expect(placesPanel).toContain('handleRecommendationSaveToBucket');
+    expect(placesPanel).toContain('createTripPlace');
     expect(placesPanel).toContain('await onChanged()');
+  });
+
+  it('provides Japan destination inspiration cards with coordinates', () => {
+    const curated = getCuratedRecommendations('日本 JP');
+    expect(curated.map((place) => place.title)).toEqual(expect.arrayContaining(['道頓堀', '黑門市場', '大阪城公園', '大阪燒美津の']));
+    expect(curated.every((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude))).toBe(true);
   });
 
   it('exposes all four theme tabs for zero-input recommendations', () => {

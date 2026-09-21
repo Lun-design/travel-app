@@ -154,6 +154,50 @@ export function normalizeGlobalPlace(place: GeocodingResult): GlobalPlaceSearchR
   };
 }
 
+/**
+ * Small, curated destination starters shown before a user searches.  These are
+ * deliberately stable records (rather than mock API responses) so the first
+ * useful cards still render when Places API is unavailable or offline.
+ */
+export function getCuratedRecommendations(destination: string): GlobalPlaceSearchResult[] {
+  const value = destination.trim().toLocaleLowerCase();
+  if (!/(日本|jp|japan|大阪|osaka|關西|kansai|京都|kyoto|東京|tokyo)/i.test(value)) return [];
+
+  const entries: Array<{
+    id: string;
+    title: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    category: GlobalPlaceCategory;
+    estimatedDurationMinutes: number;
+  }> = [
+    { id: 'curated-dotombori', title: '道頓堀', address: '道頓堀, 大阪府大阪市, 日本', latitude: 34.6687, longitude: 135.5013, category: 'outdoor', estimatedDurationMinutes: 90 },
+    { id: 'curated-kuromon-market', title: '黑門市場', address: '黑門市場, 大阪府大阪市, 日本', latitude: 34.6654, longitude: 135.5063, category: 'indoor', estimatedDurationMinutes: 90 },
+    { id: 'curated-osaka-castle-park', title: '大阪城公園', address: '大阪城公園, 大阪府大阪市, 日本', latitude: 34.6873, longitude: 135.5262, category: 'outdoor', estimatedDurationMinutes: 120 },
+    { id: 'curated-okonomiyaki-mizuno', title: '大阪燒美津の', address: '大阪燒美津の, 大阪府大阪市, 日本', latitude: 34.6686, longitude: 135.5034, category: 'indoor', estimatedDurationMinutes: 60 },
+  ];
+
+  return entries.map((entry) => {
+    const source: GeocodingResult = {
+      id: entry.id,
+      title: entry.title,
+      displayName: entry.address,
+      latitude: entry.latitude,
+      longitude: entry.longitude,
+      provider: 'osm',
+    };
+    return {
+      ...entry,
+      city: '大阪',
+      country: '日本',
+      timezone: 'Asia/Tokyo',
+      provider: source.provider,
+      source,
+    };
+  });
+}
+
 export async function searchGlobalPlaces(query: string, provider: GlobalPlaceSearchProvider = searchPlaces): Promise<GlobalPlaceSearchResult[]> {
   const normalized = query.trim();
   if (normalized.length < 2) return [];

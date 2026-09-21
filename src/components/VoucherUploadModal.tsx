@@ -4,6 +4,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import { uploadVoucher } from '@/lib/vouchers-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { EDITORIAL_COLORS } from '@/lib/theme';
+import { DatePickerField, TimePickerField } from './FormPickers';
 
 export function VoucherUploadModal({ visible, tripId, userId, items, onClose, onUploaded }: {
   visible: boolean;
@@ -15,12 +16,20 @@ export function VoucherUploadModal({ visible, tripId, userId, items, onClose, on
 }) {
   const [title, setTitle] = useState('');
   const [itemId, setItemId] = useState<string | null>(null);
+  const [reservationNumber, setReservationNumber] = useState('');
+  const [usageDate, setUsageDate] = useState('');
+  const [usageTime, setUsageTime] = useState('');
+  const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setTitle('');
       setItemId(null);
+      setReservationNumber('');
+      setUsageDate('');
+      setUsageTime('');
+      setNotes('');
     }
   }, [visible]);
 
@@ -31,7 +40,7 @@ export function VoucherUploadModal({ visible, tripId, userId, items, onClose, on
       if (result.canceled) return;
       const file = result.assets[0];
       const data = await (await fetch(file.uri)).arrayBuffer();
-      await uploadVoucher({ tripId, userId, itemId, title, fileName: file.name, fileType: file.mimeType ?? 'application/octet-stream', data });
+      await uploadVoucher({ tripId, userId, itemId, title, reservationNumber, usageAt: usageDate && usageTime ? `${usageDate}T${usageTime}:00` : usageDate ? `${usageDate}T00:00:00` : null, notes, fileName: file.name, fileType: file.mimeType ?? 'application/octet-stream', data });
       await onUploaded();
       onClose();
     } catch (error: any) {
@@ -47,11 +56,15 @@ export function VoucherUploadModal({ visible, tripId, userId, items, onClose, on
       <Text style={styles.title}>新增預約與票券</Text>
       <Text style={styles.hint}>支援圖片與 PDF，可綁定到時間軸上的景點、航班或飯店。</Text>
       <TextInput style={styles.input} placeholder="票券名稱（選填）" value={title} onChangeText={setTitle} />
+      <TextInput style={styles.input} placeholder="預約編號（選填）" value={reservationNumber} onChangeText={setReservationNumber} />
       <Text style={styles.label}>綁定行程項目（選填）</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <Pressable style={[styles.chip, itemId === null && styles.selected]} onPress={() => setItemId(null)}><Text style={itemId === null ? styles.white : undefined}>不綁定</Text></Pressable>
         {items.map((item) => <Pressable key={item.id} style={[styles.chip, itemId === item.id && styles.selected]} onPress={() => setItemId(item.id)}><Text style={itemId === item.id ? styles.white : undefined}>{item.location_name}</Text></Pressable>)}
       </ScrollView>
+      <Text style={styles.label}>使用日期與時間（選填）</Text>
+      <View style={styles.dateTimeRow}><DatePickerField label="使用日期" value={usageDate} onChange={setUsageDate} style={styles.picker} /><TimePickerField label="使用時間" value={usageTime} onChange={setUsageTime} style={styles.picker} /></View>
+      <TextInput style={[styles.input, styles.notes]} placeholder="備註（選填）" value={notes} onChangeText={setNotes} multiline />
       <Pressable style={styles.upload} disabled={busy} onPress={() => void choose()}><Text style={styles.white}>{busy ? '上傳中…' : '選擇圖片或 PDF'}</Text></Pressable>
       <Pressable onPress={onClose}><Text style={styles.cancel}>取消</Text></Pressable>
     </View></View>
@@ -65,6 +78,9 @@ const styles = StyleSheet.create({
   hint: { color: EDITORIAL_COLORS.taupe },
   label: { color: EDITORIAL_COLORS.charcoal, fontWeight: '700' },
   input: { minHeight: 48, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 13 },
+  notes: { minHeight: 76, textAlignVertical: 'top' },
+  dateTimeRow: { flexDirection: 'row', gap: 8 },
+  picker: { flex: 1, minWidth: 0 },
   chips: { gap: 8 },
   chip: { minHeight: 44, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.sand, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
   selected: { backgroundColor: EDITORIAL_COLORS.terracotta },

@@ -10,6 +10,16 @@ export type UploadVoucherInput = {
   fileName: string;
   fileType: string;
   data: ArrayBuffer;
+  reservationNumber?: string | null;
+  usageAt?: string | null;
+  notes?: string | null;
+};
+
+export type VoucherUpdateInput = {
+  item_id?: string | null;
+  reservation_number?: string | null;
+  usage_at?: string | null;
+  notes?: string | null;
 };
 
 export async function listVouchers(tripId: string): Promise<Voucher[]> {
@@ -41,6 +51,9 @@ export async function uploadVoucher(input: UploadVoucherInput): Promise<Voucher>
     file_type: fileType,
     file_path: path,
     uploaded_by: input.userId,
+    reservation_number: input.reservationNumber?.trim() || null,
+    usage_at: input.usageAt?.trim() || null,
+    notes: input.notes?.trim() || null,
   }).select().single();
   if (error) {
     await supabase.storage.from('travel-documents').remove([path]);
@@ -53,6 +66,18 @@ export async function getVoucherPreviewUrl(voucher: Pick<Voucher, 'file_path'>, 
   const { data, error } = await supabase.storage.from('travel-documents').createSignedUrl(voucher.file_path, expiresIn);
   if (error) throw error;
   return data.signedUrl;
+}
+
+export async function updateVoucher(id: string, input: VoucherUpdateInput): Promise<Voucher> {
+  const payload = {
+    ...(input.item_id === undefined ? {} : { item_id: input.item_id }),
+    ...(input.reservation_number === undefined ? {} : { reservation_number: input.reservation_number?.trim() || null }),
+    ...(input.usage_at === undefined ? {} : { usage_at: input.usage_at?.trim() || null }),
+    ...(input.notes === undefined ? {} : { notes: input.notes?.trim() || null }),
+  };
+  const { data, error } = await supabase.from('vouchers').update(payload).eq('id', id).select().single();
+  if (error) throw error;
+  return data as Voucher;
 }
 
 export async function deleteVoucher(voucher: Pick<Voucher, 'id' | 'file_path'>): Promise<void> {

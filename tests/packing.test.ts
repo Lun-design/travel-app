@@ -17,6 +17,13 @@ describe('packing suggestions', () => {
     ]);
   });
 
+  it('deduplicates equivalent passport and identity-document labels', () => {
+    expect(dedupePackingItems(
+      [{ name: '身分證／護照', category: '證件' }],
+      [{ name: '護照', category: '證件' }],
+    )).toEqual([]);
+  });
+
   it('adds destination and weather-aware essentials without duplicates', () => {
     const suggestions = generatePackingSuggestions('北海道滑雪', {
       precipitationProbability: 72,
@@ -104,6 +111,12 @@ describe('packing suggestions', () => {
   it('includes the Japan and Korea city essentials in the preset', () => {
     const names = templateItems('日韓都市').map((item) => item.name);
     expect(names).toEqual(expect.arrayContaining(['Visit Japan Web 填寫', '日幣現金', 'ICOCA/Suica', '網卡/漫遊', '日本插頭/轉接頭']));
+  });
+
+  it('assigns personal Japan entry items to everyone in the preset', () => {
+    const items = templateItems('日韓都市');
+    expect(items.find((item) => item.name === 'Visit Japan Web 填寫')).toMatchObject({ assigned_to_all: true });
+    expect(items.find((item) => item.name === '入境卡')).toMatchObject({ assigned_to_all: true });
   });
 
   it('adds Japan-specific AI suggestions from the destination', () => {

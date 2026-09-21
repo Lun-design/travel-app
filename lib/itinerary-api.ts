@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { normalizeItineraryItemPayload, sanitizeLoadedItineraryItems, type ItineraryItem, type ItineraryItemSaveInput } from './itinerary';
+import { normalizeReservationTags } from './reservation-tags';
 import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueueOffline, updateOfflineCollection, type OfflineApiOptions } from './offline-data';
 import { offlineStore, type OfflineScope, type OfflineStore } from './offline-store';
 
@@ -268,3 +269,13 @@ export async function updateItineraryItemImage(
 
 /** Alias that makes the persisted column name explicit for API consumers. */
 export const updateItineraryItemPreviewUrl = updateItineraryItemImage;
+
+/** Mark an itinerary item as ticketed/reserved without rewriting other fields. */
+export async function updateItineraryItemReservationTags(id: string, tags: string[]): Promise<void> {
+  const normalizedTags = normalizeReservationTags(tags);
+  const { error } = await supabase
+    .from('itinerary_items')
+    .update({ reservation_tags: normalizedTags })
+    .eq('id', id);
+  if (error) throw error;
+}

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeVoucherFileType } from '../lib/vouchers';
-import { deleteVoucher, getVoucherPreviewUrl } from '../lib/vouchers-api';
+import { deleteVoucher, getVoucherPreviewUrl, updateVoucher } from '../lib/vouchers-api';
 
 const supabaseMock = vi.hoisted(() => ({
   storage: { from: vi.fn() },
@@ -54,6 +54,18 @@ describe('voucher storage API', () => {
     expect(supabaseMock.from).toHaveBeenCalledWith('vouchers');
     expect(eq).toHaveBeenCalledWith('id', 'voucher-1');
   });
+
+  it('updates reservation metadata and binds a voucher to an itinerary item', async () => {
+    const single = vi.fn().mockResolvedValue({ data: { id: 'voucher-1', item_id: 'item-2', reservation_number: 'ABC123', usage_at: '2026-10-23T10:00:00.000Z', notes: '電子票' }, error: null });
+    const eq = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
+    const update = vi.fn().mockReturnValue({ eq });
+    supabaseMock.from.mockReturnValue({ update });
+
+    await updateVoucher('voucher-1', { item_id: 'item-2', reservation_number: 'ABC123', usage_at: '2026-10-23T10:00:00.000Z', notes: '電子票' });
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ item_id: 'item-2', reservation_number: 'ABC123', usage_at: '2026-10-23T10:00:00.000Z', notes: '電子票' }));
+    expect(eq).toHaveBeenCalledWith('id', 'voucher-1');
+  });
 });
 
 describe('vouchers panel UI contract', () => {
@@ -72,5 +84,28 @@ describe('vouchers panel UI contract', () => {
     expect(source).toContain('event.stopPropagation()');
     expect(source).toContain('onPress={(event) =>');
     expect(source).toContain('setToast(error?.message');
+  });
+
+  it('exposes preview, binding, reservation fields, and usage time in the UI', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src/components/VouchersPanel.tsx'), 'utf8');
+    const upload = readFileSync(path.resolve(process.cwd(), 'src/components/VoucherUploadModal.tsx'), 'utf8');
+    const preview = readFileSync(path.resolve(process.cwd(), 'src/components/VoucherPreviewModal.tsx'), 'utf8');
+    const metadata = readFileSync(path.resolve(process.cwd(), 'src/components/VoucherMetadataModal.tsx'), 'utf8');
+    expect(source).toContain('bindingVoucher');
+    expect(source).toContain('setBindingVoucher');
+    expect(source).toContain('setPreview(voucher)');
+    expect(source).toContain('updateVoucher');
+    expect(source).toContain('setBindingItemId');
+    expect(source).toContain('VoucherMetadataModal');
+    expect(source).toContain('updateItineraryItemReservationTags');
+    expect(source).toContain("'ticketed'");
+    expect(upload).toContain('reservationNumber');
+    expect(upload).toContain('usageAt');
+    expect(upload).toContain('notes');
+    expect(preview).toContain('getVoucherPreviewUrl');
+    expect(preview).toContain('Linking.openURL');
+    expect(metadata).toContain('updateVoucher');
+    expect(metadata).toContain('reservation_number');
+    expect(metadata).toContain('usage_at');
   });
 });

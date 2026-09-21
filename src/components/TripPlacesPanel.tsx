@@ -176,8 +176,24 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
     }
   }
 
+  async function handleRecommendationSaveToBucket(place: GlobalPlaceSearchResult) {
+    if (savedPlaces.some((saved) => saved.title.trim() === place.title.trim())) return;
+    await createTripPlace({
+      trip_id: tripId,
+      title: place.title,
+      address: place.address,
+      lat: place.latitude,
+      lng: place.longitude,
+      category: place.category,
+      notes: null,
+      created_by: userId,
+      ...(place.source.photoReference ? { photo_reference: place.source.photoReference } : {}),
+    });
+    await onChanged();
+  }
+
   return <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-    <RecommendationPanel tripId={tripId} userId={userId} dayNumber={selectedDay} destination={destination} themeMode={themeMode} onAddToItinerary={handleRecommendationAdd} onAddedToItinerary={async () => { await onChanged(); }} />
+    <RecommendationPanel tripId={tripId} userId={userId} dayNumber={selectedDay} destination={destination} themeMode={themeMode} onAddToItinerary={handleRecommendationAdd} onAddToBucket={handleRecommendationSaveToBucket} onAddedToItinerary={async () => { await onChanged(); }} />
     <View style={[styles.header, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
       <Text style={[styles.title, { color: theme.colors.text }]}>💡 靈感收藏庫</Text>
       <Text style={[styles.subtitle, { color: theme.colors.muted }]}>先收藏想去的地方，再安排到適合的日期。</Text>

@@ -15,6 +15,7 @@ import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import {
   buildGlobalItineraryPayload,
   DEFAULT_RECOMMENDATION_PAGE_SIZE,
+  getCuratedRecommendations,
   getRecommendationSubcategories,
   mergeRecommendationResults,
   paginateRecommendations,
@@ -36,11 +37,12 @@ type Props = {
   themeMode: ThemeMode;
   onAddToItinerary: (place: GlobalPlaceSearchResult, payload: GlobalItineraryPayload) => Promise<void>;
   onAddedToItinerary?: (place: GlobalPlaceSearchResult, payload: GlobalItineraryPayload) => void | Promise<void>;
+  onAddToBucket?: (place: GlobalPlaceSearchResult) => Promise<void> | void;
 };
 
 const RECOMMENDATION_PAGE_SIZE = DEFAULT_RECOMMENDATION_PAGE_SIZE;
 
-export function RecommendationPanel({ tripId, userId, dayNumber, destination, themeMode, onAddToItinerary, onAddedToItinerary }: Props) {
+export function RecommendationPanel({ tripId, userId, dayNumber, destination, themeMode, onAddToItinerary, onAddedToItinerary, onAddToBucket }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -60,6 +62,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
   const [recommendationTotalItems, setRecommendationTotalItems] = useState<number | null>(null);
   const [addedIds, setAddedIds] = useState<string[]>([]);
+  const [bucketAddedIds, setBucketAddedIds] = useState<string[]>([]);
+  const [bucketAddingId, setBucketAddingId] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
   useEffect(() => {
@@ -89,11 +93,11 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setRecommendationError('');
     try {
       const firstPage = await searchDynamicRecommendationsPage(normalized, themeValue, { subcategory: subcategoryValue });
-      setRecommendations(firstPage.results);
+      setRecommendations(mergeRecommendationResults(getCuratedRecommendations(normalized), firstPage.results));
       setNextPageToken(firstPage.nextPageToken);
       setRecommendationTotalItems(firstPage.totalItems);
     } catch (error) {
-      setRecommendations([]);
+      setRecommendations(getCuratedRecommendations(normalized));
       setNextPageToken(null);
       setRecommendationTotalItems(null);
       setRecommendationError(error instanceof Error ? error.message : '暫時無法取得即時推薦');
@@ -199,6 +203,19 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       Alert.alert('帶入失敗', error instanceof Error ? error.message : '無法加入行程');
     } finally {
       setAddingId(null);
+    }
+  }
+
+  async function handleSaveToBucket(place: GlobalPlaceSearchResult) {
+    if (!onAddToBucket) return;
+    setBucketAddingId(place.id);
+    try {
+      await onAddToBucket(place);
+      setBucketAddedIds((current) => current.includes(place.id) ? current : [...current, place.id]);
+    } catch (error) {
+      Alert.alert('收藏失敗', error instanceof Error ? error.message : '無法加入靈感收藏庫');
+    } finally {
+      setBucketAddingId(null);
     }
   }
 
@@ -351,6 +368,9 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                     <Pressable accessibilityRole="button" accessibilityLabel={`將 ${place.title} 帶入行程`} disabled={addingId !== null || addedIds.includes(place.id)} onPress={() => void handleAdd(place)} style={[styles.addButton, { borderColor: theme.colors.primary, opacity: addedIds.includes(place.id) ? 0.55 : 1 }]}>
                       {addingId === place.id ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.addText, { color: theme.colors.primary }]}>{addedIds.includes(place.id) ? '已帶入' : '一鍵帶入'}</Text>}
                     </Pressable>
+                    {onAddToBucket ? <Pressable accessibilityRole="button" accessibilityLabel={`收藏 ${place.title}`} disabled={bucketAddingId !== null || bucketAddedIds.includes(place.id)} onPress={() => void handleSaveToBucket(place)} style={[styles.addButton, { borderColor: theme.colors.border, opacity: bucketAddedIds.includes(place.id) ? 0.55 : 1 }]}>
+                      {bucketAddingId === place.id ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={[styles.addText, { color: theme.colors.text }]}>{bucketAddedIds.includes(place.id) ? '已收藏' : '＋ 收藏'}</Text>}
+                    </Pressable> : null}
                   </View>
                 ))}
               </View>

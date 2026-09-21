@@ -10,6 +10,9 @@ export type Voucher = {
   file_path: string;
   uploaded_by: string;
   created_at: string;
+  reservation_number?: string | null;
+  usage_at?: string | null;
+  notes?: string | null;
 };
 
 export function normalizeVoucherFileType(mimeType: string): VoucherFileType | null {
