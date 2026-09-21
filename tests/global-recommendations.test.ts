@@ -9,6 +9,7 @@ import {
   normalizeGlobalPlace,
   paginateRecommendations,
   buildRecommendationQuery,
+  buildExpandedRecommendationQuery,
   getCuratedRecommendations,
   filterGlobalRecommendationsByDestination,
   filterGlobalRecommendationsBySubcategory,
@@ -166,6 +167,7 @@ describe('global recommendation helpers', () => {
     expect(getRecommendationSubcategories('must-see').map((item) => item.id)).toEqual(['all', 'landmark', 'shrine', 'nature', 'shopping']);
     expect(buildRecommendationQuery('東京', 'food', 'bbq')).toContain('燒肉');
     expect(buildRecommendationQuery('大阪', 'food', 'hotpot')).toMatch(/火鍋.*涮涮鍋.*壽喜燒.*shabu.*sukiyaki.*しゃぶしゃぶ.*すき焼き/);
+    expect(buildExpandedRecommendationQuery('大阪', 'food', 'bbq', 0)).toContain('熱門燒肉');
     expect(buildRecommendationQuery('東京', 'must-see', 'shrine')).toContain('神社');
   });
 
@@ -215,6 +217,16 @@ describe('global recommendation helpers', () => {
     expect(page.results.map((place) => place.id)).toEqual(expect.arrayContaining(['one', 'two', 'three', 'four']));
   });
 
+  it('supports an explicit expansion query for subsequent recommendation pages', async () => {
+    const calls: string[] = [];
+    const provider = async (query: string): Promise<{ results: GeocodingResult[]; nextPageToken: null }> => {
+      calls.push(query);
+      return { results: [{ id: `place-${calls.length}`, title: '大阪燒肉', displayName: '大阪燒肉, Osaka, Japan', latitude: 34.67, longitude: 135.51, provider: 'google' }], nextPageToken: null };
+    };
+    await searchDynamicRecommendationsPage('大阪', 'food', { provider, subcategory: 'bbq', queryOverride: '大阪 熱門燒肉' });
+    expect(calls).toEqual(['大阪 熱門燒肉']);
+  });
+
   it('preserves API and curated image URLs for recommendation cards', () => {
     const normalized = normalizeGlobalPlace({
       id: 'photo-place',
@@ -230,6 +242,8 @@ describe('global recommendation helpers', () => {
     const panelSource = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
     expect(panelSource).toContain('resizeMode="cover"');
     expect(panelSource).toContain('onError');
+    expect(panelSource).toContain('recommendationSkeleton');
+    expect(panelSource).toContain('buildExpandedRecommendationQuery');
   });
 
   it('paginates recommendation cards with stable page boundaries', () => {

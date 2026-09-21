@@ -47,6 +47,8 @@ export type RecommendationPage = {
 export type RecommendationPageOptions = {
   subcategory?: RecommendationSubcategoryId;
   pageToken?: string | null;
+  /** Optional query used when the selected search exhausted its page token. */
+  queryOverride?: string;
   provider?: RecommendationPageProvider;
   cache?: RecommendationSessionCache;
 };
@@ -308,6 +310,34 @@ export function buildRecommendationQuery(destination: string, theme: Recommendat
   return `${destination.trim()} ${category.keyword}`.trim();
 }
 
+const RECOMMENDATION_EXPANSION_TERMS: Partial<Record<RecommendationSubcategoryId, string>> = {
+  bbq: '燒肉',
+  hotpot: '火鍋',
+  noodles: '拉麵',
+  izakaya: '居酒屋',
+  dessert: '甜點咖啡',
+  landmark: '地標',
+  shrine: '神社古蹟',
+  nature: '自然公園',
+  shopping: '購物商圈',
+};
+
+const RECOMMENDATION_EXPANSION_PREFIXES = ['熱門', '必吃', '人氣', '推薦', '附近熱門'];
+
+/** Builds a progressively broader query for pages after Places tokens are exhausted. */
+export function buildExpandedRecommendationQuery(
+  destination: string,
+  theme: RecommendationThemeId,
+  subcategory: RecommendationSubcategoryId = 'all',
+  expansionIndex = 0,
+): string {
+  const normalizedDestination = destination.trim();
+  const baseTerm = RECOMMENDATION_EXPANSION_TERMS[subcategory]
+    ?? (theme === 'food' ? '美食' : theme === 'must-see' ? '景點' : theme === 'indoor' ? '室內景點' : '休閒');
+  const prefix = RECOMMENDATION_EXPANSION_PREFIXES[Math.max(0, Math.floor(expansionIndex)) % RECOMMENDATION_EXPANSION_PREFIXES.length];
+  return `${normalizedDestination} ${prefix}${baseTerm}`.trim();
+}
+
 const RECOMMENDATION_SUBCATEGORY_TERMS: Partial<Record<RecommendationSubcategoryId, string[]>> = {
   bbq: ['燒肉', '烤肉', '焼肉', 'bbq', 'yakiniku'],
   hotpot: ['火鍋', '涮涮鍋', '鍋物', 'しゃぶ', 'hotpot', 'hot pot'],
@@ -400,7 +430,8 @@ export async function searchDynamicRecommendationsPage(
 ): Promise<RecommendationPage> {
   const normalizedDestination = destination.trim();
   if (normalizedDestination.length < 2) return { results: [], nextPageToken: null, totalItems: 0 };
-  const query = buildRecommendationQuery(normalizedDestination, theme, options.subcategory ?? 'all');
+  const query = options.queryOverride?.trim()
+    || buildRecommendationQuery(normalizedDestination, theme, options.subcategory ?? 'all');
   const pageToken = options.pageToken?.trim() || '';
   const cache = options.cache ?? recommendationSessionCache;
   const provider = options.provider ?? defaultRecommendationPageProvider;
@@ -415,6 +446,7 @@ export async function searchDynamicRecommendationsPage(
     // sparse deep category still gives the traveler a useful set of cards.
     const shouldBroaden = subcategory !== 'all'
       && !pageToken
+      && !options.queryOverride?.trim()
       && results.length < 3
       // For the real Places provider broaden immediately; injected providers
       // with a next token can continue pagination without duplicate requests.

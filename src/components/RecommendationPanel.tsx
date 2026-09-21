@@ -16,6 +16,7 @@ import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getSpotImageUrl } from '@/lib/spot-image';
 import {
   buildGlobalItineraryPayload,
+  buildExpandedRecommendationQuery,
   DEFAULT_RECOMMENDATION_PAGE_SIZE,
   getCuratedRecommendations,
   getRecommendationSubcategories,
@@ -44,6 +45,7 @@ type Props = {
 };
 
 const RECOMMENDATION_PAGE_SIZE = DEFAULT_RECOMMENDATION_PAGE_SIZE;
+const MAX_RECOMMENDATION_EXPANSIONS = 12;
 
 export function RecommendationPanel({ tripId, userId, dayNumber, destination, themeMode, onAddToItinerary, onAddedToItinerary, onAddToBucket }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
@@ -64,6 +66,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
   const [recommendationTotalItems, setRecommendationTotalItems] = useState<number | null>(null);
+  const [recommendationExpansionIndex, setRecommendationExpansionIndex] = useState(0);
   const [addedIds, setAddedIds] = useState<string[]>([]);
   const [bucketAddedIds, setBucketAddedIds] = useState<string[]>([]);
   const [bucketAddingId, setBucketAddingId] = useState<string | null>(null);
@@ -105,6 +108,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setSelectedDestination(nextDestination);
     setPage(1);
     setRecommendationTotalItems(null);
+    setRecommendationExpansionIndex(0);
+    setNextPageToken(null);
     setAddedIds([]);
   }, [destination]);
 
@@ -124,6 +129,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setRecommendationLoading(true);
     setRecommendationSearched(true);
     setRecommendationError('');
+    setRecommendationExpansionIndex(0);
     try {
       const firstPage = await searchDynamicRecommendationsPage(normalized, themeValue, { subcategory: subcategoryValue });
       const curated = filterGlobalRecommendationsBySubcategory(getCuratedRecommendations(normalized), themeValue, subcategoryValue);
@@ -148,17 +154,23 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const loadMoreRecommendations = useCallback(async (): Promise<RecommendationPage | null> => {
     const normalized = selectedDestination.trim();
     const token = nextPageToken;
-    if (normalized.length < 2 || !token || recommendationLoadingMore) return null;
+    const expansionIndex = recommendationExpansionIndex;
+    const canExpand = !token && expansionIndex < MAX_RECOMMENDATION_EXPANSIONS;
+    if (normalized.length < 2 || recommendationLoadingMore || (!token && !canExpand)) return null;
     setRecommendationLoadingMore(true);
     setRecommendationError('');
     try {
       const nextPage = await searchDynamicRecommendationsPage(normalized, activeTheme, {
         subcategory: activeSubcategory,
         pageToken: token,
+        queryOverride: token
+          ? undefined
+          : buildExpandedRecommendationQuery(normalized, activeTheme, activeSubcategory, expansionIndex),
       });
       setRecommendations((current) => mergeRecommendationResults(current, nextPage.results));
       setNextPageToken(nextPage.nextPageToken);
       setRecommendationTotalItems((current) => nextPage.totalItems ?? current);
+      if (!token) setRecommendationExpansionIndex((current) => current + 1);
       return nextPage;
     } catch (error) {
       setRecommendationError(error instanceof Error ? error.message : '?急??⊥????單??刻');
@@ -166,7 +178,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     } finally {
       setRecommendationLoadingMore(false);
     }
-  }, [activeSubcategory, activeTheme, nextPageToken, recommendationLoadingMore, selectedDestination]);
+  }, [activeSubcategory, activeTheme, nextPageToken, recommendationExpansionIndex, recommendationLoadingMore, selectedDestination]);
 
   function selectDestination(value: string) {
     const normalized = value.trim();
@@ -174,6 +186,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setSelectedDestination(normalized);
     setPage(1);
     setRecommendationTotalItems(null);
+    setRecommendationExpansionIndex(0);
+    setNextPageToken(null);
     setAddedIds([]);
   }
 
@@ -182,6 +196,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setActiveSubcategory('all');
     setPage(1);
     setRecommendationTotalItems(null);
+    setRecommendationExpansionIndex(0);
+    setNextPageToken(null);
     setAddedIds([]);
     const typedDestination = destinationInput.trim();
     if (typedDestination !== selectedDestination) setSelectedDestination(typedDestination);
@@ -191,6 +207,8 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setActiveSubcategory(nextSubcategory);
     setPage(1);
     setRecommendationTotalItems(null);
+    setRecommendationExpansionIndex(0);
+    setNextPageToken(null);
     setAddedIds([]);
   }
 
@@ -201,7 +219,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       setPage((current) => current + 1);
       return;
     }
-    if (!nextPageToken) return;
+    if (!canLoadNextPage) return;
     const loaded = await loadMoreRecommendations();
     if (loaded?.results.length) setPage((current) => current + 1);
   }
@@ -256,7 +274,16 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const recommendationPage = paginateRecommendations(recommendations, page, RECOMMENDATION_PAGE_SIZE, recommendationTotalItems);
   const nextPageStart = page * RECOMMENDATION_PAGE_SIZE;
   const nextPageAlreadyLoaded = recommendations.length > nextPageStart;
-  const canLoadNextPage = recommendationPage.hasNext && (nextPageAlreadyLoaded || Boolean(nextPageToken));
+  const canLoadNextPage = recommendations.length > 0 && (
+    recommendationPage.hasNext
+    || nextPageAlreadyLoaded
+    || Boolean(nextPageToken)
+    || recommendationExpansionIndex < MAX_RECOMMENDATION_EXPANSIONS
+  );
+  const displayTotalPages = Math.max(
+    recommendationPage.totalPages,
+    page + (canLoadNextPage ? 1 : 0),
+  );
   const subcategories = getRecommendationSubcategories(activeTheme);
 
   return (
@@ -410,6 +437,17 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                 ))}
               </View>
 
+              {recommendationLoadingMore ? (
+                <View testID="recommendationSkeleton" style={styles.recommendationSkeleton}>
+                  {[0, 1, 2].map((index) => (
+                    <View key={`recommendation-skeleton-${index}`} style={styles.skeletonRow}>
+                      <View style={styles.skeletonImage} />
+                      <View style={styles.skeletonCopy} />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
               {recommendations.length > 0 ? (
                 <View style={styles.pagination}>
                   <Pressable
@@ -421,7 +459,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
                   >
                     <Text style={[styles.paginationText, { color: theme.colors.text }]}>上一頁</Text>
                   </Pressable>
-                  <Text style={[styles.pageIndicator, { color: theme.colors.muted }]}>第 {recommendationPage.page} / {recommendationPage.totalPages} 頁</Text>
+                  <Text style={[styles.pageIndicator, { color: theme.colors.muted }]}>第 {recommendationPage.page} / {displayTotalPages} 頁</Text>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="下一頁推薦"
@@ -501,6 +539,10 @@ const styles = StyleSheet.create({
   subcategoryTabs: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   subcategoryTab: { minHeight: 36, borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
   loadingRow: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recommendationSkeleton: { width: '100%', gap: 8, paddingVertical: 4 },
+  skeletonRow: { width: '100%', minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10, backgroundColor: '#F0EDE8' },
+  skeletonImage: { width: 56, height: 56, borderRadius: 8, backgroundColor: '#E4DED6' },
+  skeletonCopy: { flex: 1, height: 38, borderRadius: 6, backgroundColor: '#E4DED6' },
   curatedList: { width: '100%', gap: 8 },
   curatedCard: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, padding: 10 },
   recommendationImage: { width: 96, height: 96, borderRadius: 10, backgroundColor: '#EEEAE4' },
