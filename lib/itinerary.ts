@@ -35,6 +35,36 @@ export type ItineraryItem = {
 };
 
 /**
+ * Remove legacy inter-stop route values from rows restored from Supabase or
+ * offline storage. `duration_minutes` is the user's stay duration and must be
+ * preserved; all route estimates are recalculated from the current segment.
+ */
+const LEGACY_ROUTE_FIELDS = [
+  'duration',
+  'estimated_minutes',
+  'estimated_drive_minutes',
+  'estimated_transit_minutes',
+  'travel_time',
+  'travel_time_minutes',
+  'transit_minutes',
+  'transport_duration',
+  'transport_duration_minutes',
+  'route_duration_minutes',
+  'route_distance_meters',
+  'route_estimate',
+  'route_estimates',
+  'route_cache',
+] as const;
+
+export function sanitizeLoadedItineraryItems<T extends object>(items: readonly T[]): T[] {
+  return items.map((item) => {
+    const cleaned = { ...item } as T & Record<string, unknown>;
+    for (const field of LEGACY_ROUTE_FIELDS) delete cleaned[field];
+    return cleaned as T;
+  });
+}
+
+/**
  * Values accepted by the itinerary editor before they are sent to Supabase.
  * The form uses strings for some fields, so keep this normalization in a
  * pure helper that can also be covered without loading the Supabase client.

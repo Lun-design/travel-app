@@ -7,7 +7,7 @@ import type { Voucher } from '@/lib/vouchers';
 import { buildDaySchedule, type ScheduleContext, type ScheduledItem } from '@/lib/schedule';
 import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
 import { formatPlaceAddress } from '@/lib/place-actions';
-import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, sanitizeRouteEstimateForDisplay, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
+import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEstimator, formatRouteEstimateDuration, sanitizeRouteEstimateForDisplay, type RouteEstimate, type RoutePoint, type TravelMode } from '@/lib/routes';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import type { PuppyId } from '@/lib/puppy';
@@ -202,7 +202,7 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
 
   useEffect(() => {
     let active = true;
-    if (routeOrderKeyRef.current !== null && routeOrderKeyRef.current !== orderKey) {
+    if (routeOrderKeyRef.current === null || routeOrderKeyRef.current !== orderKey) {
       clearRouteEstimateCaches();
     }
     routeOrderKeyRef.current = orderKey;
@@ -452,7 +452,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
           <Text style={styles.transitionArrow}>➔</Text>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
         </View>
-        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : `${segment.durationMinutes} 分鐘`} ({formatDistance(segment.distanceKm)})</Text></Pressable>
+        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {/* 導航路線按鈕已整合至景點卡片，交通 Pill 保持單一資訊列。 */}
       </View> : null}

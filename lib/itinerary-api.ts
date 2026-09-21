@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { normalizeItineraryItemPayload, type ItineraryItem, type ItineraryItemSaveInput } from './itinerary';
+import { normalizeItineraryItemPayload, sanitizeLoadedItineraryItems, type ItineraryItem, type ItineraryItemSaveInput } from './itinerary';
 import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueueOffline, updateOfflineCollection, type OfflineApiOptions } from './offline-data';
 import { offlineStore, type OfflineScope, type OfflineStore } from './offline-store';
 
@@ -89,11 +89,13 @@ export async function listItineraryItems(tripId: string, options: OfflineApiOpti
   try {
     const { data, error } = await supabase.from('itinerary_items').select('*').eq('trip_id', tripId).order('day_number').order('position');
     if (error) throw error;
-    const items = (data ?? []) as ItineraryItem[];
+    const items = sanitizeLoadedItineraryItems((data ?? []) as ItineraryItem[]);
     await updateOfflineCollection(store, scope, 'itineraryItems', () => items);
     return items;
   } catch (error) {
-    if (!options.replaying && shouldQueueOffline(error)) return ((await store.getSnapshot(scope))?.itineraryItems ?? []) as ItineraryItem[];
+    if (!options.replaying && shouldQueueOffline(error)) {
+      return sanitizeLoadedItineraryItems(((await store.getSnapshot(scope))?.itineraryItems ?? []) as ItineraryItem[]);
+    }
     throw error;
   }
 }

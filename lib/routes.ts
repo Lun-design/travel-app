@@ -152,6 +152,47 @@ export function isRouteDurationPlausible(distanceKm: number, durationMinutes: nu
   return durationMinutes + 0.001 >= minimumMinutes && durationMinutes <= maximumMinutes;
 }
 
+export type RouteDisplayEstimateInput = {
+  distanceMeters?: number | null;
+  distanceKm?: number | null;
+  durationMinutes?: number | null;
+};
+
+/**
+ * Final presentation guard for route labels. This intentionally accepts the
+ * loose shape used by persisted/API data, so a stale value cannot bypass the
+ * sanity check merely because it did not go through RouteEstimate first.
+ */
+export function sanitizeRouteDurationMinutes(input: RouteDisplayEstimateInput, mode: TravelMode = 'DRIVING'): number {
+  const rawDistanceMeters = Number(input.distanceMeters);
+  const distanceKm = Number.isFinite(rawDistanceMeters) && rawDistanceMeters >= 0
+    ? rawDistanceMeters / 1000
+    : Number.isFinite(Number(input.distanceKm)) && Number(input.distanceKm) >= 0
+      ? Number(input.distanceKm)
+      : 0;
+  const rawDuration = Number(input.durationMinutes);
+  const durationMinutes = Number.isFinite(rawDuration) && rawDuration >= 0
+    ? rawDuration
+    : calculateFallbackTravelMinutes(distanceKm, mode);
+  const distanceMeters = distanceKm * 1000;
+  // Hard presentation rules protect against old DB values such as 1 minute
+  // for 35.5 km and 61 minutes for a 478 m segment.
+  if (distanceMeters >= 10_000 && durationMinutes <= 5) {
+    return Math.max(1, Math.round((distanceKm / 40) * 60));
+  }
+  if (distanceMeters <= 1_000 && durationMinutes >= 30) {
+    return Math.max(1, Math.round((distanceKm / 5) * 60));
+  }
+  return isRouteDurationPlausible(distanceKm, durationMinutes, mode)
+    ? Math.max(1, Math.round(durationMinutes))
+    : calculateFallbackTravelMinutes(distanceKm, mode);
+}
+
+/** Build the exact user-facing duration text after the final sanity check. */
+export function formatRouteEstimateDuration(input: RouteDisplayEstimateInput, mode: TravelMode = 'DRIVING'): string {
+  return `${sanitizeRouteDurationMinutes(input, mode)} 分鐘`;
+}
+
 /**
  * Sanitize estimates at the presentation boundary as well as at the API
  * parser. A stale in-memory promise or an older browser cache can otherwise
@@ -170,17 +211,10 @@ export function sanitizeRouteEstimateForDisplay(
   const durationMinutes = Number.isFinite(estimate?.durationMinutes) && (estimate?.durationMinutes ?? 0) >= 0
     ? Number(estimate?.durationMinutes)
     : calculateFallbackTravelMinutes(distanceKm, mode);
-  const distanceMeters = distanceKm * 1000;
-  const longDistanceTooFast = distanceMeters > 5000 && durationMinutes < 5;
-  const shortDistanceTooSlow = distanceMeters < 1000 && durationMinutes > 40;
-  const duration = longDistanceTooFast
-    ? Math.max(1, Math.round((distanceKm / 40) * 60))
-    : shortDistanceTooSlow
-      ? Math.max(1, Math.round((distanceKm / 5) * 60))
-      : isRouteDurationPlausible(distanceKm, durationMinutes, mode)
-        ? Math.max(1, Math.round(durationMinutes))
-        : calculateFallbackTravelMinutes(distanceKm, mode);
-  const isFallback = longDistanceTooFast || shortDistanceTooSlow || duration !== durationMinutes || estimate?.source === 'fallback';
+  const duration = sanitizeRouteDurationMinutes({ distanceKm, durationMinutes }, mode);
+  const isFallback = duration !== Math.max(1, Math.round(durationMinutes))
+    || !isRouteDurationPlausible(distanceKm, durationMinutes, mode)
+    || estimate?.source === 'fallback';
   const navigationUrl = estimate?.navigationUrl ?? null;
   return {
     distanceKm,

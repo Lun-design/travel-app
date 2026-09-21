@@ -7,7 +7,7 @@ const timelineSource = readFileSync(resolve(process.cwd(), 'src/components/Itine
 describe('timeline route display safety', () => {
   it('sanitizes stale long-route estimates before rendering the pill', () => {
     expect(timelineSource).toContain('sanitizeRouteEstimateForDisplay(estimates[segment.fromId], segment.distanceKm, mode)');
-    expect(timelineSource).toContain('durationMinutes: estimate.durationMinutes || fallback');
+    expect(timelineSource).toContain('formatRouteEstimateDuration');
   });
 
   it('clears the shared route caches when a new order is detected', () => {

@@ -4,6 +4,7 @@ import {
   calculateFallbackTravelMinutes,
   createRouteEstimator,
   estimateRouteSequence,
+  formatRouteEstimateDuration,
   routeCacheKey,
   sanitizeRouteEstimateForDisplay,
   type RoutePoint,
@@ -13,6 +14,17 @@ const taipeiMainStation: RoutePoint = { latitude: 25.0478, longitude: 121.517, t
 const taipei101: RoutePoint = { latitude: 25.033968, longitude: 121.564468, title: '台北 101' };
 
 describe('route estimates', () => {
+  it('never renders a stale one-minute label for a 35.5 km route', () => {
+    const label = formatRouteEstimateDuration({ distanceMeters: 35_500, durationMinutes: 1 }, 'DRIVING');
+
+    expect(label).toBe('53 分鐘');
+    expect(label).not.toContain('1 分鐘');
+  });
+
+  it('corrects a stale long duration for a sub-kilometre route at render time', () => {
+    expect(formatRouteEstimateDuration({ distanceMeters: 478, durationMinutes: 61 }, 'DRIVING')).toBe('6 分鐘');
+  });
+
   it('uses a stable origin-destination-mode cache key', () => {
     expect(routeCacheKey(taipeiMainStation, taipei101, 'TRANSIT')).toBe('25.047800,121.517000->25.033968,121.564468:TRANSIT');
   });
