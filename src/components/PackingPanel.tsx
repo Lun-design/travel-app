@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 import { fetchWeatherForecast } from '@/lib/weather-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { createPackingItem, deletePackingItem as deletePackingItemRemote, importPackingTemplate, listPackingItems, updatePackingItem as updatePackingItemRemote, type PackingItem } from '@/lib/packing-api';
-import { dedupePackingItems, generatePackingSuggestions, groupPackingItems, hasRainyForecast, isPackingComplete, packingItemKey, packingProgress, RAIN_GEAR_NAME, type PackingTemplate } from '@/lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, groupPackingItems, hasRainyForecast, isPackingComplete, packingItemKey, packingProgress, PACKING_CATEGORIES, RAIN_GEAR_NAME, type PackingTemplate } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -11,8 +11,8 @@ import { offlineStore } from '@/lib/offline-store';
 import { getProfileDisplayName } from '@/lib/profiles';
 import { ProfileAvatar } from './ProfileAvatar';
 
-const categories = ['證件', '電子產品', '衣物', '藥品', '隨身物品', '未分類'];
-const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪'];
+const categories = PACKING_CATEGORIES;
+const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪', '日韓都市'];
 
 export function PackingPanel({ tripId, userId = 'anonymous', members, destination = '', tripStartDate, items: itineraryItems = [], themeMode, refreshToken = 0 }: {
   tripId: string;
@@ -31,6 +31,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const [category, setCategory] = useState('未分類');
   const [busy, setBusy] = useState(false);
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
+  const [assignmentItem, setAssignmentItem] = useState<PackingItem | null>(null);
   const [celebrateVisible, setCelebrateVisible] = useState(false);
   const autoRainGearKey = useRef<string | null>(null);
   const offlineScope = { userId, tripId };
@@ -93,6 +94,21 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
     }
   }
 
+  async function assignItemTo(item: PackingItem, assignedTo: string | null, allMembers: boolean) {
+    if (mutatingItemId) return;
+    setMutatingItemId(item.id);
+    setItems((current) => current.map((value) => value.id === item.id ? { ...value, assigned_to: assignedTo, assigned_to_all: allMembers } : value));
+    try {
+      await updatePackingItem(item.id, { assigned_to: assignedTo, assigned_to_all: allMembers }, { offlineScope, store: offlineStore });
+      setAssignmentItem(null);
+    } catch (error: any) {
+      await load();
+      Alert.alert('指派失敗', error?.message ?? '請稍後再試。');
+    } finally {
+      setMutatingItemId(null);
+    }
+  }
+
   async function removeItem(item: PackingItem) {
     if (mutatingItemId) return;
     setMutatingItemId(item.id);
@@ -137,11 +153,17 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
 
   return <View style={[styles.root, { backgroundColor: theme.colors.background }]}><View style={[styles.container, { backgroundColor: theme.colors.background }] }>
     <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
-    <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 AI 智慧建議清單</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
+    <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 點擊加入 AI 智慧建議</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
-    <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={setName} onSubmitEditing={() => void add()} /><Pressable style={styles.addButton} onPress={() => void add()} disabled={busy}><Text style={styles.white}>新增</Text></Pressable></View>
+    <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={setName} onSubmitEditing={() => void add()} /><Pressable accessibilityRole="button" style={styles.categorySelect} onPress={() => setOpen((current) => ({ ...current, __categoryPicker: true }))}><Text numberOfLines={1} style={styles.categorySelectText}>{category}</Text></Pressable><Pressable style={styles.addButton} onPress={() => void add()} disabled={busy}><Text style={styles.white}>新增</Text></Pressable></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={category === value ? styles.white : undefined}>{value}</Text></Pressable>)}</ScrollView>
-    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} disabled={mutatingItemId === item.id} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} disabled={mutatingItemId === item.id} onPress={() => void assignItem(item)}><ProfileAvatar profile={memberFor(item.assigned_to)?.profile} userId={item.assigned_to ?? undefined} size={26} /><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></Pressable><Pressable disabled={mutatingItemId === item.id} onPress={() => void removeItem(item)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
+    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} disabled={mutatingItemId === item.id} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} disabled={mutatingItemId === item.id} onPress={() => setAssignmentItem(item)}>{item.assigned_to_all ? <Text style={styles.assignee}>👥 所有人</Text> : <><ProfileAvatar profile={memberFor(item.assigned_to)?.profile} userId={item.assigned_to ?? undefined} size={26} /><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></>}</Pressable><Pressable disabled={mutatingItemId === item.id} onPress={() => void removeItem(item)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
+    <Modal visible={Boolean(open.__categoryPicker)} transparent animationType="fade" onRequestClose={() => setOpen((current) => ({ ...current, __categoryPicker: false }))}>
+      <View style={styles.modalBackdrop}><View style={styles.assignmentCard}><Text style={styles.celebrateTitle}>選擇分類</Text>{categories.map((value) => <Pressable key={value} style={styles.assignmentOption} onPress={() => { setCategory(value); setOpen((current) => ({ ...current, __categoryPicker: false })); }}><Text style={value === category ? styles.assignmentSelected : undefined}>{value}</Text></Pressable>)}</View></View>
+    </Modal>
+    <Modal visible={Boolean(assignmentItem)} transparent animationType="fade" onRequestClose={() => { if (!mutatingItemId) setAssignmentItem(null); }}>
+      <View style={styles.modalBackdrop}><View style={styles.assignmentCard}><Text style={styles.celebrateTitle}>指派攜帶人</Text>{assignmentItem ? getPackingAssignmentOptions(members.map((member) => member.user_id)).map((option, index) => <Pressable key={`${option.assignedTo ?? (option.allMembers ? 'all' : 'none')}-${index}`} disabled={Boolean(mutatingItemId)} style={styles.assignmentOption} onPress={() => void assignItemTo(assignmentItem, option.assignedTo, option.allMembers)}><Text>{option.allMembers ? '👥 所有人' : option.assignedTo ? getProfileDisplayName(memberFor(option.assignedTo)?.profile, option.assignedTo.slice(0, 8)) : '未指派'}</Text></Pressable>) : null}<Pressable style={styles.closeButton} onPress={() => setAssignmentItem(null)}><Text style={styles.white}>取消</Text></Pressable></View></View>
+    </Modal>
     <Modal visible={celebrateVisible} transparent animationType="fade" onRequestClose={() => setCelebrateVisible(false)}>
       <View style={styles.modalBackdrop}>
         <View style={styles.celebrateCard}>
@@ -172,6 +194,8 @@ const styles = StyleSheet.create({
   template: { maxWidth: '100%', minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 9, backgroundColor: EDITORIAL_COLORS.paper, borderRadius: 10, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
   templateText: { fontSize: 13 },
   addRow: { width: '100%', maxWidth: '100%', flexDirection: 'row', gap: 8 },
+  categorySelect: { width: 104, minHeight: 44, justifyContent: 'center', paddingHorizontal: 9, backgroundColor: EDITORIAL_COLORS.sand, borderRadius: 10 },
+  categorySelectText: { fontSize: 12, fontWeight: '700' },
   input: { flex: 1, minWidth: 0, minHeight: 44, backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 12 },
   addButton: { flexShrink: 0, minHeight: 44, backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
   white: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
@@ -193,6 +217,9 @@ const styles = StyleSheet.create({
   delete: { color: EDITORIAL_COLORS.dangerText, fontSize: 22, minHeight: 44, paddingVertical: 10 },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(31,31,31,.45)' },
   celebrateCard: { width: '100%', maxWidth: 360, alignItems: 'center', gap: 8, padding: 24, borderRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, backgroundColor: EDITORIAL_COLORS.paper },
+  assignmentCard: { width: '100%', maxWidth: 360, gap: 8, padding: 20, borderRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, backgroundColor: EDITORIAL_COLORS.paper },
+  assignmentOption: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
+  assignmentSelected: { color: EDITORIAL_COLORS.terracotta, fontWeight: '800' },
   celebrateTitle: { color: EDITORIAL_COLORS.charcoal, fontSize: 22, fontWeight: '800' },
   celebrateText: { color: EDITORIAL_COLORS.taupe, textAlign: 'center' },
   closeButton: { marginTop: 8, minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 24, paddingVertical: 10 },

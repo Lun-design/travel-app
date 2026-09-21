@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupePackingItems, generatePackingSuggestions, hasRainyForecast, isPackingComplete, packingProgress, RAIN_GEAR_NAME } from '../lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, hasRainyForecast, isPackingComplete, packingProgress, RAIN_GEAR_NAME, templateItems } from '../lib/packing-utils';
 
 describe('packing suggestions', () => {
   it('deduplicates by normalized item name and category', () => {
@@ -84,5 +84,25 @@ describe('packing suggestions', () => {
       { category: '衣物', is_checked: true },
       { category: '藥品', is_packed: false },
     ])).toBe(false);
+  });
+
+  it('provides an all-members assignee option', () => {
+    expect(getPackingAssignmentOptions(['alice', 'bob'])).toEqual([
+      { assignedTo: null, allMembers: false },
+      { assignedTo: 'alice', allMembers: false },
+      { assignedTo: 'bob', allMembers: false },
+      { assignedTo: null, allMembers: true },
+    ]);
+  });
+
+
+  it('includes the Japan and Korea city essentials in the preset', () => {
+    const names = templateItems('日韓都市').map((item) => item.name);
+    expect(names).toEqual(expect.arrayContaining(['Visit Japan Web 填寫', '日幣現金', 'ICOCA/Suica', '網卡/漫遊', '日本插頭/轉接頭']));
+  });
+
+  it('adds Japan-specific AI suggestions from the destination', () => {
+    const names = generatePackingSuggestions('日本 JP').map((item) => item.name);
+    expect(names).toEqual(expect.arrayContaining(['Visit Japan Web 填寫', '日幣現金', 'ICOCA/Suica', '網卡/漫遊', '日本插頭/轉接頭']));
   });
 });
