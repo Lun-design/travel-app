@@ -227,6 +227,18 @@ describe('global recommendation helpers', () => {
     expect(calls).toEqual(['大阪 熱門燒肉']);
   });
 
+  it('keeps local recommendations visible when the live provider fails', async () => {
+    const failingProvider = async (): Promise<never> => {
+      throw new Error('Places API 400');
+    };
+
+    const page = await searchDynamicRecommendationsPage('大阪', 'food', {
+      provider: failingProvider,
+    });
+
+    expect(page.results.length).toBeGreaterThan(0);
+  });
+
   it('preserves API and curated image URLs for recommendation cards', () => {
     const normalized = normalizeGlobalPlace({
       id: 'photo-place',

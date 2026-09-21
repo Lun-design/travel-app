@@ -389,7 +389,13 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload, apiKey?: string):
 export async function searchGooglePlacesTextPage(query: string, apiKey?: string, pageToken?: string): Promise<GooglePlaceSearchPage> {
   const key = getGoogleApiKey(apiKey);
   const normalizedQuery = sanitizePlaceSearchQuery(query);
+  const normalizedPageToken = typeof pageToken === 'string' ? pageToken.trim() : '';
   if (!key || !normalizedQuery) return { results: [], nextPageToken: null };
+  const requestBody: { textQuery: string; languageCode: string; pageToken?: string } = {
+    textQuery: normalizedQuery,
+    languageCode: 'zh-TW',
+  };
+  if (normalizedPageToken) requestBody.pageToken = normalizedPageToken;
   const response = await fetch(GOOGLE_TEXT_SEARCH_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -397,11 +403,7 @@ export async function searchGooglePlacesTextPage(query: string, apiKey?: string,
       'X-Goog-Api-Key': key,
       'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos,nextPageToken',
     },
-    body: JSON.stringify({
-      textQuery: normalizedQuery,
-      languageCode: 'zh-TW',
-      ...(pageToken?.trim() ? { pageToken: pageToken.trim() } : {}),
-    }),
+    body: JSON.stringify(requestBody),
   });
   if (!response.ok) throw new Error(`Google Places Text Search failed (${response.status})`);
   const payload = await response.json() as GoogleTextSearchPayload;

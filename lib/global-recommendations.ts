@@ -375,6 +375,55 @@ export function filterGlobalRecommendationsBySubcategory(
   ].filter(Boolean).join(' '), terms));
 }
 
+const LOCAL_FALLBACK_COORDINATES: Array<{ terms: string[]; latitude: number; longitude: number }> = [
+  { terms: ['大阪', 'osaka'], latitude: 34.6937, longitude: 135.5023 },
+  { terms: ['東京', 'tokyo'], latitude: 35.6762, longitude: 139.6503 },
+  { terms: ['京都', 'kyoto'], latitude: 35.0116, longitude: 135.7681 },
+  { terms: ['台北', 'taipei'], latitude: 25.033, longitude: 121.5654 },
+  { terms: ['首爾', 'seoul'], latitude: 37.5665, longitude: 126.978 },
+  { terms: ['巴黎', 'paris'], latitude: 48.8566, longitude: 2.3522 },
+  { terms: ['紐約', 'new york', 'newyork'], latitude: 40.7128, longitude: -74.006 },
+];
+
+const LOCAL_FALLBACK_THEME_LABELS: Record<RecommendationThemeId, string[]> = {
+  'must-see': ['熱門地標', '歷史街區', '城市公園', '觀景台'],
+  food: ['在地餐廳', '市場美食', '拉麵店', '咖啡甜點'],
+  indoor: ['博物館', '水族館', '購物中心', '室內展覽'],
+  'free-time': ['特色街區', '河岸散步', '咖啡休息', '商圈漫遊'],
+};
+
+/** Stable seed cards used when Places/Nominatim is unavailable or returns no data. */
+export function getLocalRecommendationFallback(
+  destination: string,
+  theme: RecommendationThemeId,
+  subcategory: RecommendationSubcategoryId = 'all',
+): GlobalPlaceSearchResult[] {
+  const normalizedDestination = destination.trim() || '旅遊目的地';
+  const coordinate = LOCAL_FALLBACK_COORDINATES.find((item) =>
+    item.terms.some((term) => normalizedDestination.toLocaleLowerCase().includes(term.toLocaleLowerCase())),
+  ) ?? { latitude: 35.6762, longitude: 139.6503 };
+  const subcategoryTerm = RECOMMENDATION_EXPANSION_TERMS[subcategory];
+  const labels = subcategoryTerm
+    ? Array.from({ length: 8 }, (_, index) => `${subcategoryTerm}${index + 1} 推薦`)
+    : LOCAL_FALLBACK_THEME_LABELS[theme];
+  const generated = labels.map((label, index) => normalizeGlobalPlace({
+    id: `local-${theme}-${subcategory}-${index + 1}`,
+    title: `${normalizedDestination} ${label}`,
+    displayName: `${normalizedDestination} · ${label}`,
+    latitude: coordinate.latitude + index * 0.001,
+    longitude: coordinate.longitude + index * 0.001,
+    provider: 'osm',
+    types: theme === 'food' ? ['restaurant'] : [],
+  }));
+  const curated = theme === 'must-see' || theme === 'indoor'
+    ? getCuratedRecommendations(normalizedDestination)
+    : [];
+  return mergeRecommendationResults(
+    filterGlobalRecommendationsBySubcategory([...curated, ...generated], theme, subcategory),
+    [],
+  );
+}
+
 export const DEFAULT_RECOMMENDATION_PAGE_SIZE = 6;
 
 export function paginateRecommendations<T>(items: T[], requestedPage: number, pageSize = DEFAULT_RECOMMENDATION_PAGE_SIZE, totalItems?: number | null) {
@@ -436,8 +485,24 @@ export async function searchDynamicRecommendationsPage(
   const cache = options.cache ?? recommendationSessionCache;
   const provider = options.provider ?? defaultRecommendationPageProvider;
   return cache.getOrFetch(`${query}|${pageToken}`, async () => {
-    const raw = await provider(query, pageToken || undefined);
     const subcategory = options.subcategory ?? 'all';
+    let raw: RecommendationRawPage;
+    try {
+      raw = await provider(query, pageToken || undefined);
+    } catch (error) {
+      // A failed first-page request should never blank the recommendation UI.
+      // Keep pagination-token failures empty so we do not duplicate page one.
+      if (pageToken) {
+        console.error('[recommendations] page request failed', error);
+        return { results: [], nextPageToken: null, totalItems: null };
+      }
+      console.error('[recommendations] provider failed; using local fallback', error);
+      return {
+        results: getLocalRecommendationFallback(normalizedDestination, theme, subcategory),
+        nextPageToken: null,
+        totalItems: null,
+      };
+    }
     let results = normalizeRecommendationResults(raw.results, normalizedDestination, theme, subcategory);
     let nextPageToken = raw.nextPageToken?.trim() || null;
     let totalItems = Number.isFinite(raw.totalItems) ? Math.max(0, Math.floor(raw.totalItems as number)) : null;
@@ -462,6 +527,10 @@ export async function searchDynamicRecommendationsPage(
         nextPageToken = nextPageToken ?? broadRaw.nextPageToken?.trim() ?? null;
         totalItems = totalItems ?? (Number.isFinite(broadRaw.totalItems) ? Math.max(0, Math.floor(broadRaw.totalItems as number)) : null);
       }
+    }
+
+    if (!results.length && !pageToken) {
+      results = getLocalRecommendationFallback(normalizedDestination, theme, subcategory);
     }
 
     return { results, nextPageToken, totalItems };

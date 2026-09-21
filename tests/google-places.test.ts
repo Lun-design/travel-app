@@ -7,6 +7,7 @@ import {
   resolveTripPlaceAddress,
   sanitizePlaceSearchQuery,
   searchGooglePlaces,
+  searchGooglePlacesTextPage,
   searchGooglePlacesText,
 } from '../lib/google-places';
 
@@ -210,6 +211,20 @@ describe('Google Places API mapping', () => {
   });
 });
 describe('Google Places search fallback', () => {
+  it('omits an empty page token from the Text Search payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ places: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await searchGooglePlacesTextPage('大阪 美食', 'test-key', '   ');
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toEqual({ textQuery: '大阪 美食', languageCode: 'zh-TW' });
+    expect(body).not.toHaveProperty('pageToken');
+  });
+
   it('falls back to global Text Search when Autocomplete has no Chinese result', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ suggestions: [] }) })
