@@ -6,6 +6,7 @@ import type { GlobalItineraryPayload, GlobalPlaceSearchResult } from '@/lib/glob
 import { createTripPlace, deleteTripPlace, scheduleTripPlace, updateTripPlace, type TripPlace } from '@/lib/trip-places-api';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { RecommendationPanel } from '@/components/RecommendationPanel';
+import { TimePickerField } from './FormPickers';
 
 type Props = {
   tripId: string;
@@ -220,7 +221,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
         <Text style={[styles.modalPlace, { color: theme.colors.muted }]}>{selectedPlace?.title}</Text>
         <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>Day</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>{days.map((value) => <Pressable key={value} onPress={() => setSelectedDay(value)} style={[styles.dayButton, { borderColor: value === selectedDay ? theme.colors.primary : theme.colors.border, backgroundColor: value === selectedDay ? theme.colors.primary : theme.colors.surface }]}><Text style={{ color: value === selectedDay ? '#fff' : theme.colors.text }}>Day {value}</Text></Pressable>)}</ScrollView>
-        <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>開始時間</Text><TextInput value={startTime} onChangeText={setStartTime} keyboardType="numbers-and-punctuation" style={[styles.modalInput, { borderColor: theme.colors.border, color: theme.colors.text }]} placeholder="10:00" />
+        <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>開始時間</Text><TimePickerField label="開始時間" value={startTime} onChange={setStartTime} style={{ borderColor: theme.colors.border, color: theme.colors.text }} placeholder="10:00" />
         <View style={styles.modalActions}><Pressable onPress={() => setSelectedPlace(null)} style={[styles.modalButton, { borderColor: theme.colors.border }]}><Text style={{ color: theme.colors.text }}>取消</Text></Pressable><Pressable disabled={busy} onPress={() => void handleSchedule()} style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}><Text style={styles.buttonText}>{busy ? '儲存中' : '確認排入'}</Text></Pressable></View>
       </View></View>
     </Modal>

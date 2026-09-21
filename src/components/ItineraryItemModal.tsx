@@ -14,6 +14,7 @@ import { ManualLocationMap } from './ManualLocationMap';
 import { OpeningHoursEditor } from './OpeningHoursEditor';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { RESERVATION_TAG_OPTIONS, normalizeReservationTags, type ReservationTag } from '@/lib/reservation-tags';
+import { TimePickerField } from './FormPickers';
 
 const categories = ['spot', 'food', 'hotel', 'flight', 'trail', 'outdoor'];
 type AutoHoursStatus = 'idle' | 'loading' | 'found' | 'missing';
@@ -375,7 +376,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       <Text style={styles.label}>地址</Text>
       <TextInput style={styles.input} placeholder="可由搜尋結果自動帶入" value={address} onChangeText={setAddress} />
       <Text style={styles.label}>開始時間（可選）</Text>
-      <TextInput style={styles.input} placeholder="09:30" value={time} onChangeText={setTime} />
+      <TimePickerField label="開始時間" value={time} onChange={setTime} placeholder="09:30" style={styles.input} />
       {parsedDate ? <Text style={styles.parsedDateHint}>解析日期：{parsedDate}（儲存時將使用 Day {selectedDay}）</Text> : null}
 
       <Pressable style={styles.moreButton} onPress={() => setShowMore((current) => !current)}><Text style={styles.moreText}>{showMore ? '收合進階設定' : '展開進階設定（類別、營業時間）'}</Text></Pressable>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { inferTimezoneFromDestination, isValidTimezone, normalizeTimezone } from '@/lib/timezone';
 import { EDITORIAL_COLORS } from '@/lib/theme';
+import { DatePickerField, TimePickerField } from './FormPickers';
 
 type CreateTripInput = {
   title: string;
@@ -55,9 +56,9 @@ export function CreateTripModal({ visible, userId, onClose, onCreate }: Props) {
       <Text style={styles.title}>新增行程</Text>
       <TextInput style={styles.input} placeholder="行程名稱" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="目的地" value={destination} onChangeText={setDestination} />
-      <TextInput style={styles.input} placeholder="開始日期 YYYY-MM-DD" value={start} onChangeText={setStart} />
-      <TextInput style={styles.input} placeholder="結束日期 YYYY-MM-DD" value={end} onChangeText={setEnd} />
-      <TextInput style={styles.input} placeholder="每日出發時間（選填，預設 09:00）" value={departure} onChangeText={setDeparture} autoCapitalize="none" />
+      <DatePickerField label="開始日期" value={start} onChange={setStart} placeholder="2026-01-20" style={styles.input} />
+      <DatePickerField label="結束日期" value={end} onChange={setEnd} placeholder="2026-01-23" style={styles.input} />
+      <TimePickerField label="預設每日出發時間" value={departure} onChange={setDeparture} placeholder="09:00" style={styles.input} />
       <View style={styles.timezoneRow}><TextInput style={[styles.input, styles.timezoneInput]} placeholder="目的地時區，例如 Asia/Tokyo" value={timezone} onChangeText={setTimezone} autoCapitalize="none" autoCorrect={false} /><Pressable style={styles.detectTimezone} onPress={() => setTimezone(inferTimezoneFromDestination(destination))}><Text style={styles.detectTimezoneText}>自動判定</Text></Pressable></View>
       <Text style={styles.helper}>時區會用於行程日期、營業時間與天氣資料。</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
