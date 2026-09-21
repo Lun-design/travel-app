@@ -125,6 +125,34 @@ function parseDurationSeconds(value: unknown): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
+type RouteSpeedBounds = { minimumKmh: number; maximumKmh: number };
+
+// Routes API occasionally returns a valid HTTP response with duration and
+// distance belonging to different legs/units. These deliberately generous
+// bounds reject only clearly impossible values while keeping real traffic,
+// transfers, and walking delays intact.
+const ROUTE_SPEED_BOUNDS: Record<TravelMode, RouteSpeedBounds> = {
+  DRIVING: { minimumKmh: 8, maximumKmh: 120 },
+  TRANSIT: { minimumKmh: 5, maximumKmh: 90 },
+  WALKING: { minimumKmh: 2, maximumKmh: 8 },
+};
+
+/** Return false when a route duration is physically implausible for its distance. */
+export function isRouteDurationPlausible(distanceKm: number, durationMinutes: number, mode: TravelMode): boolean {
+  if (!Number.isFinite(distanceKm) || distanceKm < 0 || !Number.isFinite(durationMinutes) || durationMinutes < 0) return false;
+  if (distanceKm === 0) return durationMinutes <= 30;
+
+  const bounds = ROUTE_SPEED_BOUNDS[mode];
+  const minimumMinutes = (distanceKm / bounds.maximumKmh) * 60;
+  const maximumMinutes = Math.max(30, (distanceKm / bounds.minimumKmh) * 60 + 15);
+  return durationMinutes + 0.001 >= minimumMinutes && durationMinutes <= maximumMinutes;
+}
+
+function isRouteSequencePlausible(points: readonly RoutePoint[], sequence: RouteSequenceEstimate, mode: TravelMode): boolean {
+  return sequence.legs.length === Math.max(0, points.length - 1)
+    && sequence.legs.every((leg) => isRouteDurationPlausible(leg.distanceKm, leg.durationMinutes, mode));
+}
+
 function parseRouteEstimate(payload: unknown, mode: TravelMode, fallback: RouteEstimate): RouteEstimate | null {
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { routes?: unknown }).routes)) return null;
   const route = (payload as { routes: Array<{ distanceMeters?: unknown; duration?: unknown; legs?: unknown }> }).routes[0];
@@ -153,6 +181,7 @@ function parseRouteEstimate(payload: unknown, mode: TravelMode, fallback: RouteE
   const durationMinutes = hasLegs
     ? Math.max(1, Math.ceil(parsedLegs.reduce((sum, leg) => sum + leg.durationSeconds, 0) / 60))
     : Math.max(1, Math.ceil((routeDurationSeconds as number) / 60));
+  if (!isRouteDurationPlausible(distanceKm, durationMinutes, mode)) return null;
   return {
     ...fallback,
     distanceKm,
@@ -223,7 +252,12 @@ export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
   async function getRoute(origin: RoutePoint, destination: RoutePoint, mode: TravelMode): Promise<RouteEstimate> {
     const key = routeCacheKey(origin, destination, mode);
     const cached = cache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      if (isRouteDurationPlausible(cached.distanceKm, cached.durationMinutes, mode)) return cached;
+      // Do not let a pre-fix/stale cache entry keep rendering impossible
+      // durations after the estimator's sanity rules have been corrected.
+      cache.delete(key);
+    }
 
     const fallback = fallbackEstimate(origin, destination, mode);
     const originCoordinate = pointCoordinates(origin);
@@ -325,7 +359,10 @@ export function createRouteEstimator(options: RouteEstimatorOptions = {}) {
     if (points.length < 2) return { legs: [], totalDistanceKm: 0, totalDurationMinutes: 0 };
     const key = sequenceKey(points, mode);
     const cached = sequenceCache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      if (isRouteSequencePlausible(points, cached, mode)) return cached;
+      sequenceCache.delete(key);
+    }
     const inFlight = sequenceRequests.get(key);
     if (inFlight) return inFlight;
     const request = loadRouteSequence(points, mode, key);

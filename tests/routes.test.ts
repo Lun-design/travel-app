@@ -16,6 +16,11 @@ describe('route estimates', () => {
     expect(routeCacheKey(taipeiMainStation, taipei101, 'TRANSIT')).toBe('25.047800,121.517000->25.033968,121.564468:TRANSIT');
   });
 
+  it('keeps reverse directions isolated in the route cache', () => {
+    expect(routeCacheKey(taipeiMainStation, taipei101, 'DRIVING'))
+      .not.toBe(routeCacheKey(taipei101, taipeiMainStation, 'DRIVING'));
+  });
+
   it('uses different fallback speeds for driving, transit, and walking', () => {
     const distanceKm = 2;
     const driving = calculateFallbackTravelMinutes(distanceKm, 'DRIVING');
@@ -65,6 +70,90 @@ describe('route estimates', () => {
     expect(result.source).toBe('google');
     expect(result.distanceKm).toBeCloseTo(133.3, 6);
     expect(result.durationMinutes).toBe(120);
+  });
+
+  it('falls back when a long driving route is reported as an impossible one-minute trip', async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 35_500, duration: '60s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    const result = await estimator.getRoute(
+      { latitude: 34.434, longitude: 135.244, title: '關西機場' },
+      { latitude: 34.665, longitude: 135.501, title: '南海難波站' },
+      'DRIVING',
+    );
+
+    expect(result.source).toBe('fallback');
+    expect(result.distanceKm).toBeGreaterThan(30);
+    expect(result.durationMinutes).toBe(calculateFallbackTravelMinutes(result.distanceKm, 'DRIVING'));
+    expect(result.durationMinutes).toBeGreaterThan(10);
+  });
+
+  it('falls back when a short driving route is reported as an hour-long trip', async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 478, duration: '3660s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+
+    const result = await estimator.getRoute(
+      { latitude: 34.665, longitude: 135.501, title: '南海難波站' },
+      { latitude: 34.6693, longitude: 135.501, title: '黑門市場' },
+      'DRIVING',
+    );
+
+    expect(result.source).toBe('fallback');
+    expect(result.distanceKm).toBeCloseTo(0.478, 2);
+    expect(result.durationMinutes).toBe(calculateFallbackTravelMinutes(result.distanceKm, 'DRIVING'));
+    expect(result.durationMinutes).toBeLessThan(30);
+  });
+
+  it('invalidates a stale cached estimate that fails the duration sanity check', async () => {
+    const origin = { latitude: 25.01, longitude: 121.46, title: '南海難波站' };
+    const destination = { latitude: 25.02, longitude: 121.47, title: '黑門市場' };
+    const cache = new Map<string, any>([[routeCacheKey(origin, destination, 'DRIVING'), {
+      distanceKm: 35.5,
+      durationMinutes: 1,
+      legs: [{ distanceKm: 35.5, durationMinutes: 1 }],
+      mode: 'DRIVING',
+      source: 'google',
+      navigationUrl: null,
+    }]]);
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 35_500, duration: '3600s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher, cache });
+
+    const result = await estimator.getRoute(origin, destination, 'DRIVING');
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.source).toBe('google');
+    expect(result.durationMinutes).toBe(60);
+  });
+
+  it('invalidates an impossible cached sequence leg before rendering it', async () => {
+    const points = [
+      { latitude: 34.434, longitude: 135.244, title: '關西機場' },
+      { latitude: 34.665, longitude: 135.501, title: '南海難波站' },
+    ];
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 35_500, duration: '3600s' }] }),
+    }) as unknown as Response);
+    const estimator = createRouteEstimator({ apiKey: 'test-key', fetcher });
+    estimator.sequenceCache.set('DRIVING:34.434000,135.244000>34.665000,135.501000', {
+      legs: [{ distanceKm: 35.5, durationMinutes: 1, mode: 'DRIVING', source: 'google', navigationUrl: null }],
+      totalDistanceKm: 35.5,
+      totalDurationMinutes: 1,
+    });
+
+    const result = await estimator.getRouteSequence(points, 'DRIVING');
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.totalDurationMinutes).toBe(60);
   });
 
   it('aggregates every response leg instead of using only a partial route total', async () => {
