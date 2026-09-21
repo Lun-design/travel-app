@@ -8,7 +8,6 @@ import type { TripMemberWithProfile } from '@/lib/trips';
 import { getProfileDisplayName } from '@/lib/profiles';
 import type { ThemeMode } from '@/lib/theme';
 import { EDITORIAL_COLORS, getThemeForMode } from '@/lib/theme';
-import { applySettlementRecords } from '@/lib/settlement';
 import { listSettlementRecords, type SettlementRecord } from '@/lib/settlement-api';
 import { SettlementCard } from './SettlementCard';
 import { supabase } from '@/lib/supabase';
@@ -72,8 +71,8 @@ export function BudgetDashboard({ tripId, userId, expenses, members, rates, rate
     return () => { active = false; };
   }, [tripId]);
 
-  const analytics = useMemo(() => calculateExpenseAnalytics(expenses, members, budget ? { amount: budget.total_amount, currency: budget.currency } : null, rates), [budget, expenses, members, rates]);
-  const visibleSettlements = useMemo(() => applySettlementRecords(analytics.settlements, settlementRecords), [analytics.settlements, settlementRecords]);
+  const analytics = useMemo(() => calculateExpenseAnalytics(expenses, members, budget ? { amount: budget.total_amount, currency: budget.currency } : null, rates, settlementRecords), [budget, expenses, members, rates, settlementRecords]);
+  const visibleSettlements = analytics.settlements;
   const labelFor = (memberId: string) => getProfileDisplayName(members.find((member) => member.user_id === memberId)?.profile, memberId.slice(0, 8));
   const progressPercent = Math.round(analytics.progressRatio * 100);
 
@@ -98,7 +97,7 @@ export function BudgetDashboard({ tripId, userId, expenses, members, rates, rate
     <View style={styles.summaryRow}><Summary label="總支出" value={`TWD ${analytics.totalSpentTwd.toFixed(0)}`} color={theme.colors.text} /><Summary label="總預算" value={budget ? `TWD ${analytics.totalBudgetTwd.toFixed(0)}` : '尚未設定'} color={theme.colors.text} /><Summary label="剩餘預算" value={budget ? `TWD ${analytics.remainingBudgetTwd.toFixed(0)}` : '—'} color={analytics.isOverBudget ? EDITORIAL_COLORS.dangerText : theme.colors.primary} /></View>
     {budget ? <><View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}><View style={[styles.progressFill, { width: `${Math.min(100, Math.max(0, progressPercent))}%`, backgroundColor: analytics.isOverBudget ? EDITORIAL_COLORS.dangerText : theme.colors.primary }]} /></View><Text style={[styles.progressLabel, { color: analytics.isOverBudget ? EDITORIAL_COLORS.dangerText : theme.colors.muted }]}>{analytics.isOverBudget ? `⚠️ 已超支 ${Math.abs(analytics.remainingBudgetTwd).toFixed(0)} TWD` : `${progressPercent}% 已使用`}</Text></> : <Text style={[styles.muted, { color: theme.colors.muted }]}>設定總預算，即時掌握旅費進度。</Text>}
     <View style={styles.section}><Text style={[styles.sectionTitle, { color: theme.colors.text }]}>類別支出</Text>{analytics.categories.map((entry) => <View key={entry.category} style={styles.categoryRow}><Text style={[styles.categoryName, { color: theme.colors.text }]}>{entry.category}</Text><View style={[styles.categoryTrack, { backgroundColor: theme.colors.border }]}><View style={[styles.categoryFill, { width: `${entry.percentage}%`, backgroundColor: theme.colors.primary }]} /></View><Text style={[styles.categoryValue, { color: theme.colors.muted }]}>{entry.percentage.toFixed(1)}%</Text></View>)}</View>
-    <View style={styles.section}><Text style={[styles.sectionTitle, { color: theme.colors.text }]}>成員應付／已付</Text>{analytics.members.map((member) => <View key={member.memberId} style={styles.memberRow}><Text numberOfLines={1} style={[styles.memberName, { color: theme.colors.text }]}>{labelFor(member.memberId)}</Text><Text style={[styles.memberValue, { color: theme.colors.muted }]}>應付 {member.owedTwd.toFixed(0)} · 已付 {member.paidTwd.toFixed(0)}</Text></View>)}</View>
+    <View style={styles.section}><Text style={[styles.sectionTitle, { color: theme.colors.text }]}>成員應付／已付</Text>{analytics.members.map((member) => { const cleared = analytics.settlementTotals[member.memberId] ?? { settledOutTwd: 0, settledInTwd: 0 }; return <View key={member.memberId} style={styles.memberRow}><View style={styles.memberCopy}><Text numberOfLines={1} style={[styles.memberName, { color: theme.colors.text }]}>{labelFor(member.memberId)}</Text><Text style={[styles.memberDetail, { color: theme.colors.muted }]}>應付 {member.owedTwd.toFixed(0)} · 墊付 {member.paidTwd.toFixed(0)} · 已轉出 {cleared.settledOutTwd.toFixed(0)} · 已收到 {cleared.settledInTwd.toFixed(0)}</Text></View><Text style={[styles.memberNet, { color: member.netTwd < -0.009 ? EDITORIAL_COLORS.dangerText : theme.colors.primary }]}>{member.netTwd < -0.009 ? '應付' : '應收'} {Math.abs(member.netTwd).toFixed(0)}</Text></View>; })}</View>
     {/* SettlementCard 提供「一鍵複製結算文字」與結清紀錄。 */}
     <SettlementCard tripId={tripId} userId={userId} settlements={visibleSettlements} settlementRecords={settlementRecords} members={members} labelFor={labelFor} themeMode={themeMode} onSettlementCreated={(record) => setSettlementRecords((previous) => [record, ...previous])} />
   </View>;
@@ -135,8 +134,10 @@ const styles = StyleSheet.create({
   categoryFill: { height: '100%', borderRadius: 4 },
   categoryValue: { width: 45, textAlign: 'right', fontSize: 11 },
   memberRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  memberCopy: { flex: 1, minWidth: 0, gap: 2 },
   memberName: { flex: 1, minWidth: 0, fontWeight: '700' },
-  memberValue: { flexShrink: 0, fontSize: 12 },
+  memberDetail: { fontSize: 11 },
+  memberNet: { flexShrink: 0, fontSize: 13, fontWeight: '800' },
   settlementHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   copyButton: { fontSize: 12, fontWeight: '800' },
   settlement: { fontSize: 13, fontWeight: '700' },

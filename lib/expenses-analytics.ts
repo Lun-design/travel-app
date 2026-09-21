@@ -1,5 +1,5 @@
 import { convertToTwd, normalizeCurrency, type SupportedCurrency } from './exchange-rates';
-import { calculateMinSettlements, type MinSettlement, type SettlementExpense, type SettlementMember } from './settlement';
+import { calculateMinSettlements, computeBalances, type MinSettlement, type SettlementClearanceRecord, type SettlementExpense, type SettlementMember } from './settlement';
 
 export const EXPENSE_CATEGORIES = ['餐飲', '交通', '住宿', '購物', '其他'] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
@@ -30,6 +30,11 @@ export type MemberExpenseSummary = {
   netTwd: number;
 };
 
+export type SettlementTotals = {
+  settledOutTwd: number;
+  settledInTwd: number;
+};
+
 export type ExpenseAnalytics = {
   totalBudgetTwd: number;
   totalSpentTwd: number;
@@ -39,6 +44,7 @@ export type ExpenseAnalytics = {
   categories: CategoryExpenseSummary[];
   members: MemberExpenseSummary[];
   settlements: MinSettlement[];
+  settlementTotals: Record<string, SettlementTotals>;
 };
 
 function round(value: number): number {
@@ -67,30 +73,20 @@ export function calculateExpenseAnalytics(
   members: readonly SettlementMember[],
   budget: BudgetInput = null,
   rates: Partial<Record<SupportedCurrency, number>> = {},
+  settlementRecords: readonly SettlementClearanceRecord[] = [],
 ): ExpenseAnalytics {
   const memberIds = [...new Set([
     ...members.map(memberId),
     ...expenses.flatMap((expense) => [expense.payer_id, ...(expense.splits ?? []).map((split) => split.user_id)]),
   ].filter(Boolean))];
-  const paid = new Map(memberIds.map((id) => [id, 0]));
-  const owed = new Map(memberIds.map((id) => [id, 0]));
   const categoryAmounts = new Map<ExpenseCategory, number>(EXPENSE_CATEGORIES.map((category) => [category, 0]));
 
   let totalSpentTwd = 0;
   for (const expense of expenses) {
     const spent = toTwd(expense.amount, expense.currency, rates);
     totalSpentTwd += spent;
-    paid.set(expense.payer_id, (paid.get(expense.payer_id) ?? 0) + spent);
     const category = normalizeCategory(expense.category);
     categoryAmounts.set(category, (categoryAmounts.get(category) ?? 0) + spent);
-
-    const splits = expense.splits?.filter((split) => split.user_id) ?? [];
-    if (splits.length) {
-      for (const split of splits) owed.set(split.user_id, (owed.get(split.user_id) ?? 0) + toTwd(split.amount, expense.currency, rates));
-    } else if (memberIds.length) {
-      const equalShare = spent / memberIds.length;
-      for (const id of memberIds) owed.set(id, (owed.get(id) ?? 0) + equalShare);
-    }
   }
 
   const totalBudgetTwd = budget ? toTwd(budget.amount, budget.currency, rates) : 0;
@@ -100,12 +96,13 @@ export function calculateExpenseAnalytics(
     const amountTwd = round(categoryAmounts.get(category) ?? 0);
     return { category, amountTwd, percentage: totalSpentTwd > 0 ? round(amountTwd / totalSpentTwd * 100) : 0 };
   });
-  const memberSummaries = memberIds.map((memberId) => {
-    const paidTwd = round(paid.get(memberId) ?? 0);
-    const owedTwd = round(owed.get(memberId) ?? 0);
-    return { memberId, paidTwd, owedTwd, netTwd: round(paidTwd - owedTwd) };
-  });
-  const settlements = calculateMinSettlements(expenses as SettlementExpense[], memberIds, rates);
+  const balanceRows = computeBalances(expenses as SettlementExpense[], memberIds, settlementRecords, rates);
+  const memberSummaries = balanceRows.map(({ memberId, paidTwd, owedTwd, netTwd }) => ({ memberId, paidTwd, owedTwd, netTwd }));
+  const settlementTotals = Object.fromEntries(balanceRows.map((row) => [row.memberId, {
+    settledOutTwd: row.settledOutTwd,
+    settledInTwd: row.settledInTwd,
+  }])) as Record<string, SettlementTotals>;
+  const settlements = calculateMinSettlements(expenses as SettlementExpense[], memberIds, rates, settlementRecords);
 
   return {
     totalBudgetTwd: round(totalBudgetTwd),
@@ -116,6 +113,7 @@ export function calculateExpenseAnalytics(
     categories,
     members: memberSummaries,
     settlements,
+    settlementTotals,
   };
 }
 
