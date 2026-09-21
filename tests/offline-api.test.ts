@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryOfflineStore } from '../lib/offline-store';
 import { buildItineraryWritePayload, listItineraryItems, saveItineraryItem } from '../lib/itinerary-api';
-import { buildPackingWritePayload, createPackingItem, importPackingTemplate } from '../lib/packing-api';
+import { buildPackingUpdatePayload, buildPackingWritePayload, createPackingItem, importPackingTemplate, normalizePackingItem } from '../lib/packing-api';
 import { saveExpense } from '../lib/expenses-api';
 
 const supabaseMock = vi.hoisted(() => ({ from: vi.fn(), auth: { getSession: vi.fn() } }));
@@ -113,6 +113,15 @@ describe('offline-aware itinerary API', () => {
       assigned_to: 'user-1',
       assigned_to_all: true,
     });
+  });
+
+  it('normalizes packing names with schema-compatible and legacy fallbacks', () => {
+    const base = { id: 'packing-name', trip_id: 'trip-1', category: '霅辣', is_checked: false, assigned_to: null, created_at: 'now' };
+    expect(normalizePackingItem({ ...base, name: 'Canonical name', item_name: 'Legacy name', title: 'Title' }).name).toBe('Canonical name');
+    expect(normalizePackingItem({ ...base, item_name: 'Legacy name' }).name).toBe('Legacy name');
+    expect(normalizePackingItem({ ...base, title: 'Imported title' }).name).toBe('Imported title');
+    expect(normalizePackingItem(base).name).toBe('未命名項目');
+    expect(buildPackingUpdatePayload({ name: 'Canonical name', item_name: 'Legacy name' })).toEqual({ name: 'Canonical name' });
   });
 
   it('uses the schema-safe payload for a real packing insert', async () => {

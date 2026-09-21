@@ -21,7 +21,7 @@ export function hasRainyForecast(forecast: readonly PackingForecastHint[] | null
   return (forecast ?? []).some((day) => day.precipitationProbability != null && day.precipitationProbability >= threshold);
 }
 export function packingItemName(item: Pick<PackingItemLike, 'name' | 'item_name' | 'title'>): string {
-  return String(item.name ?? item.item_name ?? item.title ?? '').trim();
+  return String(item.name || item.item_name || item.title || '未命名項目').trim() || '未命名項目';
 }
 function packingNameIdentity(name: string): string {
   const normalized = name.toLocaleLowerCase().replace(/[\s\-_/／、，,]+/g, '');

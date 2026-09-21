@@ -11,6 +11,7 @@ import {
   buildRecommendationQuery,
   getCuratedRecommendations,
   filterGlobalRecommendationsByDestination,
+  filterGlobalRecommendationsBySubcategory,
   searchDynamicRecommendations,
   searchGlobalPlaces,
   type GlobalPlaceSearchResult,
@@ -164,6 +165,28 @@ describe('global recommendation helpers', () => {
     expect(getRecommendationSubcategories('must-see').map((item) => item.id)).toEqual(['all', 'landmark', 'shrine', 'nature', 'shopping']);
     expect(buildRecommendationQuery('東京', 'food', 'bbq')).toContain('燒肉');
     expect(buildRecommendationQuery('東京', 'must-see', 'shrine')).toContain('神社');
+  });
+
+  it('filters live food results to the selected noodles subcategory', async () => {
+    const provider = async (): Promise<GeocodingResult[]> => [
+      { id: 'dotonbori', title: '道頓堀', displayName: '道頓堀, 大阪府大阪市, 日本', latitude: 34.6687, longitude: 135.5013, provider: 'google' },
+      { id: 'castle', title: '大阪城公園', displayName: '大阪城公園, 大阪府大阪市, 日本', latitude: 34.6873, longitude: 135.5262, provider: 'google' },
+      { id: 'yakiniku', title: '大阪焼肉店', displayName: '大阪焼肉店, 大阪府大阪市, 日本', latitude: 34.67, longitude: 135.51, provider: 'google' },
+      { id: 'ramen', title: 'Ramen Kamo', displayName: 'Ramen Kamo, Osaka, Japan', latitude: 34.67, longitude: 135.51, provider: 'google' },
+      { id: 'udon', title: 'うどん道場', displayName: 'うどん道場, 大阪府大阪市, 日本', latitude: 34.67, longitude: 135.51, provider: 'google' },
+    ];
+
+    await expect(searchDynamicRecommendations('日本 JP 大阪', 'food', provider, 'noodles')).resolves.toEqual([
+      expect.objectContaining({ id: 'ramen' }),
+      expect.objectContaining({ id: 'udon' }),
+    ]);
+  });
+
+  it('filters curated cards before the panel merges them into a selected subcategory', () => {
+    const curated = getCuratedRecommendations('日本 JP 大阪');
+    expect(filterGlobalRecommendationsBySubcategory(curated, 'food', 'noodles')).toEqual([]);
+    const panelSource = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    expect(panelSource).toMatch(/filterGlobalRecommendationsBySubcategory\(\s*getCuratedRecommendations/);
   });
 
   it('paginates recommendation cards with stable page boundaries', () => {

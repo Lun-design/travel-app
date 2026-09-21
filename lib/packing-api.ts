@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { PackingTemplate } from './packing-utils';
-import { dedupePackingItems, packingItemKey, templateItems } from './packing-utils';
+import { dedupePackingItems, packingItemKey, packingItemName, templateItems } from './packing-utils';
 import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueueOffline, updateOfflineCollection, type OfflineApiOptions } from './offline-data';
 import { offlineStore } from './offline-store';
 
@@ -11,7 +11,9 @@ export type PackingMutationOptions = OfflineApiOptions & { existingItems?: Packi
 export type PackingWriteInput = {
   trip_id: string;
   category: string;
-  name: string;
+  name?: string;
+  item_name?: string;
+  title?: string;
   is_checked?: boolean;
   assigned_to?: string | null;
   assigned_to_all?: boolean;
@@ -21,7 +23,7 @@ export function buildPackingWritePayload(item: PackingWriteInput & { item_name?:
   return {
     trip_id: item.trip_id,
     category: item.category,
-    name: item.name.trim(),
+    name: packingItemName(item),
     is_checked: item.is_checked ?? item.is_packed ?? false,
     assigned_to: item.assigned_to ?? null,
     assigned_to_all: Boolean(item.assigned_to_all),
@@ -30,7 +32,7 @@ export function buildPackingWritePayload(item: PackingWriteInput & { item_name?:
 
 export function buildPackingUpdatePayload(patch: Partial<Pick<PackingItem, 'name' | 'item_name' | 'category' | 'is_checked' | 'is_packed' | 'assigned_to' | 'assigned_to_all'>>): Partial<PackingWriteInput> {
   const payload: Partial<PackingWriteInput> = {};
-  if (patch.name !== undefined || patch.item_name !== undefined) payload.name = (patch.item_name ?? patch.name ?? '').trim();
+  if (patch.name !== undefined || patch.item_name !== undefined) payload.name = packingItemName(patch);
   if (patch.is_checked !== undefined || patch.is_packed !== undefined) payload.is_checked = patch.is_checked ?? patch.is_packed ?? false;
   if (patch.category !== undefined) payload.category = patch.category;
   if (patch.assigned_to !== undefined) payload.assigned_to = patch.assigned_to;
@@ -41,8 +43,8 @@ export function buildPackingUpdatePayload(patch: Partial<Pick<PackingItem, 'name
 export function normalizePackingItem(row: any): PackingItem {
   return {
     ...row,
-    name: row.item_name || row.name,
-    item_name: row.item_name || row.name,
+    name: packingItemName(row),
+    item_name: packingItemName(row),
     is_checked: row.is_packed ?? row.is_checked ?? false,
     is_packed: row.is_packed ?? row.is_checked ?? false,
     assigned_to_all: Boolean(row.assigned_to_all),

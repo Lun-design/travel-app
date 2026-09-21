@@ -17,6 +17,7 @@ export type GlobalPlaceSearchResult = {
   timezone: string;
   category: GlobalPlaceCategory;
   estimatedDurationMinutes: number;
+  types?: string[];
   provider?: GeocodingResult['provider'];
   source: GeocodingResult;
 };
@@ -151,6 +152,7 @@ export function normalizeGlobalPlace(place: GeocodingResult): GlobalPlaceSearchR
     timezone: inferTimezoneFromDestination(address),
     category,
     estimatedDurationMinutes: estimateGlobalPlaceDuration(category, { title: place.title }),
+    types: place.types,
     provider: place.provider,
     source: place,
   };
@@ -294,6 +296,43 @@ export function buildRecommendationQuery(destination: string, theme: Recommendat
   return `${destination.trim()} ${category.keyword}`.trim();
 }
 
+const RECOMMENDATION_SUBCATEGORY_TERMS: Partial<Record<RecommendationSubcategoryId, string[]>> = {
+  bbq: ['燒肉', '烤肉', '焼肉', 'bbq', 'yakiniku'],
+  hotpot: ['火鍋', '涮涮鍋', '鍋物', 'しゃぶ', 'hotpot', 'hot pot'],
+  noodles: ['拉麵', '拉面', '麵食', '麺', '麵', '烏龍麵', 'うどん', '蕎麥', 'そば', 'ramen', 'noodle', 'udon', 'soba'],
+  izakaya: ['居酒屋', '酒吧', '串燒', 'バル', 'izakaya', 'bar', 'pub'],
+  dessert: ['甜點', '咖啡', '蛋糕', '甜品', 'dessert', 'cafe', 'coffee', 'cake'],
+  landmark: ['地標', '展覽', '博物館', '塔', 'landmark', 'exhibition', 'museum', 'tower'],
+  shrine: ['神社', '古蹟', '寺', '教堂', 'shrine', 'temple', 'historic', 'church'],
+  nature: ['自然', '公園', '海邊', '步道', '花園', 'park', 'garden', 'nature', 'trail', 'beach'],
+  shopping: ['購物', '商圈', '百貨', '市場', 'shopping', 'mall', 'market', 'department'],
+};
+
+/** Keep provider results aligned with the selected deep category. */
+export function filterGlobalRecommendationsBySubcategory(
+  results: GlobalPlaceSearchResult[],
+  theme: RecommendationThemeId,
+  subcategory: RecommendationSubcategoryId = 'all',
+): GlobalPlaceSearchResult[] {
+  if (subcategory === 'all') return results;
+  // A subcategory belongs to one theme; ignoring mismatched ids avoids
+  // accidentally filtering an unrelated theme with stale UI state.
+  const validForTheme = theme === 'food'
+    ? ['bbq', 'hotpot', 'noodles', 'izakaya', 'dessert']
+    : theme === 'must-see'
+      ? ['landmark', 'shrine', 'nature', 'shopping']
+      : [];
+  if (!validForTheme.includes(subcategory)) return results;
+  const terms = RECOMMENDATION_SUBCATEGORY_TERMS[subcategory] ?? [];
+  return results.filter((place) => containsAny([
+    place.title,
+    place.address,
+    place.source.title,
+    place.source.displayName,
+    ...(place.types ?? []),
+  ].filter(Boolean).join(' '), terms));
+}
+
 export const DEFAULT_RECOMMENDATION_PAGE_SIZE = 6;
 
 export function paginateRecommendations<T>(items: T[], requestedPage: number, pageSize = DEFAULT_RECOMMENDATION_PAGE_SIZE, totalItems?: number | null) {
@@ -340,9 +379,13 @@ export async function searchDynamicRecommendationsPage(
   return cache.getOrFetch(`${query}|${pageToken}`, async () => {
     const raw = await provider(query, pageToken || undefined);
     return {
-      results: filterGlobalRecommendationsByDestination(raw.results
+      results: filterGlobalRecommendationsBySubcategory(
+        filterGlobalRecommendationsByDestination(raw.results
         .filter((result) => Number.isFinite(result.latitude) && Number.isFinite(result.longitude))
         .map(normalizeGlobalPlace), normalizedDestination),
+        theme,
+        options.subcategory ?? 'all',
+      ),
       nextPageToken: raw.nextPageToken?.trim() || null,
       totalItems: Number.isFinite(raw.totalItems) ? Math.max(0, Math.floor(raw.totalItems as number)) : null,
     };
@@ -361,7 +404,11 @@ export async function searchDynamicRecommendations(
   const query = buildRecommendationQuery(normalizedDestination, theme, subcategory);
   if (provider !== searchPlaces) {
     const results = await searchGlobalPlaces(query, provider);
-    return filterGlobalRecommendationsByDestination(results, normalizedDestination);
+    return filterGlobalRecommendationsBySubcategory(
+      filterGlobalRecommendationsByDestination(results, normalizedDestination),
+      theme,
+      subcategory,
+    );
   }
   return (await searchDynamicRecommendationsPage(normalizedDestination, theme, { subcategory })).results;
 }

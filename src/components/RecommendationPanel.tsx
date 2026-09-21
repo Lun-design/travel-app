@@ -17,6 +17,7 @@ import {
   DEFAULT_RECOMMENDATION_PAGE_SIZE,
   getCuratedRecommendations,
   getRecommendationSubcategories,
+  filterGlobalRecommendationsBySubcategory,
   mergeRecommendationResults,
   paginateRecommendations,
   RECOMMENDATION_THEMES,
@@ -93,11 +94,12 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     setRecommendationError('');
     try {
       const firstPage = await searchDynamicRecommendationsPage(normalized, themeValue, { subcategory: subcategoryValue });
-      setRecommendations(mergeRecommendationResults(getCuratedRecommendations(normalized), firstPage.results));
+      const curated = filterGlobalRecommendationsBySubcategory(getCuratedRecommendations(normalized), themeValue, subcategoryValue);
+      setRecommendations(mergeRecommendationResults(curated, firstPage.results));
       setNextPageToken(firstPage.nextPageToken);
       setRecommendationTotalItems(firstPage.totalItems);
     } catch (error) {
-      setRecommendations(getCuratedRecommendations(normalized));
+      setRecommendations(filterGlobalRecommendationsBySubcategory(getCuratedRecommendations(normalized), themeValue, subcategoryValue));
       setNextPageToken(null);
       setRecommendationTotalItems(null);
       setRecommendationError(error instanceof Error ? error.message : '暫時無法取得即時推薦');
