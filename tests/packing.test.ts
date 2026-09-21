@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, hasRainyForecast, isPackingComplete, packingProgress, RAIN_GEAR_NAME, templateItems } from '../lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, getPackingAvatarIds, hasRainyForecast, isPackingComplete, packingProgress, RAIN_GEAR_NAME, templateItems } from '../lib/packing-utils';
 
 describe('packing suggestions', () => {
   it('deduplicates by normalized item name and category', () => {
@@ -93,6 +93,11 @@ describe('packing suggestions', () => {
       { assignedTo: 'bob', allMembers: false },
       { assignedTo: null, allMembers: true },
     ]);
+  });
+
+  it('returns every member id for an all-members avatar stack', () => {
+    expect(getPackingAvatarIds(['alice', 'bob', 'carol'], null, true)).toEqual(['alice', 'bob', 'carol']);
+    expect(getPackingAvatarIds(['alice', 'bob'], 'bob', false)).toEqual(['bob']);
   });
 
 

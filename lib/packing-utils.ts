@@ -12,6 +12,11 @@ export function getPackingAssignmentOptions(memberIds: readonly string[]): Packi
   return [{ assignedTo: null, allMembers: false }, ...memberIds.map((assignedTo) => ({ assignedTo, allMembers: false })), { assignedTo: null, allMembers: true }];
 }
 
+/** Return the avatar ids that should be rendered for an assignee control. */
+export function getPackingAvatarIds(memberIds: readonly string[], assignedTo: string | null | undefined, assignedToAll: boolean): string[] {
+  return assignedToAll ? [...memberIds] : assignedTo ? [assignedTo] : [];
+}
+
 export function hasRainyForecast(forecast: readonly PackingForecastHint[] | null | undefined, threshold = 50): boolean {
   return (forecast ?? []).some((day) => day.precipitationProbability != null && day.precipitationProbability >= threshold);
 }

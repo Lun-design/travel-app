@@ -20,4 +20,12 @@ describe('offline UI integration contract', () => {
     expect(source).toContain('offlineScope');
     expect(source).toContain('offlineStore');
   });
+
+  it('renders an avatar stack for all-members packing assignments', () => {
+    const source = read('src/components/PackingPanel.tsx');
+    expect(source).toContain('item.assigned_to_all');
+    expect(source).toContain('avatarIds.map');
+    expect(source).toContain('styles.avatarStack');
+    expect(source).toContain('<ProfileAvatar profile={memberFor(id)?.profile} userId={id}');
+  });
 });

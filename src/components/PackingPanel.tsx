@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 import { fetchWeatherForecast } from '@/lib/weather-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { createPackingItem, deletePackingItem as deletePackingItemRemote, importPackingTemplate, listPackingItems, updatePackingItem as updatePackingItemRemote, type PackingItem } from '@/lib/packing-api';
-import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, groupPackingItems, hasRainyForecast, isPackingComplete, packingItemKey, packingProgress, PACKING_CATEGORIES, RAIN_GEAR_NAME, type PackingTemplate } from '@/lib/packing-utils';
+import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, getPackingAvatarIds, groupPackingItems, hasRainyForecast, isPackingComplete, packingItemKey, packingProgress, PACKING_CATEGORIES, RAIN_GEAR_NAME, type PackingTemplate } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -151,13 +151,22 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
     finally { setBusy(false); }
   }
 
+  function renderAssignee(item: PackingItem) {
+    const avatarIds = getPackingAvatarIds(members.map((member) => member.user_id), item.assigned_to, Boolean(item.assigned_to_all));
+    if (item.assigned_to_all) {
+      return <View style={styles.assigneeGroup}><View style={styles.avatarStack}>{avatarIds.map((id, index) => <View key={id} style={[styles.stackAvatar, { marginLeft: index ? -8 : 0 }]}><ProfileAvatar profile={memberFor(id)?.profile} userId={id} size={25} /></View>)}</View><Text numberOfLines={1} style={styles.assignee}>所有人</Text></View>;
+    }
+    const assignedId = avatarIds[0] ?? null;
+    return <><ProfileAvatar profile={memberFor(assignedId)?.profile} userId={assignedId ?? undefined} size={26} /><Text numberOfLines={1} style={styles.assignee}>{label(assignedId)}</Text></>;
+  }
+
   return <View style={[styles.root, { backgroundColor: theme.colors.background }]}><View style={[styles.container, { backgroundColor: theme.colors.background }] }>
     <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
     <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 點擊加入 AI 智慧建議</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
     <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={setName} onSubmitEditing={() => void add()} /><Pressable accessibilityRole="button" style={styles.categorySelect} onPress={() => setOpen((current) => ({ ...current, __categoryPicker: true }))}><Text numberOfLines={1} style={styles.categorySelectText}>{category}</Text></Pressable><Pressable style={styles.addButton} onPress={() => void add()} disabled={busy}><Text style={styles.white}>新增</Text></Pressable></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={category === value ? styles.white : undefined}>{value}</Text></Pressable>)}</ScrollView>
-    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} disabled={mutatingItemId === item.id} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={styles.assigneeButton} disabled={mutatingItemId === item.id} onPress={() => setAssignmentItem(item)}>{item.assigned_to_all ? <Text style={styles.assignee}>👥 所有人</Text> : <><ProfileAvatar profile={memberFor(item.assigned_to)?.profile} userId={item.assigned_to ?? undefined} size={26} /><Text numberOfLines={1} style={styles.assignee}>{label(item.assigned_to)}</Text></>}</Pressable><Pressable disabled={mutatingItemId === item.id} onPress={() => void removeItem(item)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
+    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} disabled={mutatingItemId === item.id} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={[styles.assigneeButton, item.assigned_to_all && styles.allMembersAssignee]} disabled={mutatingItemId === item.id} onPress={() => setAssignmentItem(item)}>{renderAssignee(item)}</Pressable><Pressable disabled={mutatingItemId === item.id} onPress={() => void removeItem(item)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
     <Modal visible={Boolean(open.__categoryPicker)} transparent animationType="fade" onRequestClose={() => setOpen((current) => ({ ...current, __categoryPicker: false }))}>
       <View style={styles.modalBackdrop}><View style={styles.assignmentCard}><Text style={styles.celebrateTitle}>選擇分類</Text>{categories.map((value) => <Pressable key={value} style={styles.assignmentOption} onPress={() => { setCategory(value); setOpen((current) => ({ ...current, __categoryPicker: false })); }}><Text style={value === category ? styles.assignmentSelected : undefined}>{value}</Text></Pressable>)}</View></View>
     </Modal>
@@ -213,6 +222,10 @@ const styles = StyleSheet.create({
   itemName: { flex: 1, minWidth: 0, flexShrink: 1, fontSize: 14 },
   done: { textDecorationLine: 'line-through', color: '#94a3b8' },
   assigneeButton: { flexShrink: 1, maxWidth: '34%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  allMembersAssignee: { maxWidth: '55%' },
+  assigneeGroup: { flexShrink: 1, maxWidth: '100%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  avatarStack: { flexDirection: 'row', alignItems: 'center', paddingLeft: 1 },
+  stackAvatar: { borderRadius: 14, borderWidth: 2, borderColor: EDITORIAL_COLORS.paper },
   assignee: { color: EDITORIAL_COLORS.terracotta, fontSize: 11 },
   delete: { color: EDITORIAL_COLORS.dangerText, fontSize: 22, minHeight: 44, paddingVertical: 10 },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(31,31,31,.45)' },
