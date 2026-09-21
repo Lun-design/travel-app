@@ -5,7 +5,7 @@ vi.mock('../lib/supabase', () => ({
 }));
 
 import { supabase } from '../lib/supabase';
-import { createSettlementRecord, listSettlementRecords, type SettlementRecord } from '../lib/settlement-api';
+import { createSettlementRecord, deleteSettlementRecord, listSettlementRecords, type SettlementRecord } from '../lib/settlement-api';
 
 const record: SettlementRecord = {
   id: 'record-1',
@@ -54,5 +54,17 @@ describe('settlement records API', () => {
 
     await expect(listSettlementRecords('trip-1')).resolves.toEqual([record]);
     expect(query.eq).toHaveBeenCalledWith('trip_id', 'trip-1');
+  });
+
+  it('deletes a settlement history record by id', async () => {
+    const query = {
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValueOnce(query as never);
+
+    await expect(deleteSettlementRecord('record-1')).resolves.toBeUndefined();
+    expect(query.delete).toHaveBeenCalled();
+    expect(query.eq).toHaveBeenCalledWith('id', 'record-1');
   });
 });

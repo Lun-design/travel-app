@@ -2,14 +2,16 @@ import { convertToTwd, normalizeCurrency, type SupportedCurrency } from './excha
 
 export type SettlementSplit = { user_id: string; amount: number };
 export type SettlementExpense = {
+  id?: string;
   payer_id: string;
   amount: number;
   currency?: string | null;
   splits?: SettlementSplit[] | null;
+  is_settled?: boolean | null;
 };
 export type SettlementMember = string | { user_id: string };
 export type MinSettlement = { from: string; to: string; amount: number; currency: SupportedCurrency };
-export type SettlementClearanceRecord = { from_user_id: string; to_user_id: string; amount: number; currency: string };
+export type SettlementClearanceRecord = { id?: string; expense_id?: string | null; from_user_id: string; to_user_id: string; amount: number; currency: string };
 export type SettlementMemberBalance = {
   memberId: string;
   paidTwd: number;
@@ -17,6 +19,22 @@ export type SettlementMemberBalance = {
   settledOutTwd: number;
   settledInTwd: number;
   netTwd: number;
+};
+
+export type ExpenseSettlementTransfer = {
+  expense_id: string;
+  from_user_id: string;
+  to_user_id: string;
+  amount: number;
+  currency: SupportedCurrency;
+};
+
+export type ExpenseSettlementStatus = {
+  expenseId: string;
+  totalOwed: number;
+  settledAmount: number;
+  remainingAmount: number;
+  isSettled: boolean;
 };
 
 function roundAmount(value: number): number {
@@ -50,6 +68,79 @@ function amountInSettlementCurrency(
   const amountTwd = convertToTwd(numeric, sourceCurrency, rates);
   const settlementUnitTwd = convertToTwd(1, settlementCurrency, rates);
   return settlementUnitTwd > 0 ? amountTwd / settlementUnitTwd : 0;
+}
+
+function convertAmount(
+  amount: number,
+  fromCurrency: string | null | undefined,
+  toCurrency: SupportedCurrency,
+  rates: Partial<Record<SupportedCurrency, number>>,
+): number {
+  const source = normalizeCurrency(fromCurrency);
+  if (source === toCurrency) return Number.isFinite(Number(amount)) ? Number(amount) : 0;
+  const amountTwd = convertToTwd(Number(amount), source, rates);
+  const unitTwd = convertToTwd(1, toCurrency, rates);
+  return unitTwd > 0 ? amountTwd / unitTwd : 0;
+}
+
+function expenseTransferRows(
+  expense: SettlementExpense,
+  records: readonly SettlementClearanceRecord[],
+  rates: Partial<Record<SupportedCurrency, number>> = {},
+): ExpenseSettlementTransfer[] {
+  const expenseId = String(expense.id ?? '');
+  if (!expenseId) return [];
+  const currency = normalizeCurrency(expense.currency);
+  const settledByDebtor = new Map<string, number>();
+  records
+    .filter((record) => record.expense_id === expenseId && record.to_user_id === expense.payer_id)
+    .forEach((record) => {
+      const amount = convertAmount(record.amount, record.currency, currency, rates);
+      if (amount > 0) settledByDebtor.set(record.from_user_id, (settledByDebtor.get(record.from_user_id) ?? 0) + amount);
+    });
+
+  return (expense.splits ?? [])
+    .filter((split) => split.user_id && split.user_id !== expense.payer_id && Number(split.amount) > 0)
+    .map((split) => ({
+      expense_id: expenseId,
+      from_user_id: split.user_id,
+      to_user_id: expense.payer_id,
+      amount: roundAmount(Math.max(0, Number(split.amount) - (settledByDebtor.get(split.user_id) ?? 0))),
+      currency,
+    }))
+    .filter((transfer) => transfer.amount > 0.009);
+}
+
+/** Calculates the outstanding settlement amount for one expense only. */
+export function calculateExpenseSettlement(
+  expense: SettlementExpense,
+  records: readonly SettlementClearanceRecord[] = [],
+  rates: Partial<Record<SupportedCurrency, number>> = {},
+): ExpenseSettlementStatus {
+  const expenseId = String(expense.id ?? '');
+  const totalOwed = roundAmount((expense.splits ?? [])
+    .filter((split) => split.user_id && split.user_id !== expense.payer_id)
+    .reduce((sum, split) => sum + Number(split.amount || 0), 0));
+  const outstanding = expenseTransferRows(expense, records, rates);
+  const remainingAmount = expense.is_settled ? 0 : roundAmount(outstanding.reduce((sum, transfer) => sum + transfer.amount, 0));
+  const settledAmount = roundAmount(Math.max(0, totalOwed - remainingAmount));
+  return {
+    expenseId,
+    totalOwed,
+    settledAmount,
+    remainingAmount,
+    isSettled: Boolean(expense.is_settled) || remainingAmount <= 0.009,
+  };
+}
+
+/** Returns only the transfers still needed to settle one expense. */
+export function createExpenseSettlementTransfers(
+  expense: SettlementExpense,
+  records: readonly SettlementClearanceRecord[] = [],
+  rates: Partial<Record<SupportedCurrency, number>> = {},
+): ExpenseSettlementTransfer[] {
+  if (expense.is_settled) return [];
+  return expenseTransferRows(expense, records, rates);
 }
 
 function buildBalanceState(
