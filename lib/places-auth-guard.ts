@@ -36,8 +36,10 @@ export async function canIssuePlacesRequest(): Promise<boolean> {
   return false;
 }
 
-/** Backwards-compatible name for UI request guards. */
-export const canMakeRequest = canIssuePlacesRequest;
+/** Synchronous circuit check used immediately before any network call. */
+export function canMakeRequest(): boolean {
+  return !placesAuthBlocked;
+}
 
 export function isPlacesAuthErrorStatus(status: number): boolean {
   return status === 400 || status === 401 || status === 403;

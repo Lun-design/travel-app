@@ -1,6 +1,6 @@
 import type { GeocodingResult } from './geocoding';
 import type { OpeningHours, OpeningHoursDay, OpeningPeriod, Weekday } from './itinerary';
-import { canIssuePlacesRequest, isPlacesAuthErrorStatus, markPlacesAuthInvalid } from './places-auth-guard';
+import { canIssuePlacesRequest, canMakeRequest, isPlacesAuthErrorStatus, markPlacesAuthInvalid } from './places-auth-guard';
 
 const GOOGLE_AUTOCOMPLETE_ENDPOINT = 'https://places.googleapis.com/v1/places:autocomplete';
 const GOOGLE_TEXT_SEARCH_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
@@ -349,9 +349,11 @@ export function buildGooglePlacePhotoUrl(reference: unknown, apiKey?: string, ma
 }
 
 async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {
+  if (!canMakeRequest()) throw new Error('AUTH_CIRCUIT_BREAKER_BLOCKED');
   const key = getGoogleApiKey(apiKey);
   const sanitizedQuery = sanitizePlaceSearchQuery(query);
-  if (!key || !(await canIssuePlacesRequest())) return [];
+  if (!key) return [];
+  if (!(await canIssuePlacesRequest())) throw new Error('AUTH_CIRCUIT_BREAKER_BLOCKED');
   const response = await fetch(GOOGLE_AUTOCOMPLETE_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -411,13 +413,15 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload, apiKey?: string):
 }
 
 export async function searchGooglePlacesTextPage(query: string, apiKey?: string, pageToken?: string): Promise<GooglePlaceSearchPage> {
+  if (!canMakeRequest()) throw new Error('AUTH_CIRCUIT_BREAKER_BLOCKED');
   const key = getGoogleApiKey(apiKey);
   const normalizedQuery = sanitizePlaceSearchQuery(query)
     .replace(/[\u0000-\u001F\u007F]/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim();
   const normalizedPageToken = typeof pageToken === 'string' ? pageToken.trim() : '';
-  if (!key || !normalizedQuery || !(await canIssuePlacesRequest())) return { results: [], nextPageToken: null };
+  if (!key || !normalizedQuery) return { results: [], nextPageToken: null };
+  if (!(await canIssuePlacesRequest())) throw new Error('AUTH_CIRCUIT_BREAKER_BLOCKED');
   const requestBody: { textQuery: string; languageCode: string; pageSize: number; pageToken?: string } = {
     textQuery: normalizedQuery,
     languageCode: 'zh-TW',
@@ -463,6 +467,7 @@ export async function searchGooglePlaces(query: string, apiKey?: string): Promis
 }
 
 export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string): Promise<GeocodingResult> {
+  if (!canMakeRequest()) throw new Error('AUTH_CIRCUIT_BREAKER_BLOCKED');
   const key = getGoogleApiKey(apiKey);
   if (!key) throw new Error('尚未設定 Google Places API Key');
   if (!(await canIssuePlacesRequest())) throw new Error('Places session expired');

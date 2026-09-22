@@ -161,6 +161,15 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       setRecommendationSource(firstPage.source ?? 'api');
     } catch (error) {
       if (requestId !== recommendationRequestId.current) return;
+      if (isPlacesAuthBlocked() || (error instanceof Error && error.message === 'AUTH_CIRCUIT_BREAKER_BLOCKED')) {
+        setRecommendations(getLocalRecommendationFallback(normalized, themeValue, subcategoryValue));
+        setRecommendationSource('seed');
+        setNextPageToken(null);
+        setRecommendationTotalItems(null);
+        setPage(1);
+        setRecommendationError('登入工作階段已逾時，已切換至離線精選推薦。');
+        return null;
+      }
       setRecommendations(getLocalRecommendationFallback(normalized, themeValue, subcategoryValue));
       setRecommendationSource('seed');
       setNextPageToken(null);

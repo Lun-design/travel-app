@@ -23,9 +23,7 @@ describe('Places auth circuit breaker', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     markPlacesAuthInvalid();
 
-    const page = await searchGooglePlacesTextPage('大阪 美食', 'test-key');
-
-    expect(page.results).toEqual([]);
+    await expect(searchGooglePlacesTextPage('大阪 美食', 'test-key')).rejects.toThrow('AUTH_CIRCUIT_BREAKER_BLOCKED');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
