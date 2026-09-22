@@ -10,9 +10,23 @@ import {
   searchGooglePlacesTextPage,
   searchGooglePlacesText,
 } from '../lib/google-places';
+import { clearPlacesAuthBlock, markPlacesAuthInvalid } from '../lib/places-auth-guard';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearPlacesAuthBlock();
+});
+
+describe('Places auth circuit breaker', () => {
+  it('does not issue a network request after session invalidation', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    markPlacesAuthInvalid();
+
+    const page = await searchGooglePlacesTextPage('大阪 美食', 'test-key');
+
+    expect(page.results).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('parseGoogleOpeningHours', () => {

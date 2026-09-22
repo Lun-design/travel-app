@@ -1,6 +1,7 @@
 import { inferTimezoneFromDestination } from './timezone';
 import { searchPlaces, type GeocodingResult } from './geocoding';
 import { hasGooglePlacesApiKey, searchGooglePlacesTextPage } from './google-places';
+import { isPlacesAuthBlocked } from './places-auth-guard';
 import type { ItineraryItemSaveInput } from './itinerary';
 
 export type GlobalPlaceCategory = 'outdoor' | 'indoor' | 'other';
@@ -512,6 +513,7 @@ export function paginateRecommendations<T>(items: T[], requestedPage: number, pa
 }
 
 async function defaultRecommendationPageProvider(query: string, pageToken?: string): Promise<RecommendationRawPage> {
+  if (isPlacesAuthBlocked()) return { results: [], nextPageToken: null };
   if (hasGooglePlacesApiKey()) {
     try {
       const page = await searchGooglePlacesTextPage(query, undefined, pageToken);

@@ -6,6 +6,7 @@ import { getRealtimeOptions, getSupabaseAuthOptions } from './supabase-runtime';
 import { buildSupabaseHealthcheckUrl } from './supabase-health';
 import { createAuthAwareFetch, JWT_RECOVERY_MESSAGE } from './supabase-auth-recovery';
 import { clearOfflineCache } from './offline-cache';
+import { setPlacesSessionChecker } from './places-auth-guard';
 
 // Keep dot-notation references explicit so Expo can inline EXPO_PUBLIC values
 // into the browser bundle. Dynamic reads from `process.env` are not inlined.
@@ -70,6 +71,9 @@ export const supabase = createClient(url, anonKey, {
   realtime: getRealtimeOptions(),
 });
 supabaseClient = supabase;
+if (isSupabaseConfigured) {
+  setPlacesSessionChecker(async () => Boolean((await supabase.auth.getSession()).data.session));
+}
 
 export { JWT_RECOVERY_MESSAGE };
 

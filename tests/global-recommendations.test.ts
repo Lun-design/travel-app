@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -21,6 +21,9 @@ import {
   type GlobalPlaceSearchResult,
 } from '../lib/global-recommendations';
 import type { GeocodingResult } from '../lib/geocoding';
+import { clearPlacesAuthBlock, markPlacesAuthInvalid } from '../lib/places-auth-guard';
+
+afterEach(() => clearPlacesAuthBlock());
 
 const tokyoTower: GeocodingResult = {
   id: 'tokyo-tower',
@@ -32,6 +35,17 @@ const tokyoTower: GeocodingResult = {
 };
 
 describe('global recommendation helpers', () => {
+  it('falls back to static seeds without issuing a provider request when auth is expired', async () => {
+    markPlacesAuthInvalid();
+    const page = await searchDynamicRecommendationsPage('大阪', 'food', {
+      cache: createRecommendationSessionCache(),
+      subcategory: 'hotpot',
+    });
+
+    expect(page.source).toBe('seed');
+    expect(page.results.length).toBeGreaterThanOrEqual(3);
+  });
+
   it('normalizes a worldwide place with city, country, duration and timezone', () => {
     const result = normalizeGlobalPlace(tokyoTower);
 

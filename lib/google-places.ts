@@ -1,10 +1,12 @@
 import type { GeocodingResult } from './geocoding';
 import type { OpeningHours, OpeningHoursDay, OpeningPeriod, Weekday } from './itinerary';
+import { canIssuePlacesRequest, isPlacesAuthErrorStatus, markPlacesAuthInvalid } from './places-auth-guard';
 
 const GOOGLE_AUTOCOMPLETE_ENDPOINT = 'https://places.googleapis.com/v1/places:autocomplete';
 const GOOGLE_TEXT_SEARCH_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 const GOOGLE_DETAILS_ENDPOINT = 'https://places.googleapis.com/v1/places';
 const GOOGLE_WEEKDAYS: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
 
 const PLACE_ACTION_PATTERN = /(?:拍攝|拍照|拍|前往|前去|到|體驗|吃|買|購買|參拜|逛逛|逛|看|欣賞|休息|找|搭車|搭乘|返回|回到|入住|辦理入住|寄放行李|退房|早餐|午餐|晚餐|take\s+photos?|photograph|visit|go\s+to|heading\s+to|eat|buy|experience|relax|check\s*-?\s*(?:in|out))/giu;
 const PLACE_TIME_PATTERN = /\b\d{1,2}(?::\d{2})?\s*(?:[~～-]\s*\d{1,2}(?::\d{2})?)?\b/gu;
@@ -331,7 +333,7 @@ export function buildGooglePlacePhotoUrl(reference: unknown, apiKey?: string, ma
 async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): Promise<GeocodingResult[]> {
   const key = getGoogleApiKey(apiKey);
   const sanitizedQuery = sanitizePlaceSearchQuery(query);
-  if (!key) return [];
+  if (!key || !(await canIssuePlacesRequest())) return [];
   const response = await fetch(GOOGLE_AUTOCOMPLETE_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -341,7 +343,10 @@ async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): P
     },
     body: JSON.stringify({ input: sanitizedQuery, languageCode: 'zh-TW' }),
   });
-  if (!response.ok) throw new Error(`Google Places 搜尋失敗 (${response.status})`);
+  if (!response.ok) {
+    if (isPlacesAuthErrorStatus(response.status)) markPlacesAuthInvalid();
+    throw new Error(`Google Places 搜尋失敗 (${response.status})`);
+  }
   const payload = await response.json() as GoogleAutocompletePayload;
   return (payload.suggestions ?? []).flatMap((suggestion) => {
     const prediction = suggestion.placePrediction;
@@ -393,7 +398,7 @@ export async function searchGooglePlacesTextPage(query: string, apiKey?: string,
     .replace(/\s+/gu, ' ')
     .trim();
   const normalizedPageToken = typeof pageToken === 'string' ? pageToken.trim() : '';
-  if (!key || !normalizedQuery) return { results: [], nextPageToken: null };
+  if (!key || !normalizedQuery || !(await canIssuePlacesRequest())) return { results: [], nextPageToken: null };
   const requestBody: { textQuery: string; languageCode: string; pageSize: number; pageToken?: string } = {
     textQuery: normalizedQuery,
     languageCode: 'zh-TW',
@@ -409,7 +414,10 @@ export async function searchGooglePlacesTextPage(query: string, apiKey?: string,
     },
     body: JSON.stringify(requestBody),
   });
-  if (!response.ok) throw new Error(`Google Places Text Search failed (${response.status})`);
+  if (!response.ok) {
+    if (isPlacesAuthErrorStatus(response.status)) markPlacesAuthInvalid();
+    throw new Error(`Google Places Text Search failed (${response.status})`);
+  }
   const payload = await response.json() as GoogleTextSearchPayload;
   return {
     results: mapTextSearchPlaces(payload, key),
@@ -437,6 +445,7 @@ export async function searchGooglePlaces(query: string, apiKey?: string): Promis
 export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string): Promise<GeocodingResult> {
   const key = getGoogleApiKey(apiKey);
   if (!key) throw new Error('尚未設定 Google Places API Key');
+  if (!(await canIssuePlacesRequest())) throw new Error('Places session expired');
   const normalizedId = normalizePlaceId(placeId);
   const response = await fetch(`${GOOGLE_DETAILS_ENDPOINT}/${encodeURIComponent(normalizedId)}?languageCode=zh-TW`, {
     headers: {
@@ -444,7 +453,10 @@ export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string):
       'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,regularOpeningHours,photos',
     },
   });
-  if (!response.ok) throw new Error(`Google Place 詳細資料取得失敗 (${response.status})`);
+  if (!response.ok) {
+    if (isPlacesAuthErrorStatus(response.status)) markPlacesAuthInvalid();
+    throw new Error(`Google Place 詳細資料取得失敗 (${response.status})`);
+  }
   return parseGooglePlaceDetails(await response.json() as GooglePlaceDetailsPayload);
 }
 
