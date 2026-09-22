@@ -6,6 +6,7 @@ import {
   pickPreferredPlaceAddress,
   resolveTripPlaceAddress,
   sanitizePlaceSearchQuery,
+  sanitizePlaceDisplayName,
   searchGooglePlaces,
   searchGooglePlacesTextPage,
   searchGooglePlacesText,
@@ -26,6 +27,14 @@ describe('Places auth circuit breaker', () => {
 
     expect(page.results).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('localized Places display values', () => {
+  it('prefers the native CJK name over an English alias', () => {
+    expect(sanitizePlaceDisplayName('San Hot Pot (参火鍋)')).toBe('参火鍋');
+    expect(sanitizePlaceDisplayName('大阪城天守閣 Osaka Castle')).toBe('大阪城天守閣');
+    expect(sanitizePlaceDisplayName('Shokumi Tenka Hotpot Restaurant')).toBe('Shokumi Tenka Hotpot Restaurant');
   });
 });
 
@@ -237,6 +246,7 @@ describe('Google Places search fallback', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(body).toEqual({ textQuery: '大阪 美食', languageCode: 'zh-TW', pageSize: 20 });
     expect(body).not.toHaveProperty('pageToken');
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ 'Accept-Language': 'zh-TW,zh;q=0.9' });
   });
 
   it('falls back to global Text Search when Autocomplete has no Chinese result', async () => {

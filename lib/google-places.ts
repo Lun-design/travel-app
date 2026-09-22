@@ -7,6 +7,24 @@ const GOOGLE_TEXT_SEARCH_ENDPOINT = 'https://places.googleapis.com/v1/places:sea
 const GOOGLE_DETAILS_ENDPOINT = 'https://places.googleapis.com/v1/places';
 const GOOGLE_WEEKDAYS: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+const CJK_NAME_PATTERN = /[\u3040-\u30ff\u3400-\u9fff]/u;
+
+/** Prefer the native CJK name when Places returns an English alias first. */
+export function sanitizePlaceDisplayName(value: unknown): string {
+  const text = typeof value === 'string' ? value.replace(/\s+/gu, ' ').trim() : '';
+  if (!text || !CJK_NAME_PATTERN.test(text)) return text;
+  const parenthetical = text.match(/[（(]([^()（）]*[\u3040-\u30ff\u3400-\u9fff][^()（）]*)[）)]/u)?.[1]?.trim();
+  if (parenthetical) return parenthetical;
+  return text
+    .replace(/^[A-Za-z0-9][A-Za-z0-9 .&'’-]*\s*(?=[\u3040-\u30ff\u3400-\u9fff\u3400-\u9fff])/u, '')
+    .replace(/\s+[A-Za-z][A-Za-z0-9 .&'’-]*$/u, '')
+    .trim();
+}
+
+export function sanitizePlaceAddress(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\s+/gu, ' ').trim() : '';
+}
+
 
 const PLACE_ACTION_PATTERN = /(?:拍攝|拍照|拍|前往|前去|到|體驗|吃|買|購買|參拜|逛逛|逛|看|欣賞|休息|找|搭車|搭乘|返回|回到|入住|辦理入住|寄放行李|退房|早餐|午餐|晚餐|take\s+photos?|photograph|visit|go\s+to|heading\s+to|eat|buy|experience|relax|check\s*-?\s*(?:in|out))/giu;
 const PLACE_TIME_PATTERN = /\b\d{1,2}(?::\d{2})?\s*(?:[~～-]\s*\d{1,2}(?::\d{2})?)?\b/gu;
@@ -339,6 +357,7 @@ async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): P
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
+      'Accept-Language': 'zh-TW,zh;q=0.9',
       'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text',
     },
     body: JSON.stringify({ input: sanitizedQuery, languageCode: 'zh-TW' }),
@@ -352,10 +371,10 @@ async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): P
     const prediction = suggestion.placePrediction;
     const placeId = prediction?.placeId;
     if (!placeId) return [];
-    const mainText = prediction.structuredFormat?.mainText?.text?.trim() || prediction.text?.text?.trim();
+    const mainText = sanitizePlaceDisplayName(prediction.structuredFormat?.mainText?.text) || sanitizePlaceDisplayName(prediction.text?.text);
     if (!mainText) return [];
     const secondaryText = prediction.structuredFormat?.secondaryText?.text?.trim();
-    const displayName = secondaryText ? `${mainText}, ${secondaryText}` : (prediction.text?.text?.trim() || mainText);
+    const displayName = secondaryText ? `${mainText}, ${secondaryText}` : (sanitizePlaceDisplayName(prediction.text?.text) || mainText);
     return [{
       id: `google:${normalizePlaceId(placeId)}`,
       googlePlaceId: normalizePlaceId(placeId),
@@ -371,7 +390,7 @@ async function searchGooglePlacesAutocomplete(query: string, apiKey?: string): P
 function mapTextSearchPlaces(payload: GoogleTextSearchPayload, apiKey?: string): GeocodingResult[] {
   return (payload.places ?? []).flatMap((place) => {
     const placeId = place.id ? normalizePlaceId(place.id) : '';
-    const title = place.displayName?.text?.trim() || place.formattedAddress?.split(',')[0]?.trim();
+    const title = sanitizePlaceDisplayName(place.displayName?.text) || sanitizePlaceDisplayName(place.formattedAddress?.split(',')[0]);
     if (!placeId || !title) return [];
     const latitude = Number(place.location?.latitude);
     const longitude = Number(place.location?.longitude);
@@ -382,7 +401,7 @@ function mapTextSearchPlaces(payload: GoogleTextSearchPayload, apiKey?: string):
       googlePlaceId: placeId,
       provider: 'google' as const,
       title,
-      displayName: place.formattedAddress?.trim() || title,
+      displayName: sanitizePlaceAddress(place.formattedAddress) || title,
       latitude: Number.isFinite(latitude) ? latitude : Number.NaN,
       longitude: Number.isFinite(longitude) ? longitude : Number.NaN,
       ...(photoReference ? { photoReference } : {}),
@@ -410,6 +429,7 @@ export async function searchGooglePlacesTextPage(query: string, apiKey?: string,
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
+      'Accept-Language': 'zh-TW,zh;q=0.9',
       'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos,nextPageToken',
     },
     body: JSON.stringify(requestBody),
@@ -450,6 +470,7 @@ export async function fetchGooglePlaceDetails(placeId: string, apiKey?: string):
   const response = await fetch(`${GOOGLE_DETAILS_ENDPOINT}/${encodeURIComponent(normalizedId)}?languageCode=zh-TW`, {
     headers: {
       'X-Goog-Api-Key': key,
+      'Accept-Language': 'zh-TW,zh;q=0.9',
       'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,regularOpeningHours,photos',
     },
   });
@@ -475,8 +496,8 @@ export function resolveTripPlaceAddress(searchAddress?: string | null, detailsAd
 
 export function parseGooglePlaceDetails(payload: GooglePlaceDetailsPayload): GeocodingResult {
   const placeId = normalizePlaceId(payload.id ?? payload.name ?? '');
-  const title = payload.displayName?.text?.trim() || payload.formattedAddress?.split(',')[0]?.trim() || '未命名地點';
-  const displayName = payload.formattedAddress?.trim() || title;
+  const title = sanitizePlaceDisplayName(payload.displayName?.text) || sanitizePlaceDisplayName(payload.formattedAddress?.split(',')[0]) || '未命名地點';
+  const displayName = sanitizePlaceAddress(payload.formattedAddress) || title;
   const latitude = Number(payload.location?.latitude);
   const longitude = Number(payload.location?.longitude);
   const openingHours = parseGoogleOpeningHours(payload.regularOpeningHours);
