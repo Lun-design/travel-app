@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getSpotImageUrl } from '@/lib/spot-image';
-import { canIssuePlacesRequest, isPlacesAuthBlocked } from '@/lib/places-auth-guard';
+import { canIssuePlacesRequest, canMakeRequest, isPlacesAuthBlocked } from '@/lib/places-auth-guard';
 import {
   buildGlobalItineraryPayload,
   buildExpandedRecommendationQuery,
@@ -74,6 +74,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [failedImageIds, setFailedImageIds] = useState<string[]>([]);
   const [searched, setSearched] = useState(false);
   const recommendationRequestId = useRef(0);
+  const searchRequestId = useRef(0);
 
   function recommendationImageUrl(place: GlobalPlaceSearchResult): string {
     return place.imageUrl
@@ -191,6 +192,13 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     const expansionIndex = recommendationExpansionIndex;
     const canExpand = !token && expansionIndex < MAX_RECOMMENDATION_EXPANSIONS;
     if (normalized.length < 2 || recommendationLoadingMore || (!token && !canExpand)) return null;
+    if (!canMakeRequest()) {
+      setRecommendations(getLocalRecommendationFallback(normalized, activeTheme, activeSubcategory));
+      setRecommendationSource('seed');
+      setNextPageToken(null);
+      setPage(1);
+      return null;
+    }
     setRecommendationLoadingMore(true);
     setRecommendationError('');
     try {
@@ -274,10 +282,18 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   async function handleSearch() {
     const value = query.trim();
     if (value.length < 2) return;
+    const requestId = ++searchRequestId.current;
     setSearching(true);
     setSearched(true);
     try {
-      setResults(await searchGlobalPlaces(value));
+      if (!canMakeRequest() || !(await canIssuePlacesRequest())) {
+        if (requestId === searchRequestId.current) {
+          setResults(getLocalRecommendationFallback(selectedDestination || destinationInput, activeTheme, activeSubcategory));
+        }
+        return;
+      }
+      const nextResults = await searchGlobalPlaces(value);
+      if (requestId === searchRequestId.current) setResults(nextResults);
     } catch (error) {
       setResults([]);
       Alert.alert('搜尋失敗', error instanceof Error ? error.message : '暫時無法取得全球景點');
@@ -287,6 +303,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   }
 
   async function handleAdd(place: GlobalPlaceSearchResult) {
+    if (!place?.id || !place.title) return;
     setAddingId(place.id);
     try {
       const payload = buildGlobalItineraryPayload(place, {
@@ -306,7 +323,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   }
 
   async function handleSaveToBucket(place: GlobalPlaceSearchResult) {
-    if (!onAddToBucket) return;
+    if (!onAddToBucket || !place?.id || !place.title) return;
     setBucketAddingId(place.id);
     try {
       await onAddToBucket(place);

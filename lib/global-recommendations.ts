@@ -18,6 +18,7 @@ export type GlobalPlaceSearchResult = {
   timezone: string;
   category: GlobalPlaceCategory;
   subcategory?: RecommendationSubcategoryId;
+  subCategories?: RecommendationSubcategoryId[];
   estimatedDurationMinutes: number;
   types?: string[];
   imageUrl?: string | null;
@@ -358,6 +359,7 @@ type StaticRecommendationSeed = {
   destinations: ('osaka' | 'tokyo')[];
   theme: RecommendationThemeId;
   subcategory: RecommendationSubcategoryId;
+  subCategories?: RecommendationSubcategoryId[];
   title: string;
   address: string;
   latitude: number;
@@ -431,6 +433,7 @@ function normalizeStaticSeed(seed: StaticRecommendationSeed): GlobalPlaceSearchR
     timezone: 'Asia/Tokyo',
     category: seed.theme === 'food' ? 'indoor' : 'outdoor',
     subcategory: seed.subcategory,
+    subCategories: seed.subCategories ?? [seed.subcategory],
     estimatedDurationMinutes: seed.estimatedDurationMinutes,
     imageUrl: seed.imageUrl,
     image_url: seed.imageUrl,
@@ -505,7 +508,7 @@ export function getLocalRecommendationFallback(
     .filter((seed) => staticSeedMatchesDestination(seed, destination));
   const strictSeeds = destinationSeeds
     .filter((seed) => seed.theme === theme)
-    .filter((seed) => subcategory === 'all' || seed.subcategory === subcategory);
+    .filter((seed) => subcategory === 'all' || (seed.subCategories ?? [seed.subcategory]).includes(subcategory));
   const fallbackSeeds = [...strictSeeds];
   // Never pad a deep category with another deep category (for example,
   // noodles must not appear in a hotpot result). Generic same-destination
