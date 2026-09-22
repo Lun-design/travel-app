@@ -1,4 +1,5 @@
 export type VoucherFileType = 'image' | 'pdf';
+export type VoucherCategory = 'flight' | 'hotel' | 'ticket' | 'transport' | 'other';
 
 export type Voucher = {
   id: string;
@@ -13,6 +14,7 @@ export type Voucher = {
   reservation_number?: string | null;
   usage_at?: string | null;
   notes?: string | null;
+  category?: VoucherCategory | null;
 };
 
 export function normalizeVoucherFileType(mimeType: string): VoucherFileType | null {

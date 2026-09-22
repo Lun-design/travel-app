@@ -10,10 +10,15 @@ import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { updateItineraryItemReservationTags } from '@/lib/itinerary-api';
 import { normalizeReservationTags } from '@/lib/reservation-tags';
+import { getVoucherCategoryLabel, voucherCategoryOptions, type VoucherCategory } from '@/lib/voucher-categories';
+import { groupVouchersByDate } from '@/lib/voucher-date-grouping';
 
 export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onChanged }: { tripId: string; userId: string; items: ItineraryItem[]; themeMode?: ThemeMode; onChanged?: () => void | Promise<void> }) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [allVouchers, setAllVouchers] = useState<Voucher[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<VoucherCategory | 'all'>('all');
+  const [showExpired, setShowExpired] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<Voucher | null>(null);
@@ -29,7 +34,9 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onC
   async function load() {
     try {
       const nextVouchers = await listVouchers(tripId);
-      setVouchers(nextVouchers);
+      setAllVouchers(nextVouchers);
+      const dateGroups = groupVouchersByDate(nextVouchers);
+      setVouchers([...dateGroups.future, ...dateGroups.undated]);
       const signedEntries = await Promise.all(nextVouchers
         .filter((voucher) => voucher.file_type === 'image' && Boolean(voucher.file_path))
         .map(async (voucher) => {
@@ -84,6 +91,7 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onC
     try {
       await deleteVoucher({ id: voucher.id, file_path: voucher.file_path });
       setVouchers((current) => current.filter((entry) => entry.id !== voucher.id));
+      setAllVouchers((current) => current.filter((entry) => entry.id !== voucher.id));
       setPreviewUrls((current) => {
         const next = { ...current };
         delete next[voucher.id];
@@ -100,7 +108,33 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onC
     }
   }
 
+  async function copyReservationNumber(value: string) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        setToast('預約編號已複製！');
+      } else {
+        setToast('此裝置不支援剪貼簿，請長按編號複製。');
+      }
+    } catch {
+      setToast('複製失敗，請手動複製預約編號。');
+    }
+  }
+
+  const reservationCopyButtons = vouchers.filter((voucher) => Boolean(voucher.reservation_number)).map((voucher) => (
+    <Pressable key={`copy-${voucher.id}`} accessibilityRole="button" accessibilityLabel="複製預約編號" style={styles.copyButton} onPress={() => void copyReservationNumber(voucher.reservation_number!)}>
+      <Text style={styles.copyText}>複製 {voucher.reservation_number}</Text>
+    </Pressable>
+  ));
+  const dateGroups = groupVouchersByDate(allVouchers);
+  const selectCategory = (value: VoucherCategory | 'all') => {
+    setCategoryFilter(value);
+    const source = showExpired ? [...dateGroups.future, ...dateGroups.undated, ...dateGroups.expired] : [...dateGroups.future, ...dateGroups.undated];
+    setVouchers(value === 'all' ? source : source.filter((entry) => getVoucherCategoryLabel(entry.category, entry.title).value === value));
+  };
+  const filterButtons = <View style={styles.filterList}>{[{ value: 'all' as const, label: '全部', icon: '' }, ...voucherCategoryOptions].map((option) => <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={`篩選${option.label}`} style={[styles.filterButton, categoryFilter === option.value && styles.filterSelected]} onPress={() => selectCategory(option.value)}><Text style={categoryFilter === option.value ? styles.filterSelectedText : styles.filterText}>{option.icon ? `${option.icon} ` : ''}{option.label}</Text></Pressable>)}<Pressable accessibilityRole="button" accessibilityLabel="展開已過期票券" style={[styles.filterButton, showExpired && styles.filterSelected]} onPress={() => { setShowExpired((current) => !current); selectCategory(categoryFilter); }}><Text style={showExpired ? styles.filterSelectedText : styles.filterText}>已過期 ({dateGroups.expired.length})</Text></Pressable></View>;
   return <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]} style={{ backgroundColor: theme.colors.background }}>
+    {filterButtons}{reservationCopyButtons.length ? <View style={styles.referenceList}>{reservationCopyButtons}</View> : null}
     {toast ? <Pressable accessibilityRole="alert" style={styles.toast} onPress={() => setToast(null)}><Text style={styles.toastText}>{toast}</Text></Pressable> : null}
     <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.title}>🎫 預約與票券</Text><Text style={styles.subtitle}>集中管理門票、機票 QR Code 與飯店預約單。</Text></View><Pressable style={styles.upload} onPress={() => setUploading(true)}><Text style={styles.white}>＋ 新增</Text></Pressable></View>
     {vouchers.length ? vouchers.map((voucher) => <View key={voucher.id} style={styles.card}><Pressable style={styles.info} onPress={() => setPreview(voucher)}>{voucher.file_type === 'image' && previewUrls[voucher.id] ? <Image source={{ uri: previewUrls[voucher.id] }} accessibilityLabel={`${voucher.title} 預覽縮圖`} resizeMode="cover" style={styles.thumbnail} /> : <View style={styles.iconBox}><Text style={styles.icon}>{voucher.file_type === 'pdf' ? '📄' : '🖼️'}</Text></View>}<View style={styles.content}><Text numberOfLines={2} style={styles.name}>{voucher.title}</Text><Text numberOfLines={2} style={styles.meta}>{voucher.file_type.toUpperCase()} · {itemName(voucher.item_id)}</Text>{voucher.reservation_number ? <Text numberOfLines={1} style={styles.meta}>預約編號：{voucher.reservation_number}</Text> : null}{voucher.usage_at ? <Text numberOfLines={1} style={styles.meta}>使用時間：{voucher.usage_at.replace('T', ' ').slice(0, 16)}</Text> : null}{voucher.notes ? <Text numberOfLines={1} style={styles.meta}>{voucher.notes}</Text> : null}</View></Pressable><View style={styles.cardActions}><Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => setEditingVoucher(voucher)}><Text style={styles.bindText}>編輯資料</Text></Pressable><Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => openBinding(voucher)}><Text style={styles.bindText}>{voucher.item_id ? '重新綁定景點' : '綁定至景點'}</Text></Pressable><Pressable style={styles.deleteButton} onPress={(event) => { event.stopPropagation(); setToast(null); setPendingDelete(voucher); }}><Text style={styles.delete}>刪除</Text></Pressable></View></View>) : <View style={styles.empty}><PuppyMascot puppy="-6" size={165} accessibilityLabel="目前沒有預約票券" /><Text style={styles.subtitle}>目前還沒有預約或票券</Text></View>}
@@ -148,6 +182,16 @@ const styles = StyleSheet.create({
   content: { flex: 1, minWidth: 0 },
   name: { fontSize: 16, fontWeight: '800' },
   meta: { color: EDITORIAL_COLORS.taupe, fontSize: 12, marginTop: 3 },
+  referenceList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  filterList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  filterButton: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 999, backgroundColor: EDITORIAL_COLORS.sand },
+  filterSelected: { backgroundColor: EDITORIAL_COLORS.terracotta },
+  filterText: { color: EDITORIAL_COLORS.charcoal, fontSize: 12, fontWeight: '700' },
+  filterSelectedText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '800' },
+  referenceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reference: { flex: 1 },
+  copyButton: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand },
+  copyText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   label: { color: EDITORIAL_COLORS.charcoal, fontWeight: '700', marginTop: 4 },
   cardActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginLeft: 8 },
   bindButton: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },

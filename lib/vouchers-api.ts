@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { buildDocumentPath } from './documents';
-import { normalizeVoucherFileType, type Voucher } from './vouchers';
+import { normalizeVoucherFileType, type Voucher, type VoucherCategory } from './vouchers';
 
 export type UploadVoucherInput = {
   tripId: string;
@@ -13,6 +13,7 @@ export type UploadVoucherInput = {
   reservationNumber?: string | null;
   usageAt?: string | null;
   notes?: string | null;
+  category?: VoucherCategory | null;
 };
 
 export type VoucherUpdateInput = {
@@ -20,6 +21,7 @@ export type VoucherUpdateInput = {
   reservation_number?: string | null;
   usage_at?: string | null;
   notes?: string | null;
+  category?: VoucherCategory | null;
 };
 
 export async function listVouchers(tripId: string): Promise<Voucher[]> {
@@ -54,6 +56,7 @@ export async function uploadVoucher(input: UploadVoucherInput): Promise<Voucher>
     reservation_number: input.reservationNumber?.trim() || null,
     usage_at: input.usageAt?.trim() || null,
     notes: input.notes?.trim() || null,
+    ...(input.category === undefined ? {} : { category: input.category ?? 'other' }),
   }).select().single();
   if (error) {
     await supabase.storage.from('travel-documents').remove([path]);
@@ -74,6 +77,7 @@ export async function updateVoucher(id: string, input: VoucherUpdateInput): Prom
     ...(input.reservation_number === undefined ? {} : { reservation_number: input.reservation_number?.trim() || null }),
     ...(input.usage_at === undefined ? {} : { usage_at: input.usage_at?.trim() || null }),
     ...(input.notes === undefined ? {} : { notes: input.notes?.trim() || null }),
+    ...(input.category === undefined ? {} : { category: input.category ?? 'other' }),
   };
   const { data, error } = await supabase.from('vouchers').update(payload).eq('id', id).select().single();
   if (error) throw error;

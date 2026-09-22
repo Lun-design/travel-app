@@ -111,4 +111,22 @@ describe('vouchers panel UI contract', () => {
     expect(metadata).toContain('reservation_number');
     expect(metadata).toContain('usage_at');
   });
+
+  it('provides reservation-number copy controls backed by the clipboard API', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src/components/VouchersPanel.tsx'), 'utf8');
+
+    expect(source).toContain('navigator.clipboard.writeText');
+    expect(source).toContain('複製預約編號');
+    expect(source).toContain('預約編號已複製');
+  });
+
+  it('exposes category filters and category labels for voucher cards', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src/components/VouchersPanel.tsx'), 'utf8');
+    const metadata = readFileSync(path.resolve(process.cwd(), 'src/components/VoucherMetadataModal.tsx'), 'utf8');
+
+    expect(source).toContain('篩選');
+    expect(source).toContain('getVoucherCategoryLabel');
+    expect(metadata).toContain('voucherCategoryOptions');
+    expect(metadata).toContain('category');
+  });
 });

@@ -4,6 +4,7 @@ import { updateVoucher } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { DatePickerField, TimePickerField } from './FormPickers';
+import { getVoucherCategoryLabel, voucherCategoryOptions, type VoucherCategory } from '@/lib/voucher-categories';
 
 type Props = {
   visible: boolean;
@@ -22,6 +23,7 @@ export function VoucherMetadataModal({ visible, voucher, onClose, onSaved }: Pro
   const [usageDate, setUsageDate] = useState('');
   const [usageTime, setUsageTime] = useState('');
   const [notes, setNotes] = useState('');
+  const [category, setCategory] = useState<VoucherCategory>('other');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function VoucherMetadataModal({ visible, voucher, onClose, onSaved }: Pro
     setUsageDate(usage.date);
     setUsageTime(usage.time);
     setNotes(voucher.notes ?? '');
+    setCategory(voucher.category ?? getVoucherCategoryLabel(null, voucher.title).value);
   }, [visible, voucher]);
 
   async function save() {
@@ -41,6 +44,7 @@ export function VoucherMetadataModal({ visible, voucher, onClose, onSaved }: Pro
         reservation_number: reservationNumber,
         usage_at: usageDate ? `${usageDate}T${usageTime || '00:00'}:00` : null,
         notes,
+        category,
       });
       await onSaved(updated);
       onClose();
@@ -51,10 +55,13 @@ export function VoucherMetadataModal({ visible, voucher, onClose, onSaved }: Pro
     }
   }
 
+  const categoryControls = <View style={styles.categoryRow}><Text style={styles.label}>票券類別</Text>{voucherCategoryOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" style={[styles.categoryOption, category === option.value && styles.categorySelected]} onPress={() => setCategory(option.value)}><Text>{option.icon} {option.label}</Text></Pressable>)}</View>;
+
   return <Modal visible={visible && Boolean(voucher)} transparent animationType="fade" onRequestClose={() => { if (!saving) onClose(); }}>
     <View style={styles.backdrop}><View style={styles.card}>
       <Text style={styles.title}>編輯票券資料</Text>
       <Text style={styles.subtitle}>{voucher?.title}</Text>
+      {categoryControls}
       <TextInput style={styles.input} placeholder="預約編號（選填）" value={reservationNumber} onChangeText={setReservationNumber} />
       <Text style={styles.label}>使用日期與時間（選填）</Text>
       <View style={styles.dateTimeRow}><DatePickerField label="使用日期" value={usageDate} onChange={setUsageDate} style={styles.picker} /><TimePickerField label="使用時間" value={usageTime} onChange={setUsageTime} style={styles.picker} /></View>
@@ -77,6 +84,9 @@ const styles = StyleSheet.create({
   notes: { minHeight: 76, textAlignVertical: 'top' },
   dateTimeRow: { flexDirection: 'row', gap: 8 },
   picker: { flex: 1, minWidth: 0 },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryOption: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
+  categorySelected: { backgroundColor: EDITORIAL_COLORS.terracotta },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 },
   cancel: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14 },
   cancelText: { color: EDITORIAL_COLORS.taupe, fontWeight: '700' },
