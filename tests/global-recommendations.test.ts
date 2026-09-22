@@ -299,6 +299,13 @@ describe('global recommendation helpers', () => {
     expect(tokyo.every((place) => place.city === '東京' && !place.address.includes('大阪'))).toBe(true);
   });
 
+  it('never pads hotpot fallback with noodle seeds', () => {
+    const hotpot = getLocalRecommendationFallback('大阪', 'food', 'hotpot');
+    expect(hotpot.length).toBeGreaterThanOrEqual(6);
+    expect(hotpot.every((place) => place.subcategory === 'hotpot')).toBe(true);
+    expect(hotpot.some((place) => /一蘭|今井|麺|拉麵|烏龍/.test(place.title))).toBe(false);
+  });
+
   it('preserves API and curated image URLs for recommendation cards', () => {
     const normalized = normalizeGlobalPlace({
       id: 'photo-place',

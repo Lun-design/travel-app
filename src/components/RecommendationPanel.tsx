@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getSpotImageUrl } from '@/lib/spot-image';
-import { canIssuePlacesRequest } from '@/lib/places-auth-guard';
+import { canIssuePlacesRequest, isPlacesAuthBlocked } from '@/lib/places-auth-guard';
 import {
   buildGlobalItineraryPayload,
   buildExpandedRecommendationQuery,
@@ -130,7 +130,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       setRecommendationTotalItems(0);
       return;
     }
-    if (!(await canIssuePlacesRequest())) {
+    if (isPlacesAuthBlocked() || !(await canIssuePlacesRequest())) {
       if (requestId !== recommendationRequestId.current) return;
       setRecommendations(getLocalRecommendationFallback(normalized, themeValue, subcategoryValue));
       setRecommendationSource('seed');

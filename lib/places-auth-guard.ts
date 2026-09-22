@@ -36,6 +36,9 @@ export async function canIssuePlacesRequest(): Promise<boolean> {
   return false;
 }
 
+/** Backwards-compatible name for UI request guards. */
+export const canMakeRequest = canIssuePlacesRequest;
+
 export function isPlacesAuthErrorStatus(status: number): boolean {
   return status === 400 || status === 401 || status === 403;
 }
