@@ -18,10 +18,8 @@ import {
   buildGlobalItineraryPayload,
   buildExpandedRecommendationQuery,
   DEFAULT_RECOMMENDATION_PAGE_SIZE,
-  getCuratedRecommendations,
   getLocalRecommendationFallback,
   getRecommendationSubcategories,
-  filterGlobalRecommendationsBySubcategory,
   mergeRecommendationResults,
   paginateRecommendations,
   RECOMMENDATION_THEMES,
@@ -68,6 +66,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
   const [recommendationTotalItems, setRecommendationTotalItems] = useState<number | null>(null);
   const [recommendationExpansionIndex, setRecommendationExpansionIndex] = useState(0);
+  const [recommendationSource, setRecommendationSource] = useState<'api' | 'seed'>('api');
   const [addedIds, setAddedIds] = useState<string[]>([]);
   const [bucketAddedIds, setBucketAddedIds] = useState<string[]>([]);
   const [bucketAddingId, setBucketAddingId] = useState<string | null>(null);
@@ -144,13 +143,14 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     try {
       const firstPage = await searchDynamicRecommendationsPage(normalized, themeValue, { subcategory: subcategoryValue });
       if (requestId !== recommendationRequestId.current) return;
-      const curated = filterGlobalRecommendationsBySubcategory(getCuratedRecommendations(normalized), themeValue, subcategoryValue);
-      setRecommendations(mergeRecommendationResults(curated, firstPage.results));
+      setRecommendations(firstPage.results);
       setNextPageToken(firstPage.nextPageToken);
       setRecommendationTotalItems(firstPage.totalItems);
+      setRecommendationSource(firstPage.source ?? 'api');
     } catch (error) {
       if (requestId !== recommendationRequestId.current) return;
       setRecommendations(getLocalRecommendationFallback(normalized, themeValue, subcategoryValue));
+      setRecommendationSource('seed');
       setNextPageToken(null);
       setRecommendationTotalItems(null);
       setRecommendationError(error instanceof Error ? error.message : '暫時無法取得即時推薦');
@@ -180,7 +180,14 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
           ? undefined
           : buildExpandedRecommendationQuery(normalized, activeTheme, activeSubcategory, expansionIndex),
       });
-      setRecommendations((current) => mergeRecommendationResults(current, nextPage.results));
+      if (nextPage.source === recommendationSource) {
+        setRecommendations((current) => mergeRecommendationResults(current, nextPage.results));
+      } else if (nextPage.source === 'api') {
+        // A successful API expansion supersedes the offline seed list; never
+        // present verified API cards and synthetic/local records together.
+        setRecommendations(nextPage.results);
+        setRecommendationSource('api');
+      }
       setNextPageToken(nextPage.nextPageToken);
       setRecommendationTotalItems((current) => nextPage.totalItems ?? current);
       if (!token) setRecommendationExpansionIndex((current) => current + 1);
@@ -191,7 +198,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     } finally {
       setRecommendationLoadingMore(false);
     }
-  }, [activeSubcategory, activeTheme, nextPageToken, recommendationExpansionIndex, recommendationLoadingMore, selectedDestination]);
+  }, [activeSubcategory, activeTheme, nextPageToken, recommendationExpansionIndex, recommendationLoadingMore, recommendationSource, selectedDestination]);
 
   function selectDestination(value: string) {
     const normalized = value.trim();

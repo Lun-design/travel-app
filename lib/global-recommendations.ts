@@ -16,6 +16,7 @@ export type GlobalPlaceSearchResult = {
   longitude: number;
   timezone: string;
   category: GlobalPlaceCategory;
+  subcategory?: RecommendationSubcategoryId;
   estimatedDurationMinutes: number;
   types?: string[];
   imageUrl?: string | null;
@@ -42,6 +43,7 @@ export type RecommendationPage = {
   results: GlobalPlaceSearchResult[];
   nextPageToken: string | null;
   totalItems: number | null;
+  source?: 'api' | 'seed';
 };
 
 export type RecommendationPageOptions = {
@@ -350,6 +352,79 @@ const RECOMMENDATION_SUBCATEGORY_TERMS: Partial<Record<RecommendationSubcategory
   shopping: ['購物', '商圈', '百貨', '市場', 'shopping', 'mall', 'market', 'department'],
 };
 
+type StaticRecommendationSeed = {
+  id: string;
+  destinations: ('osaka' | 'tokyo')[];
+  theme: RecommendationThemeId;
+  subcategory: RecommendationSubcategoryId;
+  title: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  estimatedDurationMinutes: number;
+  imageUrl: string;
+};
+
+/** Verified, human-curated places used only when live providers are offline. */
+const STATIC_RECOMMENDATION_SEEDS: StaticRecommendationSeed[] = [
+  { id: 'seed-osaka-ichiran-dotonbori', destinations: ['osaka'], theme: 'food', subcategory: 'noodles', title: '一蘭 道頓堀店', address: '大阪府大阪市中央区宗右衛門町7-18', latitude: 34.6687, longitude: 135.5013, estimatedDurationMinutes: 60, imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-dotonbori-imai', destinations: ['osaka'], theme: 'food', subcategory: 'noodles', title: '道頓堀 今井 本店', address: '大阪府大阪市中央区道頓堀1-7-22', latitude: 34.6681, longitude: 135.5022, estimatedDurationMinutes: 60, imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-menya-juroku', destinations: ['osaka'], theme: 'food', subcategory: 'noodles', title: '麺屋 丈六', address: '大阪府大阪市中央区難波千日前6-16', latitude: 34.6635, longitude: 135.5056, estimatedDurationMinutes: 60, imageUrl: 'https://images.unsplash.com/photo-1557872943-16a5ac26437e?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-kisoji', destinations: ['osaka'], theme: 'food', subcategory: 'hotpot', title: '木曽路 道頓堀店', address: '大阪府大阪市中央区宗右衛門町3-17', latitude: 34.6691, longitude: 135.5026, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-onyasai-namba', destinations: ['osaka'], theme: 'food', subcategory: 'hotpot', title: 'しゃぶしゃぶ温野菜 なんば店', address: '大阪府大阪市中央区難波3-4-16', latitude: 34.6661, longitude: 135.5015, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-dontei', destinations: ['osaka'], theme: 'food', subcategory: 'hotpot', title: 'しゃぶしゃぶ どん亭', address: '大阪府大阪市中央区難波3-1-28', latitude: 34.6667, longitude: 135.5011, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-jojoen-lucua', destinations: ['osaka'], theme: 'food', subcategory: 'bbq', title: '叙々苑 ルクア大阪店', address: '大阪府大阪市北区梅田3-1-3', latitude: 34.7025, longitude: 135.4959, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-osaka-castle', destinations: ['osaka'], theme: 'must-see', subcategory: 'landmark', title: '大阪城天守閣', address: '大阪府大阪市中央区大阪城1-1', latitude: 34.6873, longitude: 135.5262, estimatedDurationMinutes: 120, imageUrl: 'https://images.unsplash.com/photo-1590253230532-a67f6bc61d9e?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-kuromon', destinations: ['osaka'], theme: 'must-see', subcategory: 'shopping', title: '黒門市場', address: '大阪府大阪市中央区日本橋2-4-1', latitude: 34.6654, longitude: 135.5063, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-osaka-kaiyukan', destinations: ['osaka'], theme: 'must-see', subcategory: 'landmark', title: '海遊館', address: '大阪府大阪市港区海岸通1-1-10', latitude: 34.6545, longitude: 135.4289, estimatedDurationMinutes: 150, imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-tokyo-ichiran-shinjuku', destinations: ['tokyo'], theme: 'food', subcategory: 'noodles', title: '一蘭 新宿中央東口店', address: '東京都新宿区新宿3-34-11', latitude: 35.6913, longitude: 139.7039, estimatedDurationMinutes: 60, imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-tokyo-kisoji', destinations: ['tokyo'], theme: 'food', subcategory: 'hotpot', title: '木曽路 新宿三丁目店', address: '東京都新宿区新宿3-17-5', latitude: 35.6914, longitude: 139.7056, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-tokyo-onyasai', destinations: ['tokyo'], theme: 'food', subcategory: 'hotpot', title: 'しゃぶしゃぶ温野菜 新宿店', address: '東京都新宿区新宿3-20-8', latitude: 35.6918, longitude: 139.7045, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-tokyo-jojoen', destinations: ['tokyo'], theme: 'food', subcategory: 'bbq', title: '叙々苑 游玄亭 新宿店', address: '東京都新宿区歌舞伎町1-10-7', latitude: 35.6944, longitude: 139.7021, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-tokyo-tower', destinations: ['tokyo'], theme: 'must-see', subcategory: 'landmark', title: '東京タワー', address: '東京都港区芝公園4-2-8', latitude: 35.6586, longitude: 139.7454, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=640&h=360&fit=crop&auto=format' },
+];
+
+function staticSeedMatchesDestination(seed: StaticRecommendationSeed, destination: string): boolean {
+  const value = destination.toLocaleLowerCase();
+  if (value.includes('大阪') || value.includes('osaka')) return seed.destinations.includes('osaka');
+  if (value.includes('東京') || value.includes('tokyo')) return seed.destinations.includes('tokyo');
+  if (value.includes('日本') || value.includes('japan') || value.includes('jp')) return true;
+  return false;
+}
+
+function normalizeStaticSeed(seed: StaticRecommendationSeed): GlobalPlaceSearchResult {
+  const source: GeocodingResult = {
+    id: seed.id,
+    title: seed.title,
+    displayName: seed.address,
+    latitude: seed.latitude,
+    longitude: seed.longitude,
+    provider: 'osm',
+    types: seed.theme === 'food' ? ['restaurant'] : ['tourist_attraction'],
+    imageUrl: seed.imageUrl,
+  };
+  return {
+    id: seed.id,
+    title: seed.title,
+    address: seed.address,
+    city: seed.destinations[0] === 'osaka' ? '大阪' : '東京',
+    country: '日本',
+    countryCode: 'JP',
+    latitude: seed.latitude,
+    longitude: seed.longitude,
+    timezone: 'Asia/Tokyo',
+    category: seed.theme === 'food' ? 'indoor' : 'outdoor',
+    subcategory: seed.subcategory,
+    estimatedDurationMinutes: seed.estimatedDurationMinutes,
+    imageUrl: seed.imageUrl,
+    image_url: seed.imageUrl,
+    photoUrl: seed.imageUrl,
+    photo_url: seed.imageUrl,
+    provider: 'osm',
+    source,
+  };
+}
+
 /** Keep provider results aligned with the selected deep category. */
 export function filterGlobalRecommendationsBySubcategory(
   results: GlobalPlaceSearchResult[],
@@ -366,7 +441,7 @@ export function filterGlobalRecommendationsBySubcategory(
       : [];
   if (!validForTheme.includes(subcategory)) return results;
   const terms = RECOMMENDATION_SUBCATEGORY_TERMS[subcategory] ?? [];
-  return results.filter((place) => containsAny([
+  return results.filter((place) => place.subcategory === subcategory || containsAny([
     place.title,
     place.address,
     place.source.title,
@@ -410,28 +485,12 @@ export function getLocalRecommendationFallback(
   theme: RecommendationThemeId,
   subcategory: RecommendationSubcategoryId = 'all',
 ): GlobalPlaceSearchResult[] {
-  const normalizedDestination = destination.trim() || '旅遊目的地';
-  const coordinate = LOCAL_FALLBACK_COORDINATES.find((item) =>
-    item.terms.some((term) => normalizedDestination.toLocaleLowerCase().includes(term.toLocaleLowerCase())),
-  ) ?? { latitude: 35.6762, longitude: 139.6503 };
-  const labels = LOCAL_FALLBACK_SUBCATEGORY_LABELS[subcategory]
-    ?? LOCAL_FALLBACK_THEME_LABELS[theme];
-  const generated = labels.map((label, index) => normalizeGlobalPlace({
-    id: `local-${theme}-${subcategory}-${index + 1}`,
-    title: `${normalizedDestination} ${label}`,
-    displayName: `${normalizedDestination} · ${label}`,
-    latitude: coordinate.latitude + index * 0.001,
-    longitude: coordinate.longitude + index * 0.001,
-    provider: 'osm',
-    types: theme === 'food' ? ['restaurant'] : [],
-  }));
-  const curated = theme === 'must-see' || theme === 'indoor'
-    ? getCuratedRecommendations(normalizedDestination)
-    : [];
-  return mergeRecommendationResults(
-    filterGlobalRecommendationsBySubcategory([...curated, ...generated], theme, subcategory),
-    [],
-  );
+  return STATIC_RECOMMENDATION_SEEDS
+    .filter((seed) => staticSeedMatchesDestination(seed, destination))
+    .filter((seed) => seed.theme === theme)
+    .filter((seed) => subcategory === 'all' || seed.subcategory === subcategory)
+    .map(normalizeStaticSeed);
+
 }
 
 export const DEFAULT_RECOMMENDATION_PAGE_SIZE = 6;
@@ -488,7 +547,7 @@ export async function searchDynamicRecommendationsPage(
   options: RecommendationPageOptions = {},
 ): Promise<RecommendationPage> {
   const normalizedDestination = destination.trim();
-  if (normalizedDestination.length < 2) return { results: [], nextPageToken: null, totalItems: 0 };
+  if (normalizedDestination.length < 2) return { results: [], nextPageToken: null, totalItems: 0, source: 'api' };
   const query = options.queryOverride?.trim()
     || buildRecommendationQuery(normalizedDestination, theme, options.subcategory ?? 'all');
   const pageToken = options.pageToken?.trim() || '';
@@ -504,15 +563,17 @@ export async function searchDynamicRecommendationsPage(
       // Keep pagination-token failures empty so we do not duplicate page one.
       if (pageToken) {
         console.error('[recommendations] page request failed', error);
-        return { results: [], nextPageToken: null, totalItems: null };
+        return { results: [], nextPageToken: null, totalItems: null, source: 'api' };
       }
       console.error('[recommendations] provider failed; using local fallback', error);
       return {
         results: getLocalRecommendationFallback(normalizedDestination, theme, subcategory),
         nextPageToken: null,
         totalItems: null,
+        source: 'seed',
       };
     }
+    let source: 'api' | 'seed' = 'api';
     let results = normalizeRecommendationResults(raw.results, normalizedDestination, theme, subcategory);
     let nextPageToken = raw.nextPageToken?.trim() || null;
     let totalItems = Number.isFinite(raw.totalItems) ? Math.max(0, Math.floor(raw.totalItems as number)) : null;
@@ -541,9 +602,10 @@ export async function searchDynamicRecommendationsPage(
 
     if (!results.length && !pageToken) {
       results = getLocalRecommendationFallback(normalizedDestination, theme, subcategory);
+      source = 'seed';
     }
 
-    return { results, nextPageToken, totalItems };
+    return { results, nextPageToken, totalItems, source };
   });
 }
 

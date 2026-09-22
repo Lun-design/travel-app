@@ -11,6 +11,8 @@ import {
   buildRecommendationQuery,
   buildExpandedRecommendationQuery,
   getCuratedRecommendations,
+  getLocalRecommendationFallback,
+  createRecommendationSessionCache,
   filterGlobalRecommendationsByDestination,
   filterGlobalRecommendationsBySubcategory,
   searchDynamicRecommendations,
@@ -190,7 +192,7 @@ describe('global recommendation helpers', () => {
     const curated = getCuratedRecommendations('日本 JP 大阪');
     expect(filterGlobalRecommendationsBySubcategory(curated, 'food', 'noodles')).toEqual([]);
     const panelSource = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
-    expect(panelSource).toMatch(/filterGlobalRecommendationsBySubcategory\(\s*getCuratedRecommendations/);
+    expect(panelSource).not.toContain('mergeRecommendationResults(curated, firstPage.results)');
   });
 
   it('broadens a sparse subcategory page after strict filtering', async () => {
@@ -249,8 +251,29 @@ describe('global recommendation helpers', () => {
     expect(page.results.length).toBeGreaterThanOrEqual(3);
     expect(page.results.every((place) => !/拉麵\d+|推薦\d+/.test(place.title))).toBe(true);
     expect(page.results.map((place) => place.title)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/拉麵|麵食|麵屋|食堂/),
+      expect.stringMatching(/一蘭/),
     ]));
+  });
+
+  it('keeps API results and offline seeds on separate paths', async () => {
+    const apiResult = {
+      id: 'api-real-place',
+      title: '一蘭 道頓堀店',
+      displayName: '一蘭 道頓堀店, Osaka, Japan',
+      latitude: 34.6687,
+      longitude: 135.5013,
+      provider: 'google' as const,
+    };
+    const page = await searchDynamicRecommendationsPage('大阪', 'food', {
+      provider: async () => ({ results: [apiResult], nextPageToken: null }),
+      cache: createRecommendationSessionCache(),
+    });
+    expect(page.results.map((place) => place.title)).toEqual(['一蘭 道頓堀店']);
+    const seeds = getLocalRecommendationFallback('日本 JP 大阪', 'food', 'hotpot');
+    expect(seeds.length).toBeGreaterThanOrEqual(3);
+    expect(seeds.every((place) => !/JP|在地|餐廳|食堂|推薦/.test(place.title))).toBe(true);
+    const panelSource = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    expect(panelSource).not.toContain('mergeRecommendationResults(curated, firstPage.results)');
   });
 
   it('preserves API and curated image URLs for recommendation cards', () => {
