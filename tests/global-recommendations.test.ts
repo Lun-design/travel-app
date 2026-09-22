@@ -284,10 +284,19 @@ describe('global recommendation helpers', () => {
     });
     expect(page.results.map((place) => place.title)).toEqual(['一蘭 道頓堀店']);
     const seeds = getLocalRecommendationFallback('日本 JP 大阪', 'food', 'hotpot');
-    expect(seeds.length).toBeGreaterThanOrEqual(3);
+    expect(seeds.length).toBeGreaterThanOrEqual(6);
     expect(seeds.every((place) => !/JP|在地|餐廳|食堂|推薦/.test(place.title))).toBe(true);
     const panelSource = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
     expect(panelSource).not.toContain('mergeRecommendationResults(curated, firstPage.results)');
+  });
+
+  it('keeps seed fallback inside the selected city and guarantees a full first page', () => {
+    const osaka = getLocalRecommendationFallback('大阪', 'food', 'noodles');
+    const tokyo = getLocalRecommendationFallback('東京', 'food', 'noodles');
+    expect(osaka.length).toBeGreaterThanOrEqual(6);
+    expect(tokyo.length).toBeGreaterThanOrEqual(6);
+    expect(osaka.every((place) => place.city === '大阪' && !place.address.includes('東京'))).toBe(true);
+    expect(tokyo.every((place) => place.city === '東京' && !place.address.includes('大阪'))).toBe(true);
   });
 
   it('preserves API and curated image URLs for recommendation cards', () => {

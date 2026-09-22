@@ -226,7 +226,7 @@ export function filterGlobalRecommendationsByDestination(
  */
 export function getCuratedRecommendations(destination: string): GlobalPlaceSearchResult[] {
   const value = destination.trim().toLocaleLowerCase();
-  if (!/(日本|jp|japan|大阪|osaka|關西|kansai|京都|kyoto|東京|tokyo)/i.test(value)) return [];
+  if (!/(日本|jp|japan|大阪|osaka|關西|kansai)/i.test(value)) return [];
 
   const entries: Array<{
     id: string;
@@ -383,6 +383,7 @@ const STATIC_RECOMMENDATION_SEEDS: StaticRecommendationSeed[] = [
   { id: 'seed-tokyo-onyasai', destinations: ['tokyo'], theme: 'food', subcategory: 'hotpot', title: 'しゃぶしゃぶ温野菜 新宿店', address: '東京都新宿区新宿3-20-8', latitude: 35.6918, longitude: 139.7045, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=640&h=360&fit=crop&auto=format' },
   { id: 'seed-tokyo-jojoen', destinations: ['tokyo'], theme: 'food', subcategory: 'bbq', title: '叙々苑 游玄亭 新宿店', address: '東京都新宿区歌舞伎町1-10-7', latitude: 35.6944, longitude: 139.7021, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=640&h=360&fit=crop&auto=format' },
   { id: 'seed-tokyo-tower', destinations: ['tokyo'], theme: 'must-see', subcategory: 'landmark', title: '東京タワー', address: '東京都港区芝公園4-2-8', latitude: 35.6586, longitude: 139.7454, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=640&h=360&fit=crop&auto=format' },
+  { id: 'seed-tokyo-shibuya-sky', destinations: ['tokyo'], theme: 'must-see', subcategory: 'landmark', title: 'SHIBUYA SKY', address: '東京都渋谷区渋谷2-24-12', latitude: 35.6580, longitude: 139.7016, estimatedDurationMinutes: 90, imageUrl: 'https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=640&h=360&fit=crop&auto=format' },
 ];
 
 function staticSeedMatchesDestination(seed: StaticRecommendationSeed, destination: string): boolean {
@@ -486,11 +487,19 @@ export function getLocalRecommendationFallback(
   theme: RecommendationThemeId,
   subcategory: RecommendationSubcategoryId = 'all',
 ): GlobalPlaceSearchResult[] {
-  return STATIC_RECOMMENDATION_SEEDS
-    .filter((seed) => staticSeedMatchesDestination(seed, destination))
+  const destinationSeeds = STATIC_RECOMMENDATION_SEEDS
+    .filter((seed) => staticSeedMatchesDestination(seed, destination));
+  const strictSeeds = destinationSeeds
     .filter((seed) => seed.theme === theme)
-    .filter((seed) => subcategory === 'all' || seed.subcategory === subcategory)
-    .map(normalizeStaticSeed);
+    .filter((seed) => subcategory === 'all' || seed.subcategory === subcategory);
+  const fallbackSeeds = [...strictSeeds];
+  if (fallbackSeeds.length < 6) {
+    for (const seed of destinationSeeds) {
+      if (!fallbackSeeds.some((item) => item.id === seed.id)) fallbackSeeds.push(seed);
+      if (fallbackSeeds.length >= 6) break;
+    }
+  }
+  return fallbackSeeds.map(normalizeStaticSeed);
 
 }
 
@@ -518,6 +527,7 @@ async function defaultRecommendationPageProvider(query: string, pageToken?: stri
     try {
       const page = await searchGooglePlacesTextPage(query, undefined, pageToken);
       if (page.results.length || pageToken) return page;
+      if (isPlacesAuthBlocked()) return { results: [], nextPageToken: null };
     } catch (error) {
       console.error('[recommendations] Google Text Search unavailable; falling back to geocoding', error);
       if (pageToken) return { results: [], nextPageToken: null };

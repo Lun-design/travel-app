@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getSpotImageUrl } from '@/lib/spot-image';
+import { canIssuePlacesRequest } from '@/lib/places-auth-guard';
 import {
   buildGlobalItineraryPayload,
   buildExpandedRecommendationQuery,
@@ -129,6 +130,17 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       setRecommendationTotalItems(0);
       return;
     }
+    if (!(await canIssuePlacesRequest())) {
+      if (requestId !== recommendationRequestId.current) return;
+      setRecommendations(getLocalRecommendationFallback(normalized, themeValue, subcategoryValue));
+      setRecommendationSource('seed');
+      setNextPageToken(null);
+      setRecommendationTotalItems(null);
+      setRecommendationSearched(true);
+      setRecommendationError('登入工作階段已逾時，已切換至離線精選推薦。');
+      setRecommendationLoading(false);
+      return;
+    }
     setRecommendationLoading(true);
     setRecommendationSearched(true);
     setRecommendationError('');
@@ -187,6 +199,12 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
         // present verified API cards and synthetic/local records together.
         setRecommendations(nextPage.results);
         setRecommendationSource('api');
+      } else if (nextPage.source === 'seed') {
+        // If the session expires while paging, switch the entire list to the
+        // offline catalogue instead of leaving stale API cards on screen.
+        setRecommendations(nextPage.results);
+        setRecommendationSource('seed');
+        setPage(1);
       }
       setNextPageToken(nextPage.nextPageToken);
       setRecommendationTotalItems((current) => nextPage.totalItems ?? current);
@@ -304,6 +322,16 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
     recommendationPage.totalPages,
     page + (canLoadNextPage ? 1 : 0),
   );
+  useEffect(() => {
+    if (recommendations.length === 0) {
+      if (page !== 1) setPage(1);
+      return;
+    }
+    const boundedPage = Math.max(1, Math.min(page, recommendationPage.totalPages));
+    if (boundedPage !== page || (recommendationPage.items.length === 0 && page !== 1)) {
+      setPage(recommendationPage.items.length === 0 ? 1 : boundedPage);
+    }
+  }, [page, recommendationPage.items.length, recommendationPage.totalPages, recommendations.length]);
   const subcategories = getRecommendationSubcategories(activeTheme);
 
   return (
@@ -439,7 +467,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
               {recommendationSearched && !recommendationLoading && !recommendationError && recommendations.length === 0 ? <Text style={[styles.emptyText, { color: theme.colors.muted }]}>目前找不到符合的推薦，請換個地區或主題。</Text> : null}
 
               <View style={styles.curatedList}>
-                {recommendationPage.items.map((place) => (
+                {recommendationPage.items.filter((place) => Boolean(place?.id && place?.title)).map((place) => (
                   <View key={`curated-${place.id}`} style={[styles.curatedCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
                     {renderRecommendationImage(place)}
                     <View style={styles.copy}>
