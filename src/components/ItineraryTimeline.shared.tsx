@@ -67,6 +67,8 @@ export function timelineItemsRevision(items: readonly ItineraryItem[]): string {
     address: item.address,
     category: item.category,
     notes: item.notes,
+    preview_url: item.preview_url,
+    image_url: item.image_url,
     reservation_tags: item.reservation_tags,
     is_backup: item.is_backup,
     opening_hours: item.opening_hours,

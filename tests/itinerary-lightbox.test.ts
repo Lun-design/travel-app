@@ -26,4 +26,10 @@ describe('itinerary spot image lightbox', () => {
     expect(screen).toContain('await data.reload()');
     expect(screen).toContain('retaining saved URL');
   });
+
+  it('invalidates the timeline card revision when its persisted image URL changes', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    expect(source).toContain('preview_url: item.preview_url');
+    expect(source).toContain('item.preview_url, item.photo_reference');
+  });
 });
