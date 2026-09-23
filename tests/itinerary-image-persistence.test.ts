@@ -25,7 +25,6 @@ it('persists a manually replaced preview URL to the itinerary item', async () =>
   await updateItineraryItemImage('item-1', 'https://cdn.example/new.jpg');
 
   expect(supabase.from).toHaveBeenCalledWith('itinerary_items');
-  expect(query.update).toHaveBeenCalledWith({ preview_url: 'https://cdn.example/new.jpg' });
+  expect(query.update).toHaveBeenCalledWith({ preview_url: 'https://cdn.example/new.jpg', photo_reference: null });
   expect(query.eq).toHaveBeenCalledWith('id', 'item-1');
 });
-

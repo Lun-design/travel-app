@@ -31,5 +31,7 @@ describe('itinerary spot image lightbox', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     expect(source).toContain('preview_url: item.preview_url');
     expect(source).toContain('item.preview_url, item.photo_reference');
+    expect(source).toContain('cacheBustedImageUrl');
+    expect(source).toContain('key={`${item.id}-${imageRevision}`}');
   });
 });

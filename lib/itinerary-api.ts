@@ -243,11 +243,13 @@ export async function updateItineraryItemImage(
   try {
     const { error } = await supabase
       .from('itinerary_items')
-      .update({ preview_url: normalizedUrl })
+      // preview_url is the canonical persisted image field. Clear the photo
+      // reference so a later resolver cannot overwrite the user's selection.
+      .update({ preview_url: normalizedUrl, photo_reference: null })
       .eq('id', id);
     if (error) throw error;
     await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (items) => items.map((item) => (
-      item.id === id ? { ...item, preview_url: normalizedUrl } : item
+      item.id === id ? { ...item, preview_url: normalizedUrl, photo_reference: null } : item
     )));
   } catch (error) {
     if (!options.replaying && shouldQueueOffline(error)) {
@@ -256,10 +258,10 @@ export async function updateItineraryItemImage(
         entity: 'itinerary',
         operation: 'update',
         resourceId: id,
-        payload: { id, preview_url: normalizedUrl },
+        payload: { id, preview_url: normalizedUrl, photo_reference: null },
       });
       await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (items) => items.map((item) => (
-        item.id === id ? { ...item, preview_url: normalizedUrl } : item
+        item.id === id ? { ...item, preview_url: normalizedUrl, photo_reference: null } : item
       )));
       return;
     }

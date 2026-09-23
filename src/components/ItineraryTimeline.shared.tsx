@@ -19,6 +19,11 @@ import { getSpotImageFallbackUrl, getSpotImageLightboxUrl, getSpotImageUrl, reso
 import { getCategoryBadgePalette } from '@/lib/visual-styles';
 import { getCategoryIcon } from '@/lib/category-icons';
 
+function cacheBustedImageUrl(url: string | null | undefined, version: number): string | null {
+  if (!url) return null;
+  return `${url}${url.includes('?') ? '&' : '?'}t=${version}`;
+}
+
 export type ItineraryTimelineProps = {
   items: ItineraryItem[];
   /** Used to isolate day-level weather batches between trips. */
@@ -347,6 +352,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   });
   const placeAddress = formatPlaceAddress(item.address);
   const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));
+  const [imageRevision, setImageRevision] = useState(() => Date.now());
   const [favorite, setFavorite] = useState(false);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [lightboxVisible, setLightboxVisible] = useState(false);
@@ -368,6 +374,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
       if (!result) throw new Error('查無可用照片，請換個景點關鍵字。');
       if (typeof onUpdateImage === 'function') await onUpdateImage(item, result.url);
       setResolvedImageUrl(result.url);
+      setImageRevision(Date.now());
       imageFallbackAttemptedRef.current = false;
       setImageLoadFailed(false);
       setLightboxImageFailed(false);
@@ -383,6 +390,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
     setImageLoadFailed(false);
     imageFallbackAttemptedRef.current = false;
     setResolvedImageUrl(getSpotImageUrl(item));
+    setImageRevision(Date.now());
     void resolveSpotImage(item).then((resolved) => {
       // Keep the fallback when a remote URL has already failed instead of
       // racing the failed request back into the image element.
@@ -404,7 +412,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
             <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxVisible(false)}>
               <View style={styles.lightboxContent}>
                 <Pressable style={styles.lightboxImagePressable} onPress={(event) => event.stopPropagation()}>
-                  {lightboxImageFailed ? <View style={[styles.lightboxImage, styles.lightboxFallback]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={72} accessibilityLabel={`${item.location_name} 無預覽圖`} /><Text style={styles.lightboxFallbackText}>目前無預覽圖</Text></View> : <Image source={{ uri: getSpotImageLightboxUrl(item, undefined, resolvedImageUrl) }} style={styles.lightboxImage} resizeMode="contain" accessibilityLabel={`${item.location_name} 大圖`} onError={() => setLightboxImageFailed(true)} />}
+                  {lightboxImageFailed ? <View style={[styles.lightboxImage, styles.lightboxFallback]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={72} accessibilityLabel={`${item.location_name} 無預覽圖`} /><Text style={styles.lightboxFallbackText}>目前無預覽圖</Text></View> : <Image source={{ uri: getSpotImageLightboxUrl(item, undefined, cacheBustedImageUrl(resolvedImageUrl, imageRevision) ?? resolvedImageUrl) }} style={styles.lightboxImage} resizeMode="contain" accessibilityLabel={`${item.location_name} 大圖`} onError={() => setLightboxImageFailed(true)} />}
                 </Pressable>
                 <Pressable style={styles.lightboxActions} onPress={(event) => event.stopPropagation()}>
                   {!manualPhotoSearchOpen ? <Pressable accessibilityRole="button" accessibilityLabel="更換照片" style={styles.lightboxReplaceButton} onPress={() => { setManualPhotoError(null); setManualPhotoSearchOpen(true); }}><Text style={styles.lightboxReplaceText}>🔄 更換照片</Text></Pressable> : <View style={styles.lightboxSearchRow}>
@@ -418,7 +426,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
             </Pressable>
           </Modal>
           <View style={styles.cardBody}>
-            {!imageLoadFailed && resolvedImageUrl ? <Image source={{ uri: resolvedImageUrl }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} onError={() => {
+            {!imageLoadFailed && resolvedImageUrl ? <Image key={`${item.id}-${imageRevision}`} source={{ uri: cacheBustedImageUrl(resolvedImageUrl, imageRevision) ?? resolvedImageUrl }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} onError={() => {
               if (!imageFallbackAttemptedRef.current) {
                 imageFallbackAttemptedRef.current = true;
                 setResolvedImageUrl(getSpotImageFallbackUrl(item, resolvedImageUrl));
