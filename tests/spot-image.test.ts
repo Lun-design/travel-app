@@ -24,6 +24,20 @@ describe('spot image resolver', () => {
     expect(getSpotImageUrl({ location_name: '清水寺', preview_url: 'https://cdn.example/persisted.jpg', imageUrl: 'https://cdn.example/old.jpg' })).toBe('https://cdn.example/persisted.jpg');
   });
 
+  it('never resolves Places photos when a persisted custom preview already exists', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(resolveSpotImage({
+      name: 'Custom spot',
+      address: 'Osaka address',
+      preview_url: 'https://cdn.example/custom.jpg',
+      photo_reference: 'places/old/photos/old-photo',
+    })).resolves.toMatchObject({ url: 'https://cdn.example/custom.jpg' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('uses the Google Places Photo endpoint with the public key and a 400px width', () => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key');
     expect(getGooglePhotoUrl('photo-ref')).toBe(

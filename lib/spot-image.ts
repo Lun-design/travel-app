@@ -296,6 +296,10 @@ function dynamicPhotoKey(spot: SpotImageInput): string | null {
 export async function resolveSpotImage(spot: SpotImageInput | null | undefined, apiKey?: string): Promise<SpotImageResolution> {
   const fallback = { url: getSpotImageUrl(spot), photoReference: null } satisfies SpotImageResolution;
   if (!spot) return fallback;
+  // A user-selected/persisted URL is authoritative. Never issue a Places
+  // lookup merely because a stale photo reference is still present on the row.
+  const persistedUrl = nonEmpty(spot.preview_url) ?? nonEmpty(spot.imageUrl) ?? nonEmpty(spot.image_url);
+  if (persistedUrl) return { url: persistedUrl, photoReference: null };
   const reference = nonEmpty(spot.photoReference) ?? nonEmpty(spot.photo_reference);
   const directUrl = reference ? getGooglePhotoUrl(reference, apiKey) : null;
   if (directUrl) return { url: directUrl, photoReference: reference };
