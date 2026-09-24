@@ -5,6 +5,7 @@ import type { TripMemberWithProfile } from '@/lib/trips';
 import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIES, type ExchangeRateSnapshot, type SplitMode } from '@/lib/exchange-rates';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getProfileDisplayName } from '@/lib/profiles';
+import { ReceiptScanButton } from './ReceiptScanButton';
 
 type Props = {
   visible: boolean;
@@ -34,6 +35,12 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
   const [saving, setSaving] = useState(false);
   const [lockingRate, setLockingRate] = useState(false);
   const [manualRate, setManualRate] = useState('');
+
+  function applyReceiptScan(result: { title: string; amount: number | null; currency: string }) {
+    if (result.title) setTitle(result.title);
+    if (result.amount !== null) setAmount(String(result.amount));
+    if (SUPPORTED_CURRENCIES.includes(result.currency as any)) setCurrency(result.currency);
+  }
 
   useEffect(() => {
     if (!visible) return;
@@ -94,6 +101,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
 
   return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ReceiptScanButton onResult={applyReceiptScan} />
       <Text style={[styles.title, { color: theme.colors.text }]}>{expense ? '編輯旅費' : '新增旅費'}</Text>
       <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="項目名稱，例如：晚餐" placeholderTextColor={theme.colors.muted} value={title} onChangeText={setTitle} />
       <View style={styles.row}><TextInput style={[styles.input, styles.flex, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="金額" placeholderTextColor={theme.colors.muted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><View style={styles.currencyChoices}>{SUPPORTED_CURRENCIES.map((option) => <Pressable key={option} style={[styles.currencyChip, normalizeCurrency(currency) === option && styles.selected]} onPress={() => setCurrency(option)}><Text style={normalizeCurrency(currency) === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View></View>
