@@ -2,15 +2,25 @@ export type ReceiptCurrency = 'TWD' | 'JPY' | 'KRW' | 'USD' | 'EUR';
 export type ReceiptItem = { name: string; price: number; quantity?: number };
 export type ReceiptParseResult = { title: string; amount: number | null; currency: ReceiptCurrency; usageDate: string | null; items: ReceiptItem[] };
 
-const ITEM_HEADER = /商品名稱|品名|品項|(?:\bITEMS?\b.*\b(?:QTY|PRICE|AMOUNT)\b)|(?:數量.*(?:單價|金額))|(?:單價.*金額)/i;
-const SUMMARY = /(?:總計|合計|小計|合計額|お買上|税込|합계|총액|받을금액|결제금액|GRANDTOTAL|SUBTOTAL|TOTAL|AMOUNT)/i;
-const FINAL_TOTAL = /(?:總計|合計額|合計|합계|총액|받을금액|결제금액|GRANDTOTAL|TOTAL|AMOUNT)/i;
-const TITLE_NOISE = /退貨|發票|明細|歡迎光臨|存根|正本|載具|TAXINVOICE|RECEIPT|^TEL|電話|收據|日期|稅額/i;
-const ITEM_NOISE = /電話|日期|退貨|發票|明細|歡迎光臨|存根|正本|載具|稅額|TAXINVOICE|RECEIPT|^TEL|202\d[-/.]/i;
-const MONEY_TOKEN = /(?:NT\$|[¥￥₩$€])?-?\d[\d,]*(?:\.\d{1,2})?(?:TX|TA|T|円|₩|元)?/gi;
+const ITEM_HEADER = /商品名稱|商品名|品名|品項|(?:\bITEMS?\b.*\b(?:QTY|PRICE|AMOUNT)\b)|(?:數量.*(?:單價|金額))|(?:單價.*金額)/i;
+// Match labels at the beginning, so a product such as “Total Care” is not a total.
+const FINAL_TOTAL = /^(?:總計|合計額|合計|お買上|합계|총액|받을금액|결제금액|GRANDTOTAL(?=$|[^A-Z])|AMOUNTDUE(?=$|[^A-Z])|TOTAL(?=$|[^A-Z])|AMOUNT(?=$|[^A-Z]))/i;
+const SUBTOTAL = /^(?:小計|税込|SUBTOTAL(?=$|[^A-Z]))/i;
+const DISCOUNT = /折扣|優惠|値引|割引|할인|\bDISCOUNT\b|\bOFF\b/i;
+const TAX_LINE = /^(?:稅額|税額|消費税|부가세|SALES?TAX|VAT)/i;
+const TITLE_NOISE = /退貨|發票|明細|歡迎光臨|存根|正本|載具|領収書|TAXINVOICE|RECEIPT|^TEL|電話|收據|日期|稅額/i;
+const ITEM_NOISE = /電話|日期|退貨|發票|明細|歡迎光臨|存根|正本|載具|領収書|稅額|税額|消費税|부가세|SALES?TAX|\bVAT\b|TAXINVOICE|RECEIPT|^TEL|202\d[-/.]/i;
+const MONEY_TOKEN = /[+-]?(?:NT\$|[¥￥₩$€])?\d(?:[\d.,]*\d)?(?:TX|TA|T|円|₩|元)?/gi;
 
 function compact(line: string): string {
   return line.replace(/\s+/g, '');
+}
+
+function summaryKind(line: string): 'final' | 'subtotal' | null {
+  const value = compact(line);
+  if (FINAL_TOTAL.test(value)) return 'final';
+  if (SUBTOTAL.test(value)) return 'subtotal';
+  return null;
 }
 
 function isNoisyHeading(line: string): boolean {
@@ -20,12 +30,16 @@ function isNoisyHeading(line: string): boolean {
 }
 
 function cleanMoney(raw: string): number {
-  return Number(raw.replace(/(?:TX|TA|T|円|₩|元|NT\$)/gi, '').replace(/[¥￥$€₩,]/g, ''));
+  const stripped = raw.replace(/(?:TX|TA|T|円|₩|元|NT\$)/gi, '').replace(/[¥￥$€₩]/g, '');
+  const lastComma = stripped.lastIndexOf(',');
+  const lastDot = stripped.lastIndexOf('.');
+  const commaIsDecimal = lastComma > lastDot && /,\d{1,2}$/.test(stripped);
+  return Number(commaIsDecimal
+    ? stripped.replace(/\./g, '').replace(',', '.')
+    : stripped.replace(/,/g, ''));
 }
 
 function cleanTitle(raw: string): string {
-  const packed = compact(raw);
-  if (packed.startsWith('原價屋')) return '原價屋';
   if (isNoisyHeading(raw) || /\d/.test(raw) || /(?:^|\s)[\p{Script=Han}](?:\s+[\p{Script=Han}]){3,}/u.test(raw) || !isReadableItemName(raw)) return '';
   const normalized = raw.replace(/[（(]股[）)]\s*公司.*$/i, '').replace(/(?:股份有限公司|有限公司|分公司).*$/, '').trim();
   const symbolCount = (normalized.match(/[^\p{L}\p{N}\s]/gu) ?? []).length;
@@ -44,6 +58,8 @@ function isReadableItemName(name: string): boolean {
   if (/([\p{Script=Han}])\1{2,}/u.test(name)) return false;
   if (/\b([A-Za-z]+)(?:\s+\1){2,}\b/i.test(name)) return false;
   return /[\p{Script=Han}]{2,}/u.test(name)
+    || /[\p{Script=Hiragana}\p{Script=Katakana}ー]{2,}/u.test(name)
+    || /[\p{Script=Hangul}]{2,}/u.test(name)
     || /(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9-]{2,}(?![A-Za-z0-9])/u.test(name);
 }
 
@@ -58,7 +74,9 @@ function extractLineItems(lines: string[]): ReceiptItem[] {
   let pendingName = '';
   for (const line of lines.slice(start + 1)) {
     const normalized = compact(line);
-    if (SUMMARY.test(normalized)) break;
+    const summary = summaryKind(line);
+    if (summary === 'final') break;
+    if (summary === 'subtotal') { pendingName = ''; continue; }
     if (ITEM_NOISE.test(normalized) || /^[-—=\s]+$/.test(line) || /(?:公司|商店|商城|店$|\bStore\b)/i.test(normalized)) {
       pendingName = '';
       continue;
@@ -90,7 +108,7 @@ function extractLineItems(lines: string[]): ReceiptItem[] {
     const name = [pendingName, line.slice(0, numericStart).trim()].filter(Boolean).join(' ').trim()
       .replace(/(?<=\p{Script=Han})\s+(?=\p{Script=Han})/gu, '');
     const rawPrice = cleanMoney(last[0]);
-    const price = /折扣|優惠/.test(name) ? -Math.abs(rawPrice) : rawPrice;
+    const price = DISCOUNT.test(name) ? -Math.abs(rawPrice) : rawPrice;
     if (!name || isNoisyHeading(name) || !Number.isFinite(price)) continue;
     const quantity = trailingNumbers.length >= 2 ? cleanMoney(trailingNumbers[0][0]) : undefined;
     items.push({ name, ...(quantity !== undefined && Number.isInteger(quantity) && Math.abs(quantity) <= 100 ? { quantity } : {}), price });
@@ -115,15 +133,14 @@ function parseCurrency(text: string): ReceiptCurrency {
 export function parseReceiptText(text: string): ReceiptParseResult {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const rawItems = extractLineItems(lines);
-  const summaryLines = lines.filter((line) => SUMMARY.test(compact(line)));
-  const amountLine = summaryLines.find((line) => /總計|grandtotal|結帳|應付|結帳金額/i.test(compact(line)))
-    ?? summaryLines.find((line) => FINAL_TOTAL.test(compact(line))) ?? summaryLines[0];
+  const amountLine = [...lines].reverse().find((line) => summaryKind(line) === 'final')
+    ?? [...lines].reverse().find((line) => summaryKind(line) === 'subtotal');
   const amountTokens = amountLine ? [...amountLine.matchAll(MONEY_TOKEN)] : [];
   const explicitAmount = amountTokens.length ? cleanMoney(amountTokens.at(-1)![0]) : null;
   const dateMatch = text.match(/(20\d{2})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/);
   const headerIndex = lines.findIndex((line) => ITEM_HEADER.test(line));
   const merchant = (headerIndex < 0 ? lines : lines.slice(0, headerIndex))
-    .filter((line) => !isNoisyHeading(line) && !SUMMARY.test(compact(line)))
+    .filter((line) => !isNoisyHeading(line) && !summaryKind(line))
     .map(cleanTitle).find(Boolean);
   const fallbackNumbers = [...text.matchAll(/\d[\d,]*(?:\.\d{1,2})?/g)].filter((match) => {
     const start = match.index ?? 0;
@@ -137,15 +154,18 @@ export function parseReceiptText(text: string): ReceiptParseResult {
   }).map((match) => Number(match[0].replace(/,/g, ''))).filter((value) => value <= 10_000_000);
   const fallbackAmount = fallbackNumbers.length ? Math.max(...fallbackNumbers) : null;
   const summaryIndex = amountLine ? lines.indexOf(amountLine) : -1;
-  const laterTotals = summaryIndex < 0 || /總計|grandtotal/i.test(compact(amountLine ?? '')) ? [] : lines.slice(summaryIndex + 1)
+  const laterLines = summaryIndex < 0 ? [] : lines.slice(summaryIndex + 1);
+  const laterTax = laterLines.filter((line) => TAX_LINE.test(compact(line)))
+    .flatMap((line) => [...line.matchAll(MONEY_TOKEN)].map((match) => cleanMoney(match[0])));
+  const laterTotals = laterLines
     .filter((line) => !ITEM_NOISE.test(compact(line)) && !/\d{4}[-/.]\d{1,2}/.test(line))
     .flatMap((line) => [...line.matchAll(MONEY_TOKEN)].map((match) => cleanMoney(match[0])))
-    .filter((value) => Number.isFinite(value) && value > (explicitAmount ?? 0) && value <= 10_000_000);
+    .filter((value) => Number.isFinite(value) && value > (explicitAmount ?? 0) && value <= 10_000_000
+      && (summaryKind(amountLine ?? '') !== 'final' || laterTax.some((tax) => Math.abs(value - (explicitAmount! + tax)) < 0.01)));
   const amount = laterTotals.length ? Math.max(...laterTotals) : (explicitAmount ?? fallbackAmount);
   const items = keepReadableItems(rawItems);
-  const title = rawItems.length > 0 && items.length === 0
-    ? (merchant === '原價屋' ? '原價屋' : '購物消費')
-    : (merchant || cleanTitle(items[0]?.name ?? '') || '收據消費');
+  const fallbackTitle = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text) ? '購物消費' : 'Shopping';
+  const title = merchant || fallbackTitle;
   return {
     title,
     amount,

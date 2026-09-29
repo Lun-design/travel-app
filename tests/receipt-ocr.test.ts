@@ -14,7 +14,7 @@ describe('receipt OCR parsing', () => {
   });
 
   it('returns a safe partial result when amount is not found', () => {
-    expect(parseReceiptText('Cafe receipt')).toMatchObject({ title: '收據消費', amount: null, items: [] });
+    expect(parseReceiptText('Cafe receipt')).toMatchObject({ title: 'Shopping', amount: null, items: [] });
   });
 
   it('extracts six Taiwan invoice line items, merchant, discount, and final total', () => {
@@ -33,7 +33,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
 合計: 11619
 稅額: 581
 總計: 12200`);
-    expect(result).toMatchObject({ title: '原價屋', amount: 12200, currency: 'TWD' });
+    expect(result).toMatchObject({ title: '原價屋電腦', amount: 12200, currency: 'TWD' });
     expect(result.items).toHaveLength(6);
     expect(result.items.map((item) => item.price)).toEqual([1590, 550, 4690, 3490, 2490, -610]);
     expect(result.items[0].quantity).toBe(1);
@@ -57,7 +57,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
 合計 11619
 稅額 581
 總計 12200`);
-    expect(result.title).toBe('原價屋');
+    expect(result.title).toBe('購物消費');
     expect(result.amount).toBe(12200);
     expect(result.items.map((item) => item.price)).toEqual([1590, 550, 4690, 3490, 0, 2490, -610]);
     expect(result.items.map((item) => item.name)).toEqual([
@@ -74,7 +74,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
 
   it('prefers a merchant over a short OCR fragment in the heading', () => {
     const result = parseReceiptText('es 生\n原價屋電腦(股)公司光華分公司\n風扇 550TX\n總計 550');
-    expect(result.title).toBe('原價屋');
+    expect(result.title).toBe('原價屋電腦');
   });
 
   it('makes a positive-looking discount negative and preserves a zero-priced product', () => {
@@ -87,9 +87,9 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
     expect(result.items).toEqual([{ name: 'Silver Soul 135 散熱器', price: 1590 }]);
   });
 
-  it('uses the first real item when merchant is absent, and rejects noisy headings', () => {
-    expect(parseReceiptText('TAX INVOICE\n商品名稱 數量 金額\n黑門市場便當 1 850円\n茶飲 1 100円\n合計 950円')).toMatchObject({ title: '黑門市場便當', amount: 950 });
-    expect(parseReceiptText('RECEIPT\n*** /// !!!\nTEL 12345678')).toMatchObject({ title: '收據消費' });
+  it('uses a localized shopping title when merchant is absent, and rejects noisy headings', () => {
+    expect(parseReceiptText('TAX INVOICE\n商品名稱 數量 金額\n黑門市場便當 1 850円\n茶飲 1 100円\n合計 950円')).toMatchObject({ title: '購物消費', amount: 950 });
+    expect(parseReceiptText('RECEIPT\n*** /// !!!\nTEL 12345678')).toMatchObject({ title: 'Shopping' });
   });
 
   it('parses English line-item headers and negative discounts', () => {
@@ -113,7 +113,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
 稅 額 : 581
 (# 1 12200 +`;
     const result = parseReceiptText(raw);
-    expect(['原價屋電腦(股)公司光華分公司', '收據消費']).toContain(result.title);
+    expect(result.title).toBe('購物消費');
     expect(result.amount).toBe(12200);
     expect(result.items.some((item) => item.price === 1590 && /Silver Soul/.test(item.name))).toBe(true);
     expect(result.items.some((item) => item.price === -610)).toBe(true);
@@ -154,7 +154,7 @@ Fe 多 80
 
   it('ignores spaced receipt warnings and header text as merchant names', () => {
     const result = parseReceiptText('退 貨 說 明\n發 票 正 本\n歡 迎 光 臨\n載 具 明 細\n原 價 屋 電 腦 ( 股 ) 公 司 光 華 分 公 司\n散熱器 1590TX\n總 計 1690');
-    expect(result.title).toBe('原價屋');
+    expect(result.title).toBe('購物消費');
     expect(result.items).toEqual([{ name: '散熱器', price: 1590 }]);
   });
 
@@ -167,6 +167,55 @@ Fe 多 80
   it('parses Japanese and Korean total keywords', () => {
     expect(parseReceiptText('大阪店\n小計 ¥1,280\n')).toMatchObject({ amount: 1280, currency: 'JPY' });
     expect(parseReceiptText('서울 식당\n결제금액 ₩18,000\n')).toMatchObject({ amount: 18000, currency: 'KRW' });
+  });
+
+  it('parses English currency, tax and a discount after subtotal without treating tax as an item', () => {
+    const result = parseReceiptText(`RECEIPT
+ITEM QTY PRICE
+Coffee Beans 1 $1,200.00
+Subtotal $1,200.00
+Member Discount -$200.00
+Sales Tax $50.00
+Grand Total $1,050.00`);
+    expect(result).toMatchObject({ title: 'Shopping', amount: 1050, currency: 'USD' });
+    expect(result.items).toEqual([
+      { name: 'Coffee Beans', quantity: 1, price: 1200 },
+      { name: 'Member Discount', price: -200 },
+    ]);
+  });
+
+  it('parses Japanese discounts and total independently of the merchant', () => {
+    const result = parseReceiptText(`領収書
+商品名 数量 金額
+文房具 1 ¥550
+特別割引 ¥50
+合計 ¥500`);
+    expect(result).toMatchObject({ amount: 500, currency: 'JPY' });
+    expect(result.items).toEqual([
+      { name: '文房具', quantity: 1, price: 550 },
+      { name: '特別割引', price: -50 },
+    ]);
+  });
+
+  it('supports European comma decimals and an Amount Due total', () => {
+    const result = parseReceiptText(`RECEIPT
+ITEM PRICE
+Museum Ticket €12,50
+Amount Due €12,50`);
+    expect(result).toMatchObject({ title: 'Shopping', amount: 12.5, currency: 'EUR' });
+    expect(result.items).toEqual([{ name: 'Museum Ticket', price: 12.5 }]);
+    expect(parseReceiptText('ITEM PRICE\nMuseum Ticket €12.50\nAmount Due €12.50')).toMatchObject({ amount: 12.5, currency: 'EUR' });
+  });
+
+  it('keeps Japanese and Korean product names without requiring Han or English text', () => {
+    expect(parseReceiptText('商品名 金額\nカレー ¥550\n合計 ¥550').items).toEqual([{ name: 'カレー', price: 550 }]);
+    expect(parseReceiptText('ITEM PRICE\n김치 ₩8,000\n합계 ₩8,000').items).toEqual([{ name: '김치', price: 8000 }]);
+  });
+
+  it('derives a merchant generically without a merchant-specific name rule', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'lib/receipt-ocr.ts'), 'utf8');
+    expect(source).not.toContain("startsWith('原價屋')");
+    expect(parseReceiptText('北斗電腦(股)公司台北分公司\n商品名稱 金額\n鍵盤 550\n總計 550').title).toBe('北斗電腦');
   });
 
   it('falls back to the largest receipt number while ignoring dates and quantities', () => {
