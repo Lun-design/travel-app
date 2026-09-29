@@ -78,7 +78,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
   });
 
   it('makes a positive-looking discount negative and preserves a zero-priced product', () => {
-    const result = parseReceiptText('好買商店\n鼠墊 0TX\n優惠折扣 610TX\n總計 12200');
+    const result = parseReceiptText('好買商店\n鼠墊 0TX\n優惠折扣 610TX\n總計 -610');
     expect(result.items).toEqual([{ name: '鼠墊', price: 0 }, { name: '優惠折扣', price: -610 }]);
   });
 
@@ -93,7 +93,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
   });
 
   it('parses English line-item headers and negative discounts', () => {
-    const result = parseReceiptText('Tokyo Store\nITEM QTY PRICE\nNotebook 2 300\nCoupon -100\nTOTAL 500');
+    const result = parseReceiptText('Tokyo Store\nITEM QTY PRICE\nNotebook 2 300\nCoupon -100\nTOTAL 200');
     expect(result.items).toEqual([{ name: 'Notebook', quantity: 2, price: 300 }, { name: 'Coupon', price: -100 }]);
   });
 
@@ -103,7 +103,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
     expect(result.amount).toBe(1690);
   });
 
-  it('recovers items and final amount from spaced, headerless real OCR fragments', () => {
+  it('keeps the final amount but discards incomplete details from spaced, headerless OCR fragments', () => {
     const raw = `1 返 責 主 ) 語 塌 丁 調 二 0 |
 原 貞 蝦 電 腦 ( 股 ) 公 司 光 華 分 公 司
 和 民 Silver Soul 135 M 品
@@ -115,9 +115,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
     const result = parseReceiptText(raw);
     expect(result.title).toBe('購物消費');
     expect(result.amount).toBe(12200);
-    expect(result.items.some((item) => item.price === 1590 && /Silver Soul/.test(item.name))).toBe(true);
-    expect(result.items.some((item) => item.price === -610)).toBe(true);
-    expect(result.items.every((item) => !/返 責 主|合 計|稅 額/.test(item.name))).toBe(true);
+    expect(result.items).toEqual([]);
   });
 
   it('keeps only readable products and corrects known OCR product typos', () => {
@@ -131,18 +129,18 @@ ti 60
 Fe 多 80
 | bad 90
 酷 閣 依 惠 折 扣 -610T)
-總計 12200`);
+總計 980`);
     expect(result.items).toEqual([
       { name: 'Silver Soul 135 散熱器', quantity: 1, price: 1590 },
       { name: '酷幣優惠折扣', price: -610 },
     ]);
-    expect(result.amount).toBe(12200);
+    expect(result.amount).toBe(980);
   });
 
   it('keeps low-priced named products but skips explicit totals', () => {
-    const result = parseReceiptText('好買商店\n商品名稱 金額\n風扇 550\n測試商品 5\n總計 12200');
+    const result = parseReceiptText('好買商店\n商品名稱 金額\n風扇 550\n測試商品 5\n總計 555');
     expect(result.items).toEqual([{ name: '風扇', price: 550 }, { name: '測試商品', price: 5 }]);
-    expect(result.amount).toBe(12200);
+    expect(result.amount).toBe(555);
   });
 
   it('returns no items and a generic shopping title when every OCR name is noise', () => {
@@ -162,6 +160,34 @@ Fe 多 80
     const result = parseReceiptText('好買商店\n電話 02-23972669\n日期 2022-02-12\n風扇 550TA A\n稅額 20\n總計 570');
     expect(result.items).toEqual([{ name: '風扇', price: 550 }]);
     expect(result.amount).toBe(570);
+  });
+
+  it('never turns footer warnings or nearby isolated numbers into products', () => {
+    const result = parseReceiptText(`購物消費
+商品名稱 金額
+散熱器 1590
+王計 12200
+十扣 花：/ 螺睦 3
+3
+退貨 發票存根 正本載具
+總計 1590`);
+    expect(result.items).toEqual([{ name: '散熱器', price: 1590 }]);
+  });
+
+  it('drops incomplete low-confidence details while keeping the reliable total', () => {
+    const result = parseReceiptText(`發票明細
+商品名稱 金額
+Silver Soul 135 散熱器 1590TX
+十扣 花：/ 螺睦
+數量 3
+王計 12200`);
+    expect(result).toMatchObject({ title: '購物消費', amount: 12200, items: [] });
+  });
+
+  it('keeps a complete single-item receipt when tax explains the total difference', () => {
+    const result = parseReceiptText('好買商店\n商品名稱 金額\n風扇 550\n稅額 20\n總計 570');
+    expect(result.items).toEqual([{ name: '風扇', price: 550 }]);
+    expect(result.title).toBe('好買商店');
   });
 
   it('parses Japanese and Korean total keywords', () => {

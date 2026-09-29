@@ -9,7 +9,7 @@ const SUBTOTAL = /^(?:小計|税込|SUBTOTAL(?=$|[^A-Z]))/i;
 const DISCOUNT = /折扣|優惠|値引|割引|할인|\bDISCOUNT\b|\bOFF\b/i;
 const TAX_LINE = /^(?:稅額|税額|消費税|부가세|SALES?TAX|VAT)/i;
 const TITLE_NOISE = /退貨|發票|明細|歡迎光臨|存根|正本|載具|領収書|TAXINVOICE|RECEIPT|^TEL|電話|收據|日期|稅額/i;
-const ITEM_NOISE = /電話|日期|退貨|發票|明細|歡迎光臨|存根|正本|載具|領収書|稅額|税額|消費税|부가세|SALES?TAX|\bVAT\b|TAXINVOICE|RECEIPT|^TEL|202\d[-/.]/i;
+const ITEM_NOISE = /電話|日期|退貨|發票|明細|歡迎光臨|存根|正本|載具|花：|螺睦|王計|十扣|領収書|稅額|税額|消費税|부가세|SALES?TAX|\bVAT\b|TAXINVOICE|RECEIPT|^TEL|202\d[-/.]/i;
 const MONEY_TOKEN = /[+-]?(?:NT\$|[¥￥₩$€])?\d(?:[\d.,]*\d)?(?:TX|TA|T|円|₩|元)?/gi;
 
 function compact(line: string): string {
@@ -81,6 +81,10 @@ function extractLineItems(lines: string[]): ReceiptItem[] {
       pendingName = '';
       continue;
     }
+    if (/^數量\s*[+-]?\d+$/u.test(line) || (/^[+-]?\d+$/u.test(line) && Math.abs(Number(line)) <= 3)) {
+      pendingName = '';
+      continue;
+    }
     const matches = [...line.matchAll(MONEY_TOKEN)].filter((match) => {
       const before = line[match.index! - 1] ?? ' ';
       const after = line[(match.index ?? 0) + match[0].length] ?? ' ';
@@ -109,7 +113,7 @@ function extractLineItems(lines: string[]): ReceiptItem[] {
       .replace(/(?<=\p{Script=Han})\s+(?=\p{Script=Han})/gu, '');
     const rawPrice = cleanMoney(last[0]);
     const price = DISCOUNT.test(name) ? -Math.abs(rawPrice) : rawPrice;
-    if (!name || isNoisyHeading(name) || !Number.isFinite(price)) continue;
+    if (!name || ITEM_NOISE.test(compact(name)) || isNoisyHeading(name) || !Number.isFinite(price)) continue;
     const quantity = trailingNumbers.length >= 2 ? cleanMoney(trailingNumbers[0][0]) : undefined;
     items.push({ name, ...(quantity !== undefined && Number.isInteger(quantity) && Math.abs(quantity) <= 100 ? { quantity } : {}), price });
     pendingName = '';
@@ -163,9 +167,15 @@ export function parseReceiptText(text: string): ReceiptParseResult {
     .filter((value) => Number.isFinite(value) && value > (explicitAmount ?? 0) && value <= 10_000_000
       && (summaryKind(amountLine ?? '') !== 'final' || laterTax.some((tax) => Math.abs(value - (explicitAmount! + tax)) < 0.01)));
   const amount = laterTotals.length ? Math.max(...laterTotals) : (explicitAmount ?? fallbackAmount);
-  const items = keepReadableItems(rawItems);
+  const readableItems = keepReadableItems(rawItems);
+  // One or two rows differing from the total by over half are more likely
+  // incomplete OCR than a usable itemization. Keep the total only.
+  const itemSum = sumReceiptItems(readableItems);
+  const incompleteItems = amount !== null && amount > 0 && readableItems.length > 0 && readableItems.length < 3
+    && Math.abs(amount - itemSum) / amount > 0.5;
+  const items = incompleteItems ? [] : readableItems;
   const fallbackTitle = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text) ? '購物消費' : 'Shopping';
-  const title = merchant || fallbackTitle;
+  const title = incompleteItems ? fallbackTitle : (merchant || fallbackTitle);
   return {
     title,
     amount,
