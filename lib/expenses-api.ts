@@ -2,9 +2,10 @@ import { supabase } from './supabase';
 import { convertToTwd, type SupportedCurrency } from './exchange-rates';
 import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueueOffline, updateOfflineCollection, type OfflineApiOptions } from './offline-data';
 import { offlineStore } from './offline-store';
+import type { ReceiptItem } from './receipt-ocr';
 
 export type ExpenseSplit = { id?: string; expense_id?: string; user_id: string; amount: number };
-export type Expense = { id: string; trip_id: string; payer_id: string; title: string; amount: number; currency: string; category: string | null; is_settled?: boolean; created_at: string; updated_at?: string | null; updated_by?: string | null; splits: ExpenseSplit[] };
+export type Expense = { id: string; trip_id: string; payer_id: string; title: string; amount: number; currency: string; category: string | null; receipt_items?: ReceiptItem[]; is_settled?: boolean; created_at: string; updated_at?: string | null; updated_by?: string | null; splits: ExpenseSplit[] };
 export type Balance = { userId: string; amount: number };
 export type Settlement = { from: string; to: string; amount: number; currency: string };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -31,7 +32,7 @@ export async function saveExpense(expense: Partial<Expense> & { trip_id: string;
   const amount = Number(expense.amount);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('費用金額必須大於 0。');
   const normalizedSplits = splits.map((split) => { assertUuid(split.user_id, '分攤成員'); const splitAmount = Number(split.amount); if (!Number.isFinite(splitAmount) || splitAmount < 0) throw new Error('分攤金額格式不正確。'); return { user_id: split.user_id, amount: splitAmount }; });
-  const payload = { trip_id: expense.trip_id, payer_id: expense.payer_id, payer: expense.payer_id, created_by: expense.payer_id, title: expense.title, amount, currency: expense.currency ?? 'TWD', category: expense.category ?? null, ...(expense.is_settled !== undefined ? { is_settled: Boolean(expense.is_settled) } : {}) };
+  const payload = { trip_id: expense.trip_id, payer_id: expense.payer_id, payer: expense.payer_id, created_by: expense.payer_id, title: expense.title, amount, currency: expense.currency ?? 'TWD', category: expense.category ?? null, ...(expense.receipt_items !== undefined ? { receipt_items: expense.receipt_items } : {}), ...(expense.is_settled !== undefined ? { is_settled: Boolean(expense.is_settled) } : {}) };
   const store = options.store ?? offlineStore;
   const scope = await resolveOfflineScope(expense.trip_id, options.offlineScope);
   try {
