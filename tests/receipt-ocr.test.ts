@@ -1,9 +1,43 @@
-import { describe, expect, it } from 'vitest';
-import { parseReceiptText, sumReceiptItems } from '../lib/receipt-ocr';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getReceiptScanNotice, parseReceiptText, preprocessReceiptImage, sumReceiptItems } from '../lib/receipt-ocr';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 describe('receipt OCR parsing', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('upscales a narrow receipt to 1500px and sends black-and-white pixels to OCR', async () => {
+    const pixels = { data: new Uint8ClampedArray([128, 128, 128, 255, 220, 220, 220, 255]) };
+    const putImageData = vi.fn();
+    const canvas = {
+      width: 0, height: 0,
+      getContext: () => ({ drawImage: vi.fn(), getImageData: () => pixels, putImageData }),
+      toBlob: (callback: (blob: Blob) => void) => callback(new Blob(['processed'], { type: 'image/png' })),
+    };
+    vi.stubGlobal('document', { createElement: () => canvas });
+    vi.stubGlobal('Image', class {
+      naturalWidth = 600;
+      naturalHeight = 300;
+      onload?: () => void;
+      set src(_value: string) { this.onload?.(); }
+    });
+
+    const result = await preprocessReceiptImage('blob:receipt');
+    expect(canvas).toMatchObject({ width: 1500, height: 750 });
+    expect([...pixels.data]).toEqual([0, 0, 0, 255, 255, 255, 255, 255]);
+    expect(putImageData).toHaveBeenCalledOnce();
+    expect(result).toBeInstanceOf(Blob);
+  });
+
+  it('shows a brief amount-only notice when OCR has no reliable line items', () => {
+    const result = { title: '購物消費', amount: 12200, currency: 'TWD' as const, usageDate: null, items: [] };
+    expect(getReceiptScanNotice(result)).toBe('已自動帶入總金額 $12,200，明細請手動補充。');
+    expect(getReceiptScanNotice({ ...result, items: [{ name: '商品', price: 12200 }] })).toBeNull();
+    expect(getReceiptScanNotice({ ...result, amount: null })).toBeNull();
+    const modal = readFileSync(path.resolve(process.cwd(), 'src/components/ExpenseModal.tsx'), 'utf8');
+    expect(modal).toContain('setScanNotice(getReceiptScanNotice(result))');
+    expect(modal).toContain('accessibilityRole="alert"');
+  });
   it('extracts a title, total amount and currency from OCR text', () => {
     expect(parseReceiptText('大阪食堂\n合計 ¥1,280\n2026/09/24')).toMatchObject({
       title: '大阪食堂',

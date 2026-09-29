@@ -6,7 +6,7 @@ import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIE
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getProfileDisplayName } from '@/lib/profiles';
 import { ReceiptScanButton } from './ReceiptScanButton';
-import { sumReceiptItems, type ReceiptItem, type ReceiptParseResult } from '@/lib/receipt-ocr';
+import { getReceiptScanNotice, sumReceiptItems, type ReceiptItem, type ReceiptParseResult } from '@/lib/receipt-ocr';
 
 type Props = {
   visible: boolean;
@@ -37,12 +37,14 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
   const [lockingRate, setLockingRate] = useState(false);
   const [manualRate, setManualRate] = useState('');
   const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
 
   function applyReceiptScan(result: ReceiptParseResult) {
     if (result.title) setTitle(result.title);
     if (result.amount !== null) setAmount(String(result.amount));
     if (SUPPORTED_CURRENCIES.includes(result.currency as any)) setCurrency(result.currency);
     setReceiptItems(result.items);
+    setScanNotice(getReceiptScanNotice(result));
   }
 
   function updateReceiptItem(index: number, change: Partial<ReceiptItem>) {
@@ -61,7 +63,14 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
     setSplitMode('amount');
     setCategory(expense?.category && expense.category !== 'general' ? expense.category : '其他');
     setReceiptItems(expense?.receipt_items ?? []);
+    setScanNotice(null);
   }, [visible, expense, userId, members]);
+
+  useEffect(() => {
+    if (!scanNotice) return;
+    const timeout = setTimeout(() => setScanNotice(null), 4500);
+    return () => clearTimeout(timeout);
+  }, [scanNotice]);
 
   const total = Number(amount);
   const receiptSum = sumReceiptItems(receiptItems);
@@ -113,6 +122,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
   return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.scanRow}><Text style={[styles.scanHint, { color: theme.colors.muted }]}>可用手機相機自動辨識收據</Text><ReceiptScanButton onResult={applyReceiptScan} /></View>
+      {scanNotice ? <Text accessibilityRole="alert" style={[styles.scanNotice, { color: theme.colors.text, backgroundColor: theme.colors.surfaceMuted }]}>{scanNotice}</Text> : null}
       <Text style={[styles.title, { color: theme.colors.text }]}>{expense ? '編輯旅費' : '新增旅費'}</Text>
       <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="項目名稱，例如：晚餐" placeholderTextColor={theme.colors.muted} value={title} onChangeText={setTitle} />
       <View style={styles.row}><TextInput style={[styles.input, styles.flex, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="金額" placeholderTextColor={theme.colors.muted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><View style={styles.currencyChoices}>{SUPPORTED_CURRENCIES.map((option) => <Pressable key={option} style={[styles.currencyChip, normalizeCurrency(currency) === option && styles.selected]} onPress={() => setCurrency(option)}><Text style={normalizeCurrency(currency) === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View></View>
@@ -138,7 +148,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 27, fontWeight: '800' }, scanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, scanHint: { flex: 1, fontSize: 12 },
+  container: { flexGrow: 1, padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 27, fontWeight: '800' }, scanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, scanHint: { flex: 1, fontSize: 12 }, scanNotice: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 9, fontSize: 13, fontWeight: '600' },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 13 }, row: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, flex: { flex: 1 },
   currencyChoices: { width: 128, flexDirection: 'row', flexWrap: 'wrap', gap: 4 }, currencyChip: { minHeight: 36, justifyContent: 'center', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 7, backgroundColor: EDITORIAL_COLORS.sand }, conversion: { fontSize: 12, fontWeight: '700' }, rateRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }, rateHint: { fontSize: 11, flexShrink: 1 }, rateInput: { width: 82, minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, fontSize: 12 }, lockRateButton: { minHeight: 40, justifyContent: 'center', borderRadius: 8, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 9, paddingVertical: 8 }, lockRateText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700' },
   label: { fontWeight: '700', marginTop: 5 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { minHeight: 44, justifyContent: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 }, selected: { backgroundColor: EDITORIAL_COLORS.terracotta }, disabled: { opacity: 0.55 }, white: { color: EDITORIAL_COLORS.paper, fontWeight: '700' },

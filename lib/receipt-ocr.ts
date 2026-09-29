@@ -125,6 +125,13 @@ export function sumReceiptItems(items: ReceiptItem[]): number {
   return Math.round(items.reduce((sum, item) => sum + item.price, 0) * 100) / 100;
 }
 
+export function getReceiptScanNotice(result: ReceiptParseResult): string | null {
+  if (result.amount === null || !Number.isFinite(result.amount) || result.items.length > 0) return null;
+  const symbols: Record<ReceiptCurrency, string> = { TWD: '$', JPY: '¥', KRW: '₩', USD: 'US$', EUR: '€' };
+  const formattedAmount = result.amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return `已自動帶入總金額 ${symbols[result.currency]}${formattedAmount}，明細請手動補充。`;
+}
+
 function parseCurrency(text: string): ReceiptCurrency {
   if (/¥|￥|日幣|jpy/i.test(text)) return 'JPY';
   if (/₩|韓元|krw/i.test(text)) return 'KRW';
@@ -199,10 +206,11 @@ export async function preprocessReceiptImage(source: string | Blob): Promise<str
     element.onerror = reject;
     element.src = source;
   });
+  if (!image.naturalWidth || !image.naturalHeight) return source;
   const canvas = document.createElement('canvas');
-  const scale = 2;
-  canvas.width = image.naturalWidth * scale;
-  canvas.height = image.naturalHeight * scale;
+  const scale = Math.max(1, 1500 / image.naturalWidth);
+  canvas.width = Math.round(image.naturalWidth * scale);
+  canvas.height = Math.round(image.naturalHeight * scale);
   const context = canvas.getContext('2d');
   if (!context) return source;
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -210,9 +218,11 @@ export async function preprocessReceiptImage(source: string | Blob): Promise<str
   for (let index = 0; index < pixels.data.length; index += 4) {
     const gray = 0.299 * pixels.data[index] + 0.587 * pixels.data[index + 1] + 0.114 * pixels.data[index + 2];
     const enhanced = Math.max(0, Math.min(255, (gray - 128) * 1.65 + 128));
-    pixels.data[index] = enhanced;
-    pixels.data[index + 1] = enhanced;
-    pixels.data[index + 2] = enhanced;
+    const binary = enhanced < 180 ? 0 : 255;
+    pixels.data[index] = binary;
+    pixels.data[index + 1] = binary;
+    pixels.data[index + 2] = binary;
+    pixels.data[index + 3] = 255;
   }
   context.putImageData(pixels, 0, 0);
   return await new Promise<Blob | string>((resolve) => canvas.toBlob((blob) => resolve(blob ?? source), 'image/png', 1));
