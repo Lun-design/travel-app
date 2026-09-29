@@ -57,6 +57,35 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
     expect(result.amount).toBe(1590);
   });
 
+  it('recovers items and final amount from spaced, headerless real OCR fragments', () => {
+    const raw = `1 返 責 主 ) 語 塌 丁 調 二 0 |
+原 貞 蝦 電 腦 ( 股 ) 公 司 光 華 分 公 司
+和 民 Silver Soul 135 M 品
+1 1590 1590TA A
+酷 閣 依 惠 折 扣 -610T)
+合 計 : 11619
+稅 額 : 581
+(# 1 12200 +`;
+    const result = parseReceiptText(raw);
+    expect(['原價屋電腦(股)公司光華分公司', '收據消費']).toContain(result.title);
+    expect(result.amount).toBe(12200);
+    expect(result.items.some((item) => item.price === 1590 && /Silver Soul/.test(item.name))).toBe(true);
+    expect(result.items.some((item) => item.price === -610)).toBe(true);
+    expect(result.items.every((item) => !/返 責 主|合 計|稅 額/.test(item.name))).toBe(true);
+  });
+
+  it('ignores spaced receipt warnings and header text as merchant names', () => {
+    const result = parseReceiptText('退 貨 說 明\n發 票 正 本\n歡 迎 光 臨\n載 具 明 細\n原 價 屋 電 腦 ( 股 ) 公 司 光 華 分 公 司\n散熱器 1590TX\n總 計 1590');
+    expect(result.title).toBe('原價屋');
+    expect(result.items).toEqual([{ name: '散熱器', price: 1590 }]);
+  });
+
+  it('rejects dates, phone numbers, and tax rows while scanning without an item header', () => {
+    const result = parseReceiptText('好買商店\n電話 02-23972669\n日期 2022-02-12\n風扇 550TA A\n稅額 20\n總計 550');
+    expect(result.items).toEqual([{ name: '風扇', price: 550 }]);
+    expect(result.amount).toBe(550);
+  });
+
   it('parses Japanese and Korean total keywords', () => {
     expect(parseReceiptText('大阪店\n小計 ¥1,280\n')).toMatchObject({ amount: 1280, currency: 'JPY' });
     expect(parseReceiptText('서울 식당\n결제금액 ₩18,000\n')).toMatchObject({ amount: 18000, currency: 'KRW' });
