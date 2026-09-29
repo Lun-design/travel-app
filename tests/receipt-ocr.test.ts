@@ -42,7 +42,7 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
   });
 
   it('uses the first real item when merchant is absent, and rejects noisy headings', () => {
-    expect(parseReceiptText('TAX INVOICE\n商品名稱 數量 金額\n黑門市場便當 1 850円\n合計 850円')).toMatchObject({ title: '黑門市場便當', amount: 850 });
+    expect(parseReceiptText('TAX INVOICE\n商品名稱 數量 金額\n黑門市場便當 1 850円\n茶飲 1 100円\n合計 950円')).toMatchObject({ title: '黑門市場便當', amount: 950 });
     expect(parseReceiptText('RECEIPT\n*** /// !!!\nTEL 12345678')).toMatchObject({ title: '收據消費' });
   });
 
@@ -52,9 +52,9 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
   });
 
   it('removes NT$ and tax suffixes from item prices', () => {
-    const result = parseReceiptText('光華商店\n商品名稱 數量 金額\n散熱器 1 NT$1,590TX\n總計 NT$1,590');
+    const result = parseReceiptText('光華商店\n商品名稱 數量 金額\n散熱器 1 NT$1,590TX\n總計 NT$1,690');
     expect(result.items).toEqual([{ name: '散熱器', quantity: 1, price: 1590 }]);
-    expect(result.amount).toBe(1590);
+    expect(result.amount).toBe(1690);
   });
 
   it('recovers items and final amount from spaced, headerless real OCR fragments', () => {
@@ -74,16 +74,48 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
     expect(result.items.every((item) => !/返 責 主|合 計|稅 額/.test(item.name))).toBe(true);
   });
 
+  it('keeps only readable products and corrects known OCR product typos', () => {
+    const result = parseReceiptText(`原 價 屋 電 腦 ( 股 ) 公 司
+商品名稱 數量 單價 金額
+Silver S0u1 135 散熱器 1 1590 1590TA
+es 生 340
+人 人 人 120
+- 和 50
+ti 60
+Fe 多 80
+| bad 90
+酷 閣 依 惠 折 扣 -610T)
+總計 12200`);
+    expect(result.items).toEqual([
+      { name: 'Silver Soul 135 散熱器', quantity: 1, price: 1590 },
+      { name: '酷幣優惠折扣', price: -610 },
+    ]);
+    expect(result.amount).toBe(12200);
+  });
+
+  it('drops totals and tiny OCR amounts from line items', () => {
+    const result = parseReceiptText('好買商店\n商品名稱 金額\n風扇 550\n測試商品 5\n總額品 12200\n總計 12200');
+    expect(result.items).toEqual([{ name: '風扇', price: 550 }]);
+    expect(result.amount).toBe(12200);
+  });
+
+  it('returns no items and a generic shopping title when every OCR name is noise', () => {
+    const result = parseReceiptText('原 貞 蝦 電 腦 ( 股 ) 公 司\nes 生 1590\n人 人 人 550\nFe 多 4690\n總計 12200');
+    expect(result.items).toEqual([]);
+    expect(result.title).toBe('購物消費');
+    expect(result.amount).toBe(12200);
+  });
+
   it('ignores spaced receipt warnings and header text as merchant names', () => {
-    const result = parseReceiptText('退 貨 說 明\n發 票 正 本\n歡 迎 光 臨\n載 具 明 細\n原 價 屋 電 腦 ( 股 ) 公 司 光 華 分 公 司\n散熱器 1590TX\n總 計 1590');
+    const result = parseReceiptText('退 貨 說 明\n發 票 正 本\n歡 迎 光 臨\n載 具 明 細\n原 價 屋 電 腦 ( 股 ) 公 司 光 華 分 公 司\n散熱器 1590TX\n總 計 1690');
     expect(result.title).toBe('原價屋');
     expect(result.items).toEqual([{ name: '散熱器', price: 1590 }]);
   });
 
   it('rejects dates, phone numbers, and tax rows while scanning without an item header', () => {
-    const result = parseReceiptText('好買商店\n電話 02-23972669\n日期 2022-02-12\n風扇 550TA A\n稅額 20\n總計 550');
+    const result = parseReceiptText('好買商店\n電話 02-23972669\n日期 2022-02-12\n風扇 550TA A\n稅額 20\n總計 570');
     expect(result.items).toEqual([{ name: '風扇', price: 550 }]);
-    expect(result.amount).toBe(550);
+    expect(result.amount).toBe(570);
   });
 
   it('parses Japanese and Korean total keywords', () => {

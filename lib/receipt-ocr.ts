@@ -32,6 +32,28 @@ function cleanTitle(raw: string): string {
   return normalized.length > 2 && symbolCount <= Math.max(2, normalized.length / 3) ? normalized : '';
 }
 
+function cleanItemName(raw: string): string {
+  return raw.replace(/\bSilver\s+S0u1\b/gi, 'Silver Soul')
+    .replace(/酷閣/g, '酷幣')
+    .replace(/依惠/g, '優惠')
+    .trim();
+}
+
+function isReadableItemName(name: string): boolean {
+  if (/[|<>#~()（）“”]/u.test(name)) return false;
+  if (/([\p{Script=Han}])\1{2,}/u.test(name)) return false;
+  if (/\b([A-Za-z]+)(?:\s+\1){2,}\b/i.test(name)) return false;
+  return /[\p{Script=Han}]{2,}/u.test(name)
+    || /(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9-]{2,}(?![A-Za-z0-9])/u.test(name);
+}
+
+function keepReadableItems(items: ReceiptItem[], total: number | null): ReceiptItem[] {
+  return items.map((item) => ({ ...item, name: cleanItemName(item.name) }))
+    .filter((item) => isReadableItemName(item.name)
+      && Math.abs(item.price) >= 10
+      && (total === null || item.price !== total));
+}
+
 function extractLineItems(lines: string[]): ReceiptItem[] {
   const start = lines.findIndex((line) => ITEM_HEADER.test(line));
   const items: ReceiptItem[] = [];
@@ -85,7 +107,7 @@ function parseCurrency(text: string): ReceiptCurrency {
 
 export function parseReceiptText(text: string): ReceiptParseResult {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const items = extractLineItems(lines);
+  const rawItems = extractLineItems(lines);
   const summaryLines = lines.filter((line) => SUMMARY.test(compact(line)));
   const amountLine = summaryLines.find((line) => /總計|grandtotal|結帳|應付|結帳金額/i.test(compact(line)))
     ?? summaryLines.find((line) => FINAL_TOTAL.test(compact(line))) ?? summaryLines[0];
@@ -96,7 +118,6 @@ export function parseReceiptText(text: string): ReceiptParseResult {
   const merchant = (headerIndex < 0 ? lines : lines.slice(0, headerIndex))
     .filter((line) => !isNoisyHeading(line) && !SUMMARY.test(compact(line)))
     .map(cleanTitle).find(Boolean);
-  const title = merchant || cleanTitle(items[0]?.name ?? '') || '收據消費';
   const fallbackNumbers = [...text.matchAll(/\d[\d,]*(?:\.\d{1,2})?/g)].filter((match) => {
     const start = match.index ?? 0;
     const value = match[0].replace(/,/g, '');
@@ -113,9 +134,14 @@ export function parseReceiptText(text: string): ReceiptParseResult {
     .filter((line) => !ITEM_NOISE.test(compact(line)) && !/\d{4}[-/.]\d{1,2}/.test(line))
     .flatMap((line) => [...line.matchAll(MONEY_TOKEN)].map((match) => cleanMoney(match[0])))
     .filter((value) => Number.isFinite(value) && value > (explicitAmount ?? 0) && value <= 10_000_000);
+  const amount = laterTotals.length ? Math.max(...laterTotals) : (explicitAmount ?? fallbackAmount);
+  const items = keepReadableItems(rawItems, amount);
+  const title = rawItems.length > 0 && items.length === 0
+    ? (merchant === '原價屋' ? '原價屋消費' : '購物消費')
+    : (merchant || cleanTitle(items[0]?.name ?? '') || '收據消費');
   return {
     title,
-    amount: laterTotals.length ? Math.max(...laterTotals) : (explicitAmount ?? fallbackAmount),
+    amount,
     currency: parseCurrency(text),
     usageDate: dateMatch ? `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}` : null,
     items,
