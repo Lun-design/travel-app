@@ -26,7 +26,7 @@ function cleanMoney(raw: string): number {
 function cleanTitle(raw: string): string {
   const packed = compact(raw);
   if (packed.startsWith('原價屋')) return '原價屋';
-  if (isNoisyHeading(raw) || /\d/.test(raw) || /(?:^|\s)[\p{Script=Han}](?:\s+[\p{Script=Han}]){3,}/u.test(raw)) return '';
+  if (isNoisyHeading(raw) || /\d/.test(raw) || /(?:^|\s)[\p{Script=Han}](?:\s+[\p{Script=Han}]){3,}/u.test(raw) || !isReadableItemName(raw)) return '';
   const normalized = raw.replace(/[（(]股[）)]\s*公司.*$/i, '').replace(/(?:股份有限公司|有限公司|分公司).*$/, '').trim();
   const symbolCount = (normalized.match(/[^\p{L}\p{N}\s]/gu) ?? []).length;
   return normalized.length > 2 && symbolCount <= Math.max(2, normalized.length / 3) ? normalized : '';
@@ -40,18 +40,16 @@ function cleanItemName(raw: string): string {
 }
 
 function isReadableItemName(name: string): boolean {
-  if (/[|<>#~()（）“”]/u.test(name)) return false;
+  if (/[|<>#~“”]/u.test(name)) return false;
   if (/([\p{Script=Han}])\1{2,}/u.test(name)) return false;
   if (/\b([A-Za-z]+)(?:\s+\1){2,}\b/i.test(name)) return false;
   return /[\p{Script=Han}]{2,}/u.test(name)
     || /(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9-]{2,}(?![A-Za-z0-9])/u.test(name);
 }
 
-function keepReadableItems(items: ReceiptItem[], total: number | null): ReceiptItem[] {
+function keepReadableItems(items: ReceiptItem[]): ReceiptItem[] {
   return items.map((item) => ({ ...item, name: cleanItemName(item.name) }))
-    .filter((item) => isReadableItemName(item.name)
-      && Math.abs(item.price) >= 10
-      && (total === null || item.price !== total));
+    .filter((item) => isReadableItemName(item.name));
 }
 
 function extractLineItems(lines: string[]): ReceiptItem[] {
@@ -61,7 +59,7 @@ function extractLineItems(lines: string[]): ReceiptItem[] {
   for (const line of lines.slice(start + 1)) {
     const normalized = compact(line);
     if (SUMMARY.test(normalized)) break;
-    if (ITEM_NOISE.test(normalized) || /^[-—=\s]+$/.test(line) || /(?:公司|商店|\bStore\b)/i.test(normalized)) {
+    if (ITEM_NOISE.test(normalized) || /^[-—=\s]+$/.test(line) || /(?:公司|商店|商城|店$|\bStore\b)/i.test(normalized)) {
       pendingName = '';
       continue;
     }
@@ -80,12 +78,21 @@ function extractLineItems(lines: string[]): ReceiptItem[] {
       if (!isNoisyHeading(line)) pendingName = [pendingName, line].filter(Boolean).join(' ').trim();
       continue;
     }
-    const price = cleanMoney(last[0]);
-    const numericStart = matches.length >= 2 ? matches.at(-Math.min(3, matches.length))!.index! : last.index!;
+    const trailingNumbers = [last];
+    for (let index = matches.length - 2; index >= 0; index -= 1) {
+      const previous = matches[index];
+      const next = trailingNumbers[0];
+      const separator = line.slice((previous.index ?? 0) + previous[0].length, next.index ?? 0);
+      if (!/^\s+$/.test(separator)) break;
+      trailingNumbers.unshift(previous);
+    }
+    const numericStart = trailingNumbers.length >= 2 ? trailingNumbers[0].index! : last.index!;
     const name = [pendingName, line.slice(0, numericStart).trim()].filter(Boolean).join(' ').trim()
       .replace(/(?<=\p{Script=Han})\s+(?=\p{Script=Han})/gu, '');
+    const rawPrice = cleanMoney(last[0]);
+    const price = /折扣|優惠/.test(name) ? -Math.abs(rawPrice) : rawPrice;
     if (!name || isNoisyHeading(name) || !Number.isFinite(price)) continue;
-    const quantity = matches.length >= 2 ? cleanMoney(matches.at(-Math.min(3, matches.length))![0]) : undefined;
+    const quantity = trailingNumbers.length >= 2 ? cleanMoney(trailingNumbers[0][0]) : undefined;
     items.push({ name, ...(quantity !== undefined && Number.isInteger(quantity) && Math.abs(quantity) <= 100 ? { quantity } : {}), price });
     pendingName = '';
   }
@@ -135,9 +142,9 @@ export function parseReceiptText(text: string): ReceiptParseResult {
     .flatMap((line) => [...line.matchAll(MONEY_TOKEN)].map((match) => cleanMoney(match[0])))
     .filter((value) => Number.isFinite(value) && value > (explicitAmount ?? 0) && value <= 10_000_000);
   const amount = laterTotals.length ? Math.max(...laterTotals) : (explicitAmount ?? fallbackAmount);
-  const items = keepReadableItems(rawItems, amount);
+  const items = keepReadableItems(rawItems);
   const title = rawItems.length > 0 && items.length === 0
-    ? (merchant === '原價屋' ? '原價屋消費' : '購物消費')
+    ? (merchant === '原價屋' ? '原價屋' : '購物消費')
     : (merchant || cleanTitle(items[0]?.name ?? '') || '收據消費');
   return {
     title,

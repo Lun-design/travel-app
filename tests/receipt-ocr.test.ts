@@ -41,6 +41,52 @@ ASUS ROG Pugio II 滑鼠 1 2490 2490TX
     expect(sumReceiptItems(result.items)).toBe(12200);
   });
 
+  it('extracts all seven computer-store rows including a free mousepad and discount', () => {
+    const result = parseReceiptText(`退 貨 說 明
+原 價 屋 電 腦 ( 股 ) 公 司 光 華 分 公 司
+es 生
+商品名稱 數量 單價 金額
+利民 Silver Soul 135 散熱器
+1 1590 1590TX
+利民 TL-C12 PRO-G 12cm 風扇 1 550 550TX
+F.D Torrent Nano RGB 玻璃機殼 1 4690 4690TX
+ASUS ROG Strix Scope RX PBT 鍵盤 1 3490 3490TX
+ASUS ROG Mouse Pad 鼠墊 1 0 0TX
+ASUS ROG Pugio II 滑鼠 1 2490 2490TX
+酷幣優惠折扣 -1 610 -610TX
+合計 11619
+稅額 581
+總計 12200`);
+    expect(result.title).toBe('原價屋');
+    expect(result.amount).toBe(12200);
+    expect(result.items.map((item) => item.price)).toEqual([1590, 550, 4690, 3490, 0, 2490, -610]);
+    expect(result.items.map((item) => item.name)).toEqual([
+      '利民 Silver Soul 135 散熱器',
+      '利民 TL-C12 PRO-G 12cm 風扇',
+      'F.D Torrent Nano RGB 玻璃機殼',
+      'ASUS ROG Strix Scope RX PBT 鍵盤',
+      'ASUS ROG Mouse Pad 鼠墊',
+      'ASUS ROG Pugio II 滑鼠',
+      '酷幣優惠折扣',
+    ]);
+    expect(sumReceiptItems(result.items)).toBe(12200);
+  });
+
+  it('prefers a merchant over a short OCR fragment in the heading', () => {
+    const result = parseReceiptText('es 生\n原價屋電腦(股)公司光華分公司\n風扇 550TX\n總計 550');
+    expect(result.title).toBe('原價屋');
+  });
+
+  it('makes a positive-looking discount negative and preserves a zero-priced product', () => {
+    const result = parseReceiptText('好買商店\n鼠墊 0TX\n優惠折扣 610TX\n總計 12200');
+    expect(result.items).toEqual([{ name: '鼠墊', price: 0 }, { name: '優惠折扣', price: -610 }]);
+  });
+
+  it('keeps model numbers inside a product name when only the final number is a price', () => {
+    const result = parseReceiptText('電腦商城\nSilver Soul 135 散熱器 1590TX\n總計 2000');
+    expect(result.items).toEqual([{ name: 'Silver Soul 135 散熱器', price: 1590 }]);
+  });
+
   it('uses the first real item when merchant is absent, and rejects noisy headings', () => {
     expect(parseReceiptText('TAX INVOICE\n商品名稱 數量 金額\n黑門市場便當 1 850円\n茶飲 1 100円\n合計 950円')).toMatchObject({ title: '黑門市場便當', amount: 950 });
     expect(parseReceiptText('RECEIPT\n*** /// !!!\nTEL 12345678')).toMatchObject({ title: '收據消費' });
@@ -93,9 +139,9 @@ Fe 多 80
     expect(result.amount).toBe(12200);
   });
 
-  it('drops totals and tiny OCR amounts from line items', () => {
-    const result = parseReceiptText('好買商店\n商品名稱 金額\n風扇 550\n測試商品 5\n總額品 12200\n總計 12200');
-    expect(result.items).toEqual([{ name: '風扇', price: 550 }]);
+  it('keeps low-priced named products but skips explicit totals', () => {
+    const result = parseReceiptText('好買商店\n商品名稱 金額\n風扇 550\n測試商品 5\n總計 12200');
+    expect(result.items).toEqual([{ name: '風扇', price: 550 }, { name: '測試商品', price: 5 }]);
     expect(result.amount).toBe(12200);
   });
 
