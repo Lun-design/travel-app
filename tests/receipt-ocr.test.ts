@@ -282,6 +282,23 @@ Amount Due €12,50`);
     expect(parseReceiptText('2026/09/24\n商品 2 個 120\n商品 1 個 980\n')).toMatchObject({ amount: 980 });
   });
 
+  it('prefers the bottom receipt total over a corrupted duplicate item price', () => {
+    const raw = `退貨發票明細
+1 二 小 1590 1590TX 同 人 辣 1
+衣 各 點 lamNan0 RDB 時 / 淺 色 玻 珮 ee
+記 旨 說 說 1 4690 46901 四 ~ 計 和
+AS 革 人 Bc0ne Rx BT 機 帳 式 有
+史 31 司 3490 3490g0TX ee 同
+2430 2490D 二 人
+點 國 610 ~610TX 版 ww 1
+(# 1 12200 +`;
+    expect(parseReceiptText(raw).amount).toBe(12200);
+  });
+
+  it('does not invent a total from a corrupted item price when the footer is unreadable', () => {
+    expect(parseReceiptText('機殼 1 4690 46901\n鍵盤 1 3490 3490TX\n滑鼠 1 2490 2490D').amount).toBeNull();
+  });
+
   it('wires a mobile receipt scan action into the expense modal', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/ExpenseModal.tsx'), 'utf8');
     const scanner = readFileSync(path.resolve(process.cwd(), 'src/components/ReceiptScanButton.tsx'), 'utf8');
@@ -292,7 +309,7 @@ Amount Due €12,50`);
     expect(scanner).toContain('launchCameraAsync');
     expect(scanner).toContain('recognizeReceiptWithTesseract');
     const ocr = readFileSync(path.resolve(process.cwd(), 'lib/receipt-ocr.ts'), 'utf8');
-    expect(ocr).toContain("createWorker(['chi_tra', 'eng', 'jpn', 'kor'])");
+    expect(ocr).toContain("createWorker('chi_tra+eng+jpn+kor')");
     expect(ocr).toContain("[OCR] Raw parsed text:");
     expect(ocr).toContain('preprocessReceiptImage');
   });

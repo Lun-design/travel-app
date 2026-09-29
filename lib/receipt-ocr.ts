@@ -164,6 +164,19 @@ export function parseReceiptText(text: string): ReceiptParseResult {
     return Number(value) > 0;
   }).map((match) => Number(match[0].replace(/,/g, ''))).filter((value) => value <= 10_000_000);
   const fallbackAmount = fallbackNumbers.length ? Math.max(...fallbackNumbers) : null;
+  const corruptedItemMaximum = fallbackAmount !== null && lines.some((line) => {
+    const numbers = [...line.matchAll(/\d[\d,]*/g)].map((match) => match[0].replace(/,/g, ''));
+    return numbers.some((number, index) => index > 0 && Number(number) === fallbackAmount
+      && number.startsWith(numbers[index - 1]) && number.length > numbers[index - 1].length
+      && number.length - numbers[index - 1].length <= 2);
+  });
+  // OCR often appends a quantity digit to a product price (4690 -> 46901).
+  // An unlabeled, mostly numeric footer is stronger evidence than that global maximum.
+  const footerAmount = [...lines.slice(Math.floor(lines.length * 0.6))].reverse()
+    .filter((line) => !/[\p{L}]/u.test(line) && !/\d{4}[-/.]\d{1,2}/.test(line))
+    .map((line) => [...line.matchAll(/\d[\d,]*(?:\.\d{1,2})?/g)]
+      .map((match) => cleanMoney(match[0])).filter((value) => Number.isFinite(value) && value >= 10 && value <= 10_000_000).at(-1))
+    .find((value) => value !== undefined) ?? null;
   const summaryIndex = amountLine ? lines.indexOf(amountLine) : -1;
   const laterLines = summaryIndex < 0 ? [] : lines.slice(summaryIndex + 1);
   const laterTax = laterLines.filter((line) => TAX_LINE.test(compact(line)))
@@ -173,7 +186,8 @@ export function parseReceiptText(text: string): ReceiptParseResult {
     .flatMap((line) => [...line.matchAll(MONEY_TOKEN)].map((match) => cleanMoney(match[0])))
     .filter((value) => Number.isFinite(value) && value > (explicitAmount ?? 0) && value <= 10_000_000
       && (summaryKind(amountLine ?? '') !== 'final' || laterTax.some((tax) => Math.abs(value - (explicitAmount! + tax)) < 0.01)));
-  const amount = laterTotals.length ? Math.max(...laterTotals) : (explicitAmount ?? fallbackAmount);
+  const amount = laterTotals.length ? Math.max(...laterTotals)
+    : (explicitAmount ?? footerAmount ?? (corruptedItemMaximum ? null : fallbackAmount));
   const readableItems = keepReadableItems(rawItems);
   // One or two rows differing from the total by over half are more likely
   // incomplete OCR than a usable itemization. Keep the total only.
@@ -232,7 +246,7 @@ export async function preprocessReceiptImage(source: string | Blob): Promise<str
 export async function recognizeReceiptWithTesseract(image: string | Blob): Promise<ReceiptParseResult> {
   const { createWorker } = await import('tesseract.js');
   const preparedImage = await preprocessReceiptImage(image);
-  const worker = await createWorker(['chi_tra', 'eng', 'jpn', 'kor']);
+  const worker = await createWorker('chi_tra+eng+jpn+kor');
   try {
     const result = await worker.recognize(preparedImage);
     console.log('[OCR] Raw parsed text:', result.data.text);
