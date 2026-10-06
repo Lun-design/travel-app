@@ -1,4 +1,4 @@
-import { deleteItineraryItem, saveItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule } from './itinerary-api';
+import { deleteItineraryItem, moveItineraryItemToDay, saveItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule } from './itinerary-api';
 import { createPackingItem, deletePackingItem, importPackingTemplate, updatePackingItem } from './packing-api';
 import { deleteExpense, saveExpense } from './expenses-api';
 import { createTrip, updateTrip } from './trips';
@@ -17,6 +17,10 @@ async function executeMutation(mutation: OfflineMutation): Promise<void> {
     if (mutation.operation === 'update') return void await saveItineraryItem(mutation.payload as any, options);
     if (mutation.operation === 'delete') return void await deleteItineraryItem(mutation.resourceId, options);
     if (mutation.operation === 'schedule') return void await updateItineraryItemsSchedule(mutation.payload as { id: string; time: string | null }[], options);
+    if (mutation.operation === 'move-day') {
+      const value = mutation.payload as { targetDay: number };
+      return void await moveItineraryItemToDay(mutation.resourceId, value.targetDay, options);
+    }
     return void await updateItineraryItemsOrder(mutation.payload as { id: string; position: number }[], options);
   }
   if (mutation.entity === 'packing') {

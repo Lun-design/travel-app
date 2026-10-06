@@ -3,6 +3,7 @@ import { normalizeItineraryItemPayload, sanitizeLoadedItineraryItems, type Itine
 import { normalizeReservationTags } from './reservation-tags';
 import { createLocalId, enqueueOfflineMutation, resolveOfflineScope, shouldQueueOffline, updateOfflineCollection, type OfflineApiOptions } from './offline-data';
 import { offlineStore, type OfflineScope, type OfflineStore } from './offline-store';
+import { moveItineraryItemAcrossDays } from './itinerary-move';
 
 export type { OfflineApiOptions } from './offline-data';
 
@@ -126,6 +127,35 @@ export async function updateItineraryItemsOrder(items: { id: string; position: n
         const next = items.find((entry) => entry.id === item.id);
         return next ? { ...item, position: next.position } : item;
       })].sort((left, right) => Number(left.position ?? 0) - Number(right.position ?? 0)));
+      return;
+    }
+    throw error;
+  }
+}
+
+/** Move an itinerary stop between days in one database transaction. */
+export async function moveItineraryItemToDay(itemId: string, targetDay: number, options: OfflineApiOptions = {}): Promise<void> {
+  const normalizedId = String(itemId ?? '').trim();
+  if (!normalizedId || !Number.isInteger(targetDay) || targetDay < 1) throw new Error('Invalid itinerary move payload');
+  const scope = await resolveOfflineScope(options.offlineScope?.tripId ?? '', options.offlineScope);
+  const store = options.store ?? offlineStore;
+  try {
+    const { error } = await supabase.rpc('move_itinerary_item_to_day', {
+      p_item_id: normalizedId,
+      p_target_day_number: targetDay,
+    });
+    if (error) throw error;
+    await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (items) => moveItineraryItemAcrossDays(items, normalizedId, targetDay));
+  } catch (error) {
+    if (!options.replaying && shouldQueueOffline(error)) {
+      await enqueueOfflineMutation(store, {
+        scope,
+        entity: 'itinerary',
+        operation: 'move-day',
+        resourceId: normalizedId,
+        payload: { targetDay },
+      });
+      await updateOfflineCollection<ItineraryItem>(store, scope, 'itineraryItems', (items) => moveItineraryItemAcrossDays(items, normalizedId, targetDay));
       return;
     }
     throw error;

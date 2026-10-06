@@ -15,6 +15,7 @@ import { offlineStore } from '../lib/offline-store';
 const scope = { userId: 'user', tripId: 'trip' };
 const item = { location_name: '海遊館', address: null, latitude: null, longitude: null, day_number: 1, time: '09:00', duration_minutes: 60, category: 'spot', notes: null };
 beforeEach(async () => {
+  vi.stubGlobal('navigator', { onLine: true });
   vi.clearAllMocks(); await offlineStore.clearAll();
   vi.mocked(supabase.from).mockReturnValue({ delete: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never);
   vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: { user: { id: 'user' } } } } as never);

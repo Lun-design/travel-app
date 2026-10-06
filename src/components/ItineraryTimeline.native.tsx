@@ -25,6 +25,8 @@ export function ItineraryTimeline({
   onEdit,
   onDelete,
   onReorder,
+  availableDays,
+  onMoveToDay,
   onShiftSubsequent,
   scheduleContext,
   vouchers,
@@ -135,6 +137,8 @@ export function ItineraryTimeline({
               onDelete={onDelete}
               onMoveUp={moveHandlers.get(item.id)?.up}
               onMoveDown={moveHandlers.get(item.id)?.down}
+              availableDays={availableDays}
+              onMoveToDay={onMoveToDay}
               onUpdateImage={onUpdateImage}
               // The warning belongs to the current stop, so shift it and all
               // following stops (the pure helper intentionally excludes its

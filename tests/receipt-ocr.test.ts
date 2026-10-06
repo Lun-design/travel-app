@@ -35,8 +35,8 @@ describe('receipt OCR parsing', () => {
     expect(getReceiptScanNotice({ ...result, items: [{ name: '商品', price: 12200 }] })).toBeNull();
     expect(getReceiptScanNotice({ ...result, amount: null })).toBeNull();
     const modal = readFileSync(path.resolve(process.cwd(), 'src/components/ExpenseModal.tsx'), 'utf8');
-    expect(modal).toContain('setScanNotice(getReceiptScanNotice(result))');
-    expect(modal).toContain('accessibilityRole="alert"');
+    expect(modal).not.toContain('getReceiptScanNotice');
+    expect(modal).not.toContain('掃描收據');
   });
   it('extracts a title, total amount and currency from OCR text', () => {
     expect(parseReceiptText('大阪食堂\n合計 ¥1,280\n2026/09/24')).toMatchObject({
@@ -299,13 +299,15 @@ AS 革 人 Bc0ne Rx BT 機 帳 式 有
     expect(parseReceiptText('機殼 1 4690 46901\n鍵盤 1 3490 3490TX\n滑鼠 1 2490 2490D').amount).toBeNull();
   });
 
-  it('wires a mobile receipt scan action into the expense modal', () => {
+  it('removes the receipt scan entry point while preserving OCR utilities and manual receipt items', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/ExpenseModal.tsx'), 'utf8');
     const scanner = readFileSync(path.resolve(process.cwd(), 'src/components/ReceiptScanButton.tsx'), 'utf8');
-    expect(source).toContain('ReceiptScanButton');
-    expect(source).toContain('applyReceiptScan');
-    expect(source).toContain('<ReceiptScanButton onResult={applyReceiptScan} />');
-    expect(source).not.toContain('expense ? null : <ReceiptScanButton');
+    expect(source).not.toContain('ReceiptScanButton');
+    expect(source).not.toContain('applyReceiptScan');
+    expect(source).not.toContain('scanNotice');
+    expect(source).toContain('sumReceiptItems(receiptItems)');
+    expect(source).toContain('新增明細');
+    expect(source).toContain('receipt_items: receiptItems.map');
     expect(scanner).toContain('launchCameraAsync');
     expect(scanner).toContain('recognizeReceiptWithTesseract');
     const ocr = readFileSync(path.resolve(process.cwd(), 'lib/receipt-ocr.ts'), 'utf8');
@@ -316,7 +318,7 @@ AS 革 人 Bc0ne Rx BT 機 帳 式 有
 
   it('provides editable receipt rows and a live total comparison in the expense modal', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/ExpenseModal.tsx'), 'utf8');
-    expect(source).toContain('setReceiptItems(result.items)');
+    expect(source).toContain('setReceiptItems(expense?.receipt_items ?? [])');
     expect(source).toContain('sumReceiptItems(receiptItems)');
     expect(source).toContain('商品明細');
     expect(source).toContain('新增明細');

@@ -32,6 +32,8 @@ export type ItineraryTimelineProps = {
   onEdit: (item: ItineraryItem) => void;
   onDelete: (item: ItineraryItem) => void;
   onReorder?: (items: { id: string; position: number }[]) => Promise<void>;
+  availableDays?: number[];
+  onMoveToDay?: (item: ItineraryItem, targetDay: number) => Promise<void>;
   /** Persist a group of shifted times in one transaction. */
   onShiftSubsequent?: (items: { id: string; time: string | null }[]) => Promise<void>;
   focusedItemId?: string | null;
@@ -304,6 +306,8 @@ type TimelineCardProps = {
   onDelete: (item: ItineraryItem) => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  availableDays?: number[];
+  onMoveToDay?: (item: ItineraryItem, targetDay: number) => Promise<void>;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   themeMode?: ThemeMode;
@@ -334,7 +338,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, availableDays = [], onMoveToDay, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const { width: viewportWidth } = useWindowDimensions();
   const isMobile = viewportWidth < 600;
@@ -363,6 +367,22 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const [manualPhotoError, setManualPhotoError] = useState<string | null>(null);
   const imageFallbackAttemptedRef = useRef(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [moveDayVisible, setMoveDayVisible] = useState(false);
+  const [moveTargetDay, setMoveTargetDay] = useState<number | null>(null);
+  const [movingDay, setMovingDay] = useState(false);
+  const destinationDays = availableDays.filter((day) => day !== item.day_number);
+  async function confirmMoveDay() {
+    if (!onMoveToDay || moveTargetDay === null || movingDay) return;
+    setMovingDay(true);
+    try {
+      await onMoveToDay(item, moveTargetDay);
+      setMoveDayVisible(false);
+    } catch (error) {
+      Alert.alert('移動景點失敗', error instanceof Error ? error.message : '請稍後再試。');
+    } finally {
+      setMovingDay(false);
+    }
+  }
   const [routeModesVisible, setRouteModesVisible] = useState(false);
   const handleManualPhotoSearch = async () => {
     const query = manualPhotoQuery.trim();
@@ -443,7 +463,22 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
               {weather && isWeatherAlert(weather) ? <View style={[styles.weatherAlerts, compactStyles.hidden]}>{weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘／降雨預警</Text> : null}{weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}</View> : null}
               <View style={cardMenuStyles.triggerRow}><CategoryBadge category={item.category} compact={isMobile} inline /><Pressable accessibilityRole="button" accessibilityLabel="景點更多操作" style={cardMenuStyles.trigger} onPress={() => setMenuVisible(true)}><MoreHorizontalIcon /></Pressable></View>
-              <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}><Pressable style={cardMenuStyles.backdrop} onPress={() => setMenuVisible(false)}><View style={cardMenuStyles.menu}><Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onEdit(item); }}><Text style={cardMenuStyles.text}>編輯景點</Text></Pressable>{onMoveUp ? <Pressable style={cardMenuStyles.item} disabled={!canMoveUp} onPress={() => { setMenuVisible(false); onMoveUp(); }}><Text style={[cardMenuStyles.text, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}{onMoveDown ? <Pressable style={cardMenuStyles.item} disabled={!canMoveDown} onPress={() => { setMenuVisible(false); onMoveDown(); }}><Text style={[cardMenuStyles.text, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onDelete(item); }}><Text style={cardMenuStyles.danger}>刪除景點</Text></Pressable>{placeAddress ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void copyCardText(placeAddress, '地址已複製'); }}><Text style={cardMenuStyles.text}>複製地址</Text></Pressable> : null}{navigationUrl ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={cardMenuStyles.text}>開啟導航</Text></Pressable> : null}{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onPreviewVoucher(itemVouchers[0]); }}><Text style={cardMenuStyles.text}>🎫 檢視票券</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setFavorite((current) => !current); setMenuVisible(false); }}><Text style={cardMenuStyles.text}>{favorite ? '取消收藏' : '加入收藏'}</Text></Pressable></View></Pressable></Modal>
+              <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}><Pressable style={cardMenuStyles.backdrop} onPress={() => setMenuVisible(false)}><View style={cardMenuStyles.menu}><Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onEdit(item); }}><Text style={cardMenuStyles.text}>編輯景點</Text></Pressable>{onMoveUp ? <Pressable style={cardMenuStyles.item} disabled={!canMoveUp} onPress={() => { setMenuVisible(false); onMoveUp(); }}><Text style={[cardMenuStyles.text, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}{onMoveDown ? <Pressable style={cardMenuStyles.item} disabled={!canMoveDown} onPress={() => { setMenuVisible(false); onMoveDown(); }}><Text style={[cardMenuStyles.text, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}{onMoveToDay && destinationDays.length ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); setMoveTargetDay(destinationDays[0]); setMoveDayVisible(true); }}><Text style={cardMenuStyles.text}>↗ 移至其他天</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onDelete(item); }}><Text style={cardMenuStyles.danger}>刪除景點</Text></Pressable>{placeAddress ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void copyCardText(placeAddress, '地址已複製'); }}><Text style={cardMenuStyles.text}>複製地址</Text></Pressable> : null}{navigationUrl ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); void Linking.openURL(navigationUrl).catch(() => undefined); }}><Text style={cardMenuStyles.text}>開啟導航</Text></Pressable> : null}{itemVouchers.length > 0 && onPreviewVoucher ? <Pressable style={cardMenuStyles.item} onPress={() => { setMenuVisible(false); onPreviewVoucher(itemVouchers[0]); }}><Text style={cardMenuStyles.text}>🎫 檢視票券</Text></Pressable> : null}<Pressable style={cardMenuStyles.item} onPress={() => { setFavorite((current) => !current); setMenuVisible(false); }}><Text style={cardMenuStyles.text}>{favorite ? '取消收藏' : '加入收藏'}</Text></Pressable></View></Pressable></Modal>
+              <Modal visible={moveDayVisible} transparent animationType="fade" onRequestClose={() => setMoveDayVisible(false)}>
+                <Pressable style={moveDayStyles.backdrop} onPress={() => { if (!movingDay) setMoveDayVisible(false); }}>
+                  <Pressable style={moveDayStyles.dialog} onPress={(event) => event.stopPropagation()}>
+                    <Text style={moveDayStyles.title}>移動景點至其他天</Text>
+                    <Text style={moveDayStyles.subtitle}>{item.location_name} · 保留原開始時間</Text>
+                    <View style={moveDayStyles.days}>
+                      {destinationDays.map((day) => <Pressable key={day} accessibilityRole="button" accessibilityState={{ selected: moveTargetDay === day }} style={[moveDayStyles.day, moveTargetDay === day && moveDayStyles.daySelected]} onPress={() => setMoveTargetDay(day)}><Text style={[moveDayStyles.dayText, moveTargetDay === day && moveDayStyles.dayTextSelected]}>Day {day}</Text></Pressable>)}
+                    </View>
+                    <View style={moveDayStyles.actions}>
+                      <Pressable style={moveDayStyles.cancel} disabled={movingDay} onPress={() => setMoveDayVisible(false)}><Text style={moveDayStyles.cancelText}>取消</Text></Pressable>
+                      <Pressable style={[moveDayStyles.confirm, (movingDay || moveTargetDay === null) && moveDayStyles.disabled]} disabled={movingDay || moveTargetDay === null} onPress={() => { void confirmMoveDay(); }}><Text style={moveDayStyles.confirmText}>{movingDay ? '移動中…' : `移至 Day ${moveTargetDay ?? ''}`}</Text></Pressable>
+                    </View>
+                  </Pressable>
+                </Pressable>
+              </Modal>
               {reservationTagLabels(item.reservation_tags).length > 0 ? <View style={reservationTagStyles.reservationTags}>{reservationTagLabels(item.reservation_tags).map((label) => <Text key={label} style={[reservationTagStyles.reservationTag, { color: theme.colors.primary, borderColor: theme.colors.border }]}>{label}</Text>)}</View> : null}
               {placeAddress ? <Text style={[styles.address, { color: '#8E8E93', fontSize: 13 }]}>{placeAddress}</Text> : null}
               {item.notes ? <Text style={[styles.notes, { color: '#8E8E93', fontSize: 13 }]}>{item.notes}</Text> : null}
@@ -495,6 +530,23 @@ const cardMenuStyles = StyleSheet.create({
   danger: { color: EDITORIAL_COLORS.dangerText, fontSize: 14, fontWeight: '700' },
   triggerRow: { position: 'absolute', top: 3, right: 8, zIndex: 5, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
   trigger: { minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+});
+const moveDayStyles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 22, backgroundColor: 'rgba(32, 29, 27, 0.48)' },
+  dialog: { width: '100%', maxWidth: 420, padding: 20, borderRadius: 20, backgroundColor: EDITORIAL_COLORS.paper, gap: 12, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  title: { color: '#292524', fontSize: 18, fontWeight: '800' },
+  subtitle: { color: '#78716C', fontSize: 13 },
+  days: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  day: { minHeight: 42, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#F1EEEA' },
+  daySelected: { backgroundColor: '#8C6D58' },
+  dayText: { color: '#78716C', fontSize: 13, fontWeight: '700' },
+  dayTextSelected: { color: '#FFFFFF' },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 6 },
+  cancel: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 },
+  cancelText: { color: '#78716C', fontSize: 13, fontWeight: '700' },
+  confirm: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#8C6D58' },
+  confirmText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  disabled: { opacity: 0.55 },
 });
 const compactStyles = StyleSheet.create({ hidden: { display: 'none' } });
 const cardVisualStyles = StyleSheet.create({

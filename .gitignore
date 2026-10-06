@@ -40,6 +40,7 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+.superpowers/
 
 # generated native folders
 /ios
