@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { buildTimeOptions, normalizeDateValue, normalizeTimeValue } from '@/lib/form-pickers';
+import { buildTimeOptions, normalizeDateValue, normalizeTimeValue, openNativePicker } from '@/lib/form-pickers';
 
-export { buildTimeOptions, normalizeDateValue, normalizeTimeValue } from '@/lib/form-pickers';
+export { buildTimeOptions, normalizeDateValue, normalizeTimeValue, openNativePicker, openTimePicker } from '@/lib/form-pickers';
 export type PickerStyle = Record<string, unknown>;
 
 type TimePickerFieldProps = {
@@ -32,6 +32,7 @@ export function TimePickerField({ value, onChange, placeholder = '09:00', label 
       type="time"
       value={normalized}
       onChange={(event) => onChange(normalizeTimeValue(event.currentTarget.value))}
+      onClick={(event) => openNativePicker(event.currentTarget)}
       placeholder={placeholder}
       step={900}
       style={{ ...style, minHeight: 48, boxSizing: 'border-box' } as React.CSSProperties}
@@ -99,6 +100,7 @@ export function DatePickerField({ value, onChange, placeholder = '2026-01-20', l
       type="date"
       value={normalized}
       onChange={(event) => onChange(normalizeDateValue(event.currentTarget.value))}
+      onClick={(event) => openNativePicker(event.currentTarget)}
       placeholder={placeholder}
       style={{ ...style, minHeight: 48, boxSizing: 'border-box' } as React.CSSProperties}
     />;

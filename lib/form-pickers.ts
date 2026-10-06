@@ -10,6 +10,22 @@ export function normalizeTimeValue(value: string | null | undefined): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+/** Open a browser's native date/time picker from any click inside its field. */
+export function openNativePicker(input: Pick<HTMLInputElement, 'showPicker' | 'focus'>): void {
+  if (typeof input.showPicker === 'function') {
+    try {
+      input.showPicker();
+      return;
+    } catch {
+      // Some browsers reject showPicker outside a supported input gesture.
+    }
+  }
+  input.focus();
+}
+
+/** Backward-compatible name for callers that specifically use a time field. */
+export const openTimePicker = openNativePicker;
+
 export function buildTimeOptions(stepMinutes = 15): string[] {
   const step = Number.isFinite(stepMinutes) && stepMinutes > 0 ? Math.round(stepMinutes) : 15;
   const options: string[] = [];
