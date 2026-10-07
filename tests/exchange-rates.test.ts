@@ -24,6 +24,12 @@ describe('exchange rate and split helpers', () => {
     expect(() => buildSplitAmounts(100, ['a', 'b'], { a: '80', b: '30' }, 'ratio')).toThrow(/比例/);
   });
 
+  it('rejects zero, negative, and non-finite expense totals before splitting', () => {
+    for (const total of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => buildSplitAmounts(total, ['alice', 'bob'])).toThrow();
+    }
+  });
+
   it('parses a TWD-base live response into TWD-per-foreign-currency rates', () => {
     const snapshot = parseLiveExchangeRates({ base: 'TWD', rates: { JPY: 4.7, USD: 0.03125, EUR: 0.0285 } }, new Date('2026-09-06T00:00:00.000Z'));
     expect(snapshot.rates.JPY).toBeCloseTo(1 / 4.7, 6);

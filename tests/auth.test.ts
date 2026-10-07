@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { authRedirectTarget, authStatus, friendlyAuthError, isInvalidSessionError } from '../lib/auth';
 
 describe('auth helpers', () => {
+  it('checks sign-out errors before clearing the user offline cache', () => {
+    const home = readFileSync(path.resolve(process.cwd(), 'src/app/index.tsx'), 'utf8');
+    expect(home).toContain('const { error: signOutError } = await supabase.auth.signOut()');
+    expect(home).toContain('if (signOutError) throw signOutError');
+    expect(home).toContain("Alert.alert('登出失敗'");
+  });
+
   it('classifies an unverified user', () => expect(authStatus({ id: '1', email_confirmed_at: null })).toBe('unverified'));
   it('classifies an authenticated verified user', () => expect(authStatus({ id: '1', email_confirmed_at: 'now' })).toBe('authenticated'));
   it('translates invalid credentials', () => expect(friendlyAuthError(new Error('Invalid login credentials'))).toBe('Email 或密碼不正確。'));

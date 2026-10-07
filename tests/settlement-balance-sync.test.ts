@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { calculateExpenseAnalytics } from '../lib/expenses-analytics';
 import { computeBalances, type SettlementClearanceRecord } from '../lib/settlement';
 
@@ -20,6 +22,26 @@ const partialClearance: SettlementClearanceRecord = {
 };
 
 describe('settlement balance and clearance synchronization', () => {
+  it('ignores realtime refreshes that resolve after the dashboard subscription is disposed', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src/components/BudgetDashboard.tsx'), 'utf8');
+    const effectStart = source.indexOf('// Keep clearance history');
+    const realtimeEffect = source.slice(effectStart, source.indexOf('  const analytics', effectStart));
+
+    expect(realtimeEffect).toContain('let active = true;');
+    expect(realtimeEffect).toContain('if (active && refreshId === settlementRefreshRequestId.current) setSettlementRecords(records)');
+    expect(realtimeEffect).toContain('active = false');
+  });
+
+  it('prevents an older realtime settlement request from overwriting a newer response', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src/components/BudgetDashboard.tsx'), 'utf8');
+    const effectStart = source.indexOf('// Keep clearance history');
+    const realtimeEffect = source.slice(effectStart, source.indexOf('  const analytics', effectStart));
+
+    expect(source).toContain('settlementRefreshRequestId = useRef(0)');
+    expect(realtimeEffect).toContain('const refreshId = ++settlementRefreshRequestId.current;');
+    expect(realtimeEffect).toContain('if (active && refreshId === settlementRefreshRequestId.current) setSettlementRecords(records)');
+  });
+
   it('includes completed transfers in each member net balance', () => {
     const balances = computeBalances([expense], ['payer', 'debtor'], [partialClearance]);
 

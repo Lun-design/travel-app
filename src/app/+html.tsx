@@ -37,10 +37,15 @@ if ('serviceWorker' in navigator) {
       refreshing = true;
       window.location.reload();
     });
+    function updateServiceWorker(registration) {
+      registration.update().catch(function (error) {
+        console.warn('[PWA] Service Worker update failed:', error);
+      });
+    }
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
       .then(function (registration) {
-        registration.update();
-        window.setInterval(function () { registration.update(); }, 300000);
+        updateServiceWorker(registration);
+        window.setInterval(function () { updateServiceWorker(registration); }, 300000);
       })
       .catch(function (error) {
         console.error('[PWA] Service Worker registration failed:', error);

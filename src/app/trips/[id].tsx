@@ -42,6 +42,7 @@ import { preserveItineraryTimes } from '@/lib/route-optimization';
 import { updateItineraryItemImage } from '@/lib/itinerary-api';
 
 export default function TripDetailScreen() {
+  const scrollAfterSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -53,6 +54,10 @@ export default function TripDetailScreen() {
   const layout = getTripDetailLayout(width);
   const headerMascotSize = width >= 1100 ? 150 : width >= 800 ? 125 : width >= 600 ? 96 : 72;
   const data = useTripDetailData(tripId);
+
+  useEffect(() => () => {
+    if (scrollAfterSaveTimer.current) clearTimeout(scrollAfterSaveTimer.current);
+  }, []);
   const [day, setDay] = useState(1);
   const [tab, setTab] = useState<TripDetailTab>('timeline');
   const [isMapOpen, setIsMapOpen] = useState(() => getDefaultMapOpen(width));
@@ -164,7 +169,9 @@ export default function TripDetailScreen() {
     setRefreshKey((current) => current + 1);
     setDay(saved.day_number);
     setItemModal(false);
-    setTimeout(() => {
+    if (scrollAfterSaveTimer.current) clearTimeout(scrollAfterSaveTimer.current);
+    scrollAfterSaveTimer.current = setTimeout(() => {
+      scrollAfterSaveTimer.current = null;
       if (Platform.OS === 'web' && typeof document !== 'undefined') document.getElementById(`itinerary-item-${saved.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 0);
   }

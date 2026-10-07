@@ -31,6 +31,11 @@ export function SettlementCard({ settlements, labelFor, members = [], themeMode 
   const [settling, setSettling] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const previousCount = useRef(settlements.length);
+  const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+  }, []);
 
   const memberFor = (id: string) => members.find((member) => member.user_id === id);
   const displayName = (id: string) => getProfileDisplayName(memberFor(id)?.profile, labelFor(id));
@@ -46,7 +51,11 @@ export function SettlementCard({ settlements, labelFor, members = [], themeMode 
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) await navigator.clipboard.writeText(settlementText);
       else await Share.share({ message: settlementText });
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+      copyFeedbackTimer.current = setTimeout(() => {
+        copyFeedbackTimer.current = null;
+        setCopied(false);
+      }, 1800);
     } catch (error) {
       Alert.alert('複製失敗', error instanceof Error ? error.message : '請手動記下結算內容。');
     }

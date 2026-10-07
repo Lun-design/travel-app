@@ -52,6 +52,11 @@ describe('trip sharing', () => {
     expect(payload?.trip).not.toHaveProperty('created_by');
   });
 
+  it('initializes shared itinerary day from the earliest day that actually exists', () => {
+    const page = readFileSync(resolve(process.cwd(), 'src/app/share/[token].tsx'), 'utf8');
+    expect(page).toContain('firstTripDayNumber(result.items.map((item) => item.day_number))');
+  });
+
   it('revokes a share by id and trip scope', async () => {
     const query = {
       update: vi.fn().mockReturnThis(),

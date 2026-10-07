@@ -75,6 +75,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   const [searched, setSearched] = useState(false);
   const recommendationRequestId = useRef(0);
   const searchRequestId = useRef(0);
+  const paginationInFlightRequestId = useRef<number | null>(null);
 
   function recommendationImageUrl(place: GlobalPlaceSearchResult): string {
     return place.imageUrl
@@ -106,6 +107,11 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   }
 
   useEffect(() => {
+    recommendationRequestId.current += 1;
+    searchRequestId.current += 1;
+    setRecommendationLoading(false);
+    setRecommendationLoadingMore(false);
+    setSearching(false);
     const nextDestination = destination?.trim() ?? '';
     setDestinationInput(nextDestination);
     setSelectedDestination(nextDestination);
@@ -143,6 +149,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       return;
     }
     setRecommendationLoading(true);
+    setRecommendationLoadingMore(false);
     setRecommendationSearched(true);
     setRecommendationError('');
     setRecommendationExpansionIndex(0);
@@ -187,18 +194,21 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   }, [activeSubcategory, activeTheme, isOpen, loadRecommendations, selectedDestination]);
 
   const loadMoreRecommendations = useCallback(async (): Promise<RecommendationPage | null> => {
+    const requestId = recommendationRequestId.current;
     const normalized = selectedDestination.trim();
     const token = nextPageToken;
     const expansionIndex = recommendationExpansionIndex;
     const canExpand = !token && expansionIndex < MAX_RECOMMENDATION_EXPANSIONS;
-    if (normalized.length < 2 || recommendationLoadingMore || (!token && !canExpand)) return null;
+    if (normalized.length < 2 || recommendationLoadingMore || paginationInFlightRequestId.current === requestId || (!token && !canExpand)) return null;
     if (!canMakeRequest()) {
+      if (requestId !== recommendationRequestId.current) return null;
       setRecommendations(getLocalRecommendationFallback(normalized, activeTheme, activeSubcategory));
       setRecommendationSource('seed');
       setNextPageToken(null);
       setPage(1);
       return null;
     }
+    paginationInFlightRequestId.current = requestId;
     setRecommendationLoadingMore(true);
     setRecommendationError('');
     try {
@@ -209,6 +219,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
           ? undefined
           : buildExpandedRecommendationQuery(normalized, activeTheme, activeSubcategory, expansionIndex),
       });
+      if (requestId !== recommendationRequestId.current) return null;
       if (nextPage.source === recommendationSource) {
         setRecommendations((current) => mergeRecommendationResults(current, nextPage.results));
       } else if (nextPage.source === 'api') {
@@ -228,14 +239,30 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       if (!token) setRecommendationExpansionIndex((current) => current + 1);
       return nextPage;
     } catch (error) {
+      if (requestId !== recommendationRequestId.current) return null;
       setRecommendationError(error instanceof Error ? error.message : '?急??⊥????單??刻');
       return null;
     } finally {
-      setRecommendationLoadingMore(false);
+      if (paginationInFlightRequestId.current === requestId) paginationInFlightRequestId.current = null;
+      if (requestId === recommendationRequestId.current) setRecommendationLoadingMore(false);
     }
   }, [activeSubcategory, activeTheme, nextPageToken, recommendationExpansionIndex, recommendationLoadingMore, recommendationSource, selectedDestination]);
 
+  function invalidatePendingRequests() {
+    recommendationRequestId.current += 1;
+    searchRequestId.current += 1;
+    setRecommendationLoading(false);
+    setRecommendationLoadingMore(false);
+    setSearching(false);
+  }
+
+  function closePanel() {
+    invalidatePendingRequests();
+    setIsOpen(false);
+  }
+
   function selectDestination(value: string) {
+    invalidatePendingRequests();
     const normalized = value.trim();
     setDestinationInput(value);
     setSelectedDestination(normalized);
@@ -247,6 +274,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   }
 
   function handleThemeSelect(nextTheme: RecommendationThemeId) {
+    invalidatePendingRequests();
     setActiveTheme(nextTheme);
     setActiveSubcategory('all');
     setPage(1);
@@ -259,6 +287,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
   }
 
   function handleSubcategorySelect(nextSubcategory: RecommendationSubcategoryId) {
+    invalidatePendingRequests();
     setActiveSubcategory(nextSubcategory);
     setPage(1);
     setRecommendationTotalItems(null);
@@ -295,10 +324,11 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
       const nextResults = await searchGlobalPlaces(value);
       if (requestId === searchRequestId.current) setResults(nextResults);
     } catch (error) {
+      if (requestId !== searchRequestId.current) return;
       setResults([]);
       Alert.alert('搜尋失敗', error instanceof Error ? error.message : '暫時無法取得全球景點');
     } finally {
-      setSearching(false);
+      if (requestId === searchRequestId.current) setSearching(false);
     }
   }
 
@@ -376,7 +406,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
         visible={isOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => setIsOpen(false)}
+        onRequestClose={closePanel}
       >
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -388,7 +418,7 @@ export function RecommendationPanel({ tripId, userId, dayNumber, destination, th
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="關閉靈感推薦"
-                onPress={() => setIsOpen(false)}
+                onPress={closePanel}
                 style={[styles.closeButton, { borderColor: theme.colors.border }]}
               >
                 <Text style={[styles.closeText, { color: theme.colors.text }]}>✕</Text>

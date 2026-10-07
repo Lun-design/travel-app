@@ -49,4 +49,21 @@ describe('UI mutation safety audit', () => {
     expect(source).toContain('const [lockingRate, setLockingRate]');
     expect(source).toContain('disabled={lockingRate}');
   });
+
+  it('clears copy feedback timers when settlement and share modals unmount', () => {
+    const settlement = read('src/components/SettlementCard.tsx');
+    const share = read('src/components/ShareTripModal.tsx');
+    for (const source of [settlement, share]) {
+      expect(source).toContain('copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)');
+      expect(source).toContain('clearTimeout(copyFeedbackTimer.current)');
+      expect(source).toContain('useEffect(() => () => {');
+    }
+  });
+
+  it('cancels the post-save itinerary scroll timer on screen unmount', () => {
+    const source = read('src/app/trips/[id].tsx');
+    expect(source).toContain('scrollAfterSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)');
+    expect(source).toContain('clearTimeout(scrollAfterSaveTimer.current)');
+    expect(source).toContain('scrollAfterSaveTimer.current = setTimeout');
+  });
 });

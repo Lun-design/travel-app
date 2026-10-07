@@ -248,7 +248,26 @@ export function useRouteSegments(items: ItineraryItem[], modes: Record<string, T
         return [segment.fromId, sanitizeRouteEstimateForDisplay(estimate, segment.distanceKm, mode)] as const;
       }));
       if (active) setEstimates(Object.fromEntries(results.flatMap((entry) => entry ? [entry] : [])) as Record<string, RouteEstimate>);
-    })();
+    })().catch((error) => {
+      if (!active) return;
+      console.error('[Timeline] route estimate calculation failed', error);
+      const routableItems = items.filter(hasValidRouteCoordinates);
+      const byId = new Map(routableItems.map((item) => [item.id, item]));
+      const fallbackEstimates = Object.fromEntries(segmentsForItems(routableItems).map((segment) => {
+        const mode = modes[segment.fromId] ?? 'DRIVING';
+        const from = byId.get(segment.fromId);
+        const to = byId.get(segment.toId);
+        const durationMinutes = calculateFallbackTravelMinutes(segment.distanceKm, mode);
+        return [segment.fromId, {
+          distanceKm: segment.distanceKm,
+          durationMinutes,
+          mode,
+          source: 'fallback' as const,
+          navigationUrl: from && to ? buildGoogleMapsRouteUrl(toRoutePoint(from), toRoutePoint(to), mode) : null,
+        }];
+      }));
+      setEstimates(fallbackEstimates);
+    });
     return () => { active = false; };
   }, [itemKey, modeKey, orderKey, scope?.day, scope?.tripId]);
 

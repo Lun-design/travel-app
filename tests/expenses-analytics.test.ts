@@ -6,6 +6,16 @@ import { calculateExpenseAnalytics, EXPENSE_CATEGORIES } from '../lib/expenses-a
 const rates = { TWD: 1, JPY: 0.2, KRW: 0.02, USD: 30, EUR: 32 };
 
 describe('expense analytics', () => {
+  it('keeps empty and zero-budget analytics finite', () => {
+    const result = calculateExpenseAnalytics([], [], { amount: 0, currency: 'TWD' }, rates);
+    expect(result.totalSpentTwd).toBe(0);
+    expect(result.remainingBudgetTwd).toBe(0);
+    expect(result.progressRatio).toBe(0);
+    expect(result.members).toEqual([]);
+    expect(result.settlements).toEqual([]);
+    expect(result.categories.every((entry) => Number.isFinite(entry.amountTwd) && Number.isFinite(entry.percentage))).toBe(true);
+  });
+
   it('aggregates spending, remaining budget, and category percentages in TWD', () => {
     const result = calculateExpenseAnalytics([
       { payer_id: 'alice', amount: 100, currency: 'TWD', category: '餐飲', splits: [] },

@@ -72,6 +72,7 @@ describe('PWA deployment configuration', () => {
 
   it('uses versioned caches and activates the latest service worker', () => {
     const serviceWorker = readFileSync(projectFile('public', 'sw.js'), 'utf8');
+    const html = readFileSync(projectFile('src', 'app', '+html.tsx'), 'utf8');
 
     expect(serviceWorker).toContain('__BUILD_VERSION__');
     expect(serviceWorker).toContain("const CACHE_PREFIX = 'travel-planner-v7-';");
@@ -85,6 +86,7 @@ describe('PWA deployment configuration', () => {
     expect(serviceWorker).toContain("request.destination === 'image'");
     expect(serviceWorker).toContain("request.destination === 'document'");
     expect(serviceWorker).toContain("response.type === 'opaque'");
+    expect(html).toContain("registration.update().catch(function (error)");
   });
 
   it('only caches scoped trip reads from Supabase and supports runtime-cache cleanup', () => {

@@ -26,6 +26,48 @@ describe('offline sync', () => {
     await expect(store.listMutations(scope)).resolves.toEqual([]);
   });
 
+  it('does not replay the same scope twice when online events overlap', async () => {
+    const store = createMemoryOfflineStore();
+    await store.enqueueMutation({ id: 'move-1', scope, entity: 'itinerary', operation: 'move-day', resourceId: 'item-1', payload: { targetDay: 2 }, clientTimestamp: '2026-09-06T00:00:00.000Z', status: 'pending' });
+    let releaseExecution!: () => void;
+    const executionGate = new Promise<void>((resolve) => { releaseExecution = resolve; });
+    const execute = vi.fn(() => executionGate);
+    const service = createOfflineSyncService({ store, execute });
+
+    const firstSync = service.sync(scope);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    const overlappingSync = service.sync(scope);
+    await Promise.resolve();
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    releaseExecution();
+    await Promise.all([firstSync, overlappingSync]);
+    await expect(store.listMutations(scope)).resolves.toEqual([]);
+  });
+
+  it('runs one follow-up pass when new mutations arrive during an active sync', async () => {
+    const store = createMemoryOfflineStore();
+    await store.enqueueMutation({ id: 'move-1', scope, entity: 'itinerary', operation: 'move-day', resourceId: 'item-1', payload: { targetDay: 2 }, clientTimestamp: '2026-09-06T00:00:00.000Z', status: 'pending' });
+    let releaseExecution!: () => void;
+    const executionGate = new Promise<void>((resolve) => { releaseExecution = resolve; });
+    const executedIds: string[] = [];
+    const execute = vi.fn(async (mutation) => {
+      executedIds.push(mutation.id);
+      if (mutation.id === 'move-1') await executionGate;
+    });
+    const service = createOfflineSyncService({ store, execute });
+
+    const firstSync = service.sync(scope);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    await store.enqueueMutation({ id: 'expense-1', scope, entity: 'expense', operation: 'create', resourceId: 'expense-1', payload: {}, clientTimestamp: '2026-09-06T00:01:00.000Z', status: 'pending' });
+    const followUpSync = service.sync(scope);
+    releaseExecution();
+    await Promise.all([firstSync, followUpSync]);
+
+    expect(executedIds).toEqual(['move-1', 'expense-1']);
+    await expect(store.listMutations(scope)).resolves.toEqual([]);
+  });
+
   it('retains a conflict and allows choosing local or remote resolution', async () => {
     const store = createMemoryOfflineStore();
     await store.enqueueMutation({ id: 'conflict-1', scope, entity: 'itinerary', operation: 'update', resourceId: 'item-1', payload: { location_name: '本機' }, clientTimestamp: '2026-09-06T00:00:00.000Z', status: 'pending' });
@@ -58,5 +100,24 @@ describe('offline sync', () => {
     expect(sync).toHaveBeenCalledWith(scope);
     stop();
     expect(remove).toHaveBeenCalledWith('online', onlineHandler);
+  });
+
+  it('captures sync failures triggered by the online event listener', async () => {
+    const store = createMemoryOfflineStore();
+    const sync = vi.fn().mockRejectedValue(new Error('IndexedDB unavailable'));
+    const service = createOfflineSyncService({ store, execute: async () => undefined, sync });
+    const add = vi.fn();
+    const remove = vi.fn();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    Object.defineProperty(globalThis, 'addEventListener', { configurable: true, value: add });
+    Object.defineProperty(globalThis, 'removeEventListener', { configurable: true, value: remove });
+
+    const stop = service.startOnlineSync(scope);
+    const onlineHandler = add.mock.calls.find(([type]) => type === 'online')?.[1] as (() => void) | undefined;
+    onlineHandler?.();
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledWith('[OfflineSync] online sync failed', expect.any(Error)));
+
+    stop();
+    errorSpy.mockRestore();
   });
 });

@@ -42,8 +42,32 @@ export function createLocalId(prefix: string, now = new Date()): string {
 export function createOfflineSyncService(options: OfflineSyncOptions) {
   const store = options.store ?? offlineStore;
   const now = options.now ?? (() => new Date());
+  const inFlightSyncs = new Map<string, Promise<void>>();
+  const syncRequestedAgain = new Set<string>();
 
-  async function sync(scope: OfflineScope): Promise<void> {
+  function sync(scope: OfflineScope): Promise<void> {
+    const key = JSON.stringify([scope.userId, scope.tripId]);
+    const inFlight = inFlightSyncs.get(key);
+    if (inFlight) {
+      syncRequestedAgain.add(key);
+      return inFlight;
+    }
+
+    const task = (async () => {
+      do {
+        syncRequestedAgain.delete(key);
+        await performSync(scope);
+      } while (syncRequestedAgain.has(key));
+    })();
+    inFlightSyncs.set(key, task);
+    void task.then(
+      () => { if (inFlightSyncs.get(key) === task) inFlightSyncs.delete(key); },
+      () => { if (inFlightSyncs.get(key) === task) inFlightSyncs.delete(key); },
+    );
+    return task;
+  }
+
+  async function performSync(scope: OfflineScope): Promise<void> {
     const pending = await store.listMutations(scope, 'pending');
     const newestByResource = new Map<string, OfflineMutation>();
     for (const mutation of pending) {
@@ -84,7 +108,11 @@ export function createOfflineSyncService(options: OfflineSyncOptions) {
     },
     startOnlineSync(scope: OfflineScope) {
       if (typeof globalThis.addEventListener !== 'function') return () => undefined;
-      const onlineHandler = () => { void (options.sync ? options.sync(scope) : sync(scope)); };
+      const onlineHandler = () => {
+        void (options.sync ? options.sync(scope) : sync(scope)).catch((error) => {
+          console.error('[OfflineSync] online sync failed', error);
+        });
+      };
       globalThis.addEventListener('online', onlineHandler);
       return () => globalThis.removeEventListener?.('online', onlineHandler);
     },

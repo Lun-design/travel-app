@@ -28,6 +28,12 @@ export function tripDayNumbers(startDate: string, endDate: string) {
   return Array.from({ length: count }, (_, index) => index + 1);
 }
 
+/** Choose the first real itinerary day, falling back to Day 1 for empty data. */
+export function firstTripDayNumber(dayNumbers: readonly number[]): number {
+  const validDays = dayNumbers.filter((day) => Number.isInteger(day) && day > 0);
+  return validDays.length ? Math.min(...validDays) : 1;
+}
+
 /** Convert an ISO calendar date into the trip's one-based day number. */
 export function tripDayNumberForDate(date: string, startDate: string, endDate?: string): number | null {
   const start = parseUtcDate(startDate);

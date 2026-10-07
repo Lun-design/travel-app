@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import type { Expense } from '@/lib/expenses-api';
 import { SUPPORTED_CURRENCIES, type SupportedCurrency } from '@/lib/exchange-rates';
@@ -30,6 +30,7 @@ export function BudgetDashboard({ tripId, userId, expenses, members, rates, rate
   const [budgetLoading, setBudgetLoading] = useState(true);
   const [budgetSaving, setBudgetSaving] = useState(false);
   const [settlementRecords, setSettlementRecords] = useState<SettlementRecord[]>([]);
+  const settlementRefreshRequestId = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -47,21 +48,29 @@ export function BudgetDashboard({ tripId, userId, expenses, members, rates, rate
 
   // Keep clearance history in sync when another trip member settles a payment.
   useEffect(() => {
+    let active = true;
     const channel = supabase.channel(`settlement-records:${tripId}`).on('postgres_changes', {
       event: '*',
       schema: 'public',
       table: 'settlement_records',
       filter: `trip_id=eq.${tripId}`,
     }, () => {
-      void listSettlementRecords(tripId).then(setSettlementRecords).catch((error) => console.error('[settlement] realtime refresh failed', error));
+      const refreshId = ++settlementRefreshRequestId.current;
+      void listSettlementRecords(tripId).then((records) => {
+        if (active && refreshId === settlementRefreshRequestId.current) setSettlementRecords(records);
+      }).catch((error) => console.error('[settlement] realtime refresh failed', error));
     }).subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel).catch((error) => console.error('[settlement] realtime unsubscribe failed', error));
+    };
   }, [tripId]);
 
   useEffect(() => {
     let active = true;
+    const refreshId = ++settlementRefreshRequestId.current;
     void listSettlementRecords(tripId).then((records) => {
-      if (active) setSettlementRecords(records);
+      if (active && refreshId === settlementRefreshRequestId.current) setSettlementRecords(records);
     }).catch((error) => {
       if (active) {
         setSettlementRecords([]);

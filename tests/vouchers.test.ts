@@ -107,6 +107,7 @@ describe('vouchers panel UI contract', () => {
     expect(upload).toContain('notes');
     expect(preview).toContain('getVoucherPreviewUrl');
     expect(preview).toContain('Linking.openURL');
+    expect(preview).toContain('Linking.openURL(url).catch');
     expect(metadata).toContain('updateVoucher');
     expect(metadata).toContain('reservation_number');
     expect(metadata).toContain('usage_at');

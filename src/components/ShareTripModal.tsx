@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ActivityIndicator, Modal, Pressable, Share, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { buildTripShareUrl, createTripShare, listTripShares, revokeTripShare, updateTripShare, type TripShare } from '@/lib/trip-share-api';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -22,7 +22,12 @@ export function ShareTripModal({ visible, tripId, userId, themeMode = 'system', 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const url = useMemo(() => share ? buildTripShareUrl(share.share_token, shareOrigin()) : '', [share]);
+
+  useEffect(() => () => {
+    if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -50,7 +55,11 @@ export function ShareTripModal({ visible, tripId, userId, themeMode = 'system', 
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) await navigator.clipboard.writeText(nextUrl);
       else await Share.share({ message: nextUrl });
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+      copyFeedbackTimer.current = setTimeout(() => {
+        copyFeedbackTimer.current = null;
+        setCopied(false);
+      }, 1800);
     } catch (error) {
       Alert.alert('分享連結失敗', error instanceof Error ? error.message : '請稍後再試。');
     } finally { setSaving(false); }

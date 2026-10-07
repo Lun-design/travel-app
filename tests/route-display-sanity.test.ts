@@ -20,4 +20,10 @@ describe('timeline route display safety', () => {
     expect(routeGeocodingSource).toContain('&& !(latitude === 0 && longitude === 0);');
     expect(timelineSource).toContain('hasValidRouteCoordinates(item)');
   });
+
+  it('falls back to distance-based route estimates if an unexpected route pipeline error escapes', () => {
+    expect(timelineSource).toContain("console.error('[Timeline] route estimate calculation failed'");
+    expect(timelineSource).toContain('setEstimates(fallbackEstimates)');
+    expect(timelineSource).toContain("source: 'fallback'");
+  });
 });

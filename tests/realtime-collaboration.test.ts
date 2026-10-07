@@ -67,6 +67,20 @@ describe('realtime collaboration', () => {
     expect(client.removeChannel).not.toHaveBeenCalled();
   });
 
+  it('handles a rejected realtime channel cleanup without an unhandled rejection', async () => {
+    const channel: RealtimeChannelLike = { on: vi.fn(() => channel), subscribe: vi.fn() };
+    const client: RealtimeClientLike = {
+      channel: vi.fn(() => channel),
+      removeChannel: vi.fn().mockRejectedValue(new Error('socket already closed')),
+    };
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const unsubscribe = subscribeToTripRealtime(client, 'trip-1', vi.fn());
+
+    unsubscribe();
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledWith('[Realtime] channel unsubscribe failed', expect.any(Error)));
+    errorSpy.mockRestore();
+  });
+
   it('keeps the hook wired for realtime notices and packing refreshes', () => {
     const source = readFileSync('src/hooks/useTripDetailData.ts', 'utf8');
     const screen = readFileSync('src/app/trips/[id].tsx', 'utf8');

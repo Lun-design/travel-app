@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidTripDateRange, tripDayNumberForDate, tripDayNumbers, tripDateForDay } from '../lib/trip-dates';
+import { firstTripDayNumber, isValidTripDateRange, tripDayNumberForDate, tripDayNumbers, tripDateForDay } from '../lib/trip-dates';
 
 describe('isValidTripDateRange', () => {
   it('validates editable trip date ranges', () => {
@@ -24,6 +24,17 @@ describe('tripDayNumbers', () => {
   });
 });
 
+describe('firstTripDayNumber', () => {
+  it('selects the earliest valid day rather than forcing Day 1', () => {
+    expect(firstTripDayNumber([3, 2, 2, 0, -1])).toBe(2);
+  });
+
+  it('defaults to Day 1 when the payload has no valid day numbers', () => {
+    expect(firstTripDayNumber([])).toBe(1);
+    expect(firstTripDayNumber([0, -2, 1.5])).toBe(1);
+  });
+});
+
 describe('tripDayNumberForDate', () => {
   it('maps an itinerary date to its one-based day number', () => {
     expect(tripDayNumberForDate('2026-01-20', '2026-01-20')).toBe(1);
@@ -44,5 +55,11 @@ describe('tripDateForDay', () => {
   it('returns null for invalid dates or a non-positive day', () => {
     expect(tripDateForDay('not-a-date', 1)).toBeNull();
     expect(tripDateForDay('2026-01-20', 0)).toBeNull();
+  });
+
+  it('handles leap days and year boundaries as calendar days', () => {
+    expect(tripDayNumbers('2024-02-28', '2024-03-01')).toEqual([1, 2, 3]);
+    expect(tripDateForDay('2024-02-28', 2)).toBe('2024-02-29');
+    expect(tripDayNumberForDate('2025-01-01', '2024-12-31', '2025-01-01')).toBe(2);
   });
 });

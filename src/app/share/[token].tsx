@@ -6,6 +6,7 @@ import { PuppyMascot } from '@/components/PuppyMascot';
 import { getThemeForMode } from '@/lib/theme';
 import { getPublicTripByToken, type PublicTripPayload } from '@/lib/trip-share-api';
 import { sortItineraryItemsByStartTime } from '@/lib/itinerary';
+import { firstTripDayNumber } from '@/lib/trip-dates';
 import { cloneTripById } from '@/lib/trip-cloning';
 import { supabase } from '@/lib/supabase';
 
@@ -29,7 +30,7 @@ export default function PublicShareScreen() {
       if (!active) return;
       setPayload(result);
       if (!result) setError('這個分享連結已失效或已被撤銷。');
-      else setDay(Math.min(...(result.items.map((item) => item.day_number).filter((value) => value > 0)), 1));
+      else setDay(firstTripDayNumber(result.items.map((item) => item.day_number)));
     }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '目前無法載入分享行程。'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token]);

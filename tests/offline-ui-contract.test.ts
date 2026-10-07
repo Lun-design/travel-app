@@ -10,6 +10,7 @@ describe('offline UI integration contract', () => {
       read('src/hooks/useTripDetailData.ts'),
     ].join('\n');
     expect(source).toContain('offlineSyncService.sync');
+    expect(source).toContain(".catch((error) => console.error('[TripDetail] reconnect sync failed', error))");
     expect(source).toContain('offlineStore.listMutations');
     expect(source).toContain('<OfflineSyncBanner');
     expect(source).toContain('resolveConflict');

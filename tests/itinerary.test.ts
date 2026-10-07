@@ -48,6 +48,15 @@ describe('itinerary helpers', () => {
     ]);
   });
 
+  it('preserves an unusually long place name when building map markers', () => {
+    const title = '大阪旅遊景點'.repeat(2_000);
+    const markers = mapMarkersForDay([
+      { id: 'long-title', trip_id: 'trip-1', location_name: title, day_number: 1, position: 0, time: '09:00', address: null, notes: null, category: 'spot', created_by: 'user-1', latitude: 34.7, longitude: 135.5 },
+    ], 1);
+    expect(markers).toHaveLength(1);
+    expect(markers[0]?.title).toBe(title);
+  });
+
   it('builds an estimated travel segment between consecutive located attractions', () => {
     const segments = buildRouteSegments(items, 1);
 

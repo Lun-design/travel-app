@@ -129,6 +129,38 @@ describe('global recommendation helpers', () => {
     expect(placesPanel).toContain('await onChanged()');
   });
 
+  it('ignores stale search failures and does not clear the newest request loading state', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    const handlerStart = source.indexOf('  async function handleSearch()');
+    const handlerEnd = source.indexOf('  async function handleAdd(', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+    expect(handler).toContain('if (requestId !== searchRequestId.current) return;\n      setResults([])');
+    expect(handler).toContain('if (requestId === searchRequestId.current) setSearching(false)');
+  });
+
+  it('ignores stale pagination results after the destination or theme changes', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    const pagingStart = source.indexOf('  const loadMoreRecommendations = useCallback');
+    const pagingEnd = source.indexOf('  function selectDestination(', pagingStart);
+    const paging = source.slice(pagingStart, pagingEnd);
+    expect(paging).toContain('const requestId = recommendationRequestId.current');
+    expect(paging).toContain('if (requestId !== recommendationRequestId.current) return null');
+    expect(paging).toContain('if (requestId === recommendationRequestId.current) setRecommendationLoadingMore(false)');
+    expect(source).toContain('function invalidatePendingRequests() {\n    recommendationRequestId.current += 1;');
+    expect(source).toContain('function selectDestination(value: string) {\n    invalidatePendingRequests();');
+    expect(source).toContain('function handleThemeSelect(nextTheme: RecommendationThemeId) {\n    invalidatePendingRequests();');
+  });
+
+  it('resets loading indicators when pending searches are invalidated', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/components/RecommendationPanel.tsx'), 'utf8');
+    const invalidationStart = source.indexOf('  function invalidatePendingRequests()');
+    const invalidationEnd = source.indexOf('  function closePanel()', invalidationStart);
+    const invalidation = source.slice(invalidationStart, invalidationEnd);
+    expect(invalidation).toContain('setRecommendationLoading(false)');
+    expect(invalidation).toContain('setRecommendationLoadingMore(false)');
+    expect(invalidation).toContain('setSearching(false)');
+  });
+
   it('provides Japan destination inspiration cards with coordinates', () => {
     const curated = getCuratedRecommendations('日本 JP');
     expect(curated.map((place) => place.title)).toEqual(expect.arrayContaining(['道頓堀', '黑門市場', '大阪城公園', '大阪燒美津の']));

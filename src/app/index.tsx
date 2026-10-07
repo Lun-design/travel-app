@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { FlatList, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { createTrip, listTripsWithMembers, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { CreateTripModal } from '@/components/CreateTripModal';
@@ -19,7 +19,15 @@ function daysUntil(date: string) { const diff = Math.ceil((new Date(`${date}T00:
 export default function HomeScreen() {
   const router = useRouter(); const [trips, setTrips] = useState<Trip[]>([]); const [members, setMembers] = useState<Record<string, TripMemberWithProfile[]>>({}); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [createVisible, setCreateVisible] = useState(false); const [joinVisible, setJoinVisible] = useState(false); const [profileVisible, setProfileVisible] = useState(false); const [userId, setUserId] = useState(''); const [profile, setProfile] = useState<Profile | null>(null); const [cloningTripId, setCloningTripId] = useState<string | null>(null); const [cloneError, setCloneError] = useState('');
   async function load() { setLoading(true); setError(''); try { const aggregated = await listTripsWithMembers(); const rows = aggregated.map(({ trip }) => trip); const auth = await supabase.auth.getSession().then(({ data }) => data.session?.user ?? null).catch(() => null); const profileData = await getCurrentProfile().catch(() => null); setUserId(auth?.id ?? ''); setProfile(profileData); setTrips(rows ?? []); setMembers(Object.fromEntries(aggregated.map(({ trip, members }) => [trip.id, members]))); } catch (e: any) { console.error('[HomeScreen] list trips failed', e); setError(e?.message ?? '無法載入行程。'); } finally { setLoading(false); } }
-  async function signOut() { await clearOfflineCache(); await supabase.auth.signOut(); }
+  async function signOut() {
+    try {
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
+      await clearOfflineCache();
+    } catch (cause) {
+      Alert.alert('登出失敗', cause instanceof Error ? cause.message : '請稍後再試。');
+    }
+  }
   async function handleClone(tripId: string) { if (cloningTripId) return; setCloningTripId(tripId); setCloneError(''); try { const newTripId = await cloneTripById(tripId); router.push(`/trips/${newTripId}`); } catch (cause) { setCloneError(cause instanceof Error ? cause.message : '目前無法複製這份行程。'); } finally { setCloningTripId(null); } }
   useEffect(() => { load(); }, []);
   if (loading) return <View style={styles.center}><PuppyMascot puppy="-5" size={72} accessibilityLabel="載入中" /><Text style={styles.loadingText}>載入行程中…</Text></View>;

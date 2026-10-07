@@ -124,7 +124,13 @@ export function useTripDetailData(tripId: string | undefined) {
   useEffect(() => {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
     const updateOnlineState = () => setIsOffline(!navigator.onLine);
-    const handleOnline = () => { updateOnlineState(); void offlineSyncService.sync(offlineScope).then(() => refreshSyncStatus()).then(() => reload()); };
+    const handleOnline = () => {
+      updateOnlineState();
+      void offlineSyncService.sync(offlineScope)
+        .then(() => refreshSyncStatus())
+        .then(() => reload())
+        .catch((error) => console.error('[TripDetail] reconnect sync failed', error));
+    };
     updateOnlineState(); window.addEventListener('online', handleOnline); window.addEventListener('offline', updateOnlineState);
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', updateOnlineState); };
   }, [offlineScope, refreshSyncStatus, reload]);

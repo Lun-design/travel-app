@@ -39,6 +39,24 @@ describe('calculateMinSettlements', () => {
     expect(result).toEqual([]);
   });
 
+  it('returns an empty settlement list for empty expenses and members', () => {
+    expect(calculateMinSettlements([], [])).toEqual([]);
+  });
+
+  it('ignores zero and negative settlement records without producing invalid amounts', () => {
+    const result = calculateMinSettlements(
+      [{ payer_id: 'alice', amount: 100, currency: 'TWD', splits: [{ user_id: 'bob', amount: 100 }] }],
+      ['alice', 'bob'],
+      {},
+      [
+        { from_user_id: 'bob', to_user_id: 'alice', amount: 0, currency: 'TWD' },
+        { from_user_id: 'bob', to_user_id: 'alice', amount: -10, currency: 'TWD' },
+      ],
+    );
+    expect(result).toEqual([{ from: 'bob', to: 'alice', amount: 100, currency: 'TWD' }]);
+    expect(result.every((entry) => Number.isFinite(entry.amount) && entry.amount > 0)).toBe(true);
+  });
+
   it('subtracts recorded payments from matching settlement suggestions', () => {
     const remaining = applySettlementRecords(
       [

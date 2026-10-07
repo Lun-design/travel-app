@@ -80,6 +80,12 @@ export function subscribeToTripRealtime(client: RealtimeClientLike, tripId: stri
   return () => {
     if (removed) return;
     removed = true;
-    void client.removeChannel(channel);
+    try {
+      void Promise.resolve(client.removeChannel(channel)).catch((error) => {
+        console.error('[Realtime] channel unsubscribe failed', error);
+      });
+    } catch (error) {
+      console.error('[Realtime] channel unsubscribe failed', error);
+    }
   };
 }
