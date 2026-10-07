@@ -57,6 +57,19 @@ describe('trip sharing', () => {
     expect(page).toContain('firstTripDayNumber(result.items.map((item) => item.day_number))');
   });
 
+  it('preserves and renders a custom public spot cover on the share page', () => {
+    const publicUrl = 'https://cdn.example/itinerary-photos/cover.jpg';
+    const payload = normalizePublicSharePayload({
+      share: { id: 'share-1', trip_id: 'trip-1', is_active: true },
+      trip: { id: 'trip-1' },
+      items: [{ id: 'item-1', trip_id: 'trip-1', day_number: 1, location_name: '大阪城', preview_url: publicUrl }],
+    });
+    const page = readFileSync(resolve(process.cwd(), 'src/app/share/[token].tsx'), 'utf8');
+    expect(payload?.items[0].preview_url).toBe(publicUrl);
+    expect(page).toContain('item.preview_url');
+    expect(page).toContain('<Image');
+  });
+
   it('revokes a share by id and trip scope', async () => {
     const query = {
       update: vi.fn().mockReturnThis(),

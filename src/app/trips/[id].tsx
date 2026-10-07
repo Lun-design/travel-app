@@ -230,8 +230,8 @@ export default function TripDetailScreen() {
     setDay(targetDay);
   }
   async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
-  async function updateItemImage(item: ItineraryItem, imageUrl: string) {
-    const previousUrl = item.preview_url ?? item.image_url ?? null;
+  async function updateItemImage(item: ItineraryItem, imageUrl: string | null) {
+    const previousUrl = item.preview_url ?? null;
     data.setItems((currentItems) => currentItems.map((currentItem) => currentItem.id === item.id
       ? { ...currentItem, preview_url: imageUrl }
       : currentItem));

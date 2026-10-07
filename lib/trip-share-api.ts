@@ -51,6 +51,7 @@ function normalizeItem(raw: Partial<ItineraryItem>, index: number, tripId: strin
     duration_minutes: raw.duration_minutes == null ? null : Number(raw.duration_minutes),
     difficulty: raw.difficulty ?? null,
     opening_hours: raw.opening_hours ?? null,
+    preview_url: raw.preview_url ?? null,
   };
 }
 

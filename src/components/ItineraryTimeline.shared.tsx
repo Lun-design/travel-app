@@ -18,6 +18,9 @@ import { reservationTagLabels } from '@/lib/reservation-tags';
 import { getSpotImageFallbackUrl, getSpotImageLightboxUrl, getSpotImageUrl, resolveSpotImage, searchSpotImage } from '@/lib/spot-image';
 import { getCategoryBadgePalette } from '@/lib/visual-styles';
 import { getCategoryIcon } from '@/lib/category-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { compressSpotPhoto, uploadAndPersistSpotPhoto, type CompressedSpotPhoto } from '@/lib/spot-photo-upload';
 
 function cacheBustedImageUrl(url: string | null | undefined, version: number): string | null {
   if (!url) return null;
@@ -41,7 +44,7 @@ export type ItineraryTimelineProps = {
   vouchers?: Voucher[];
   onPreviewVoucher?: (voucher: Voucher) => void;
   onInsertAtPosition?: (position: number) => void;
-  onUpdateImage?: (item: ItineraryItem, imageUrl: string) => void | Promise<void>;
+  onUpdateImage?: (item: ItineraryItem, imageUrl: string | null) => void | Promise<void>;
 };
 
 export type TimelineRouteSegment = RouteSegment & {
@@ -331,7 +334,7 @@ type TimelineCardProps = {
   canMoveDown?: boolean;
   themeMode?: ThemeMode;
   onRouteModeChange?: (fromId: string, mode: TravelMode) => void;
-  onUpdateImage?: (item: ItineraryItem, imageUrl: string) => void | Promise<void>;
+  onUpdateImage?: (item: ItineraryItem, imageUrl: string | null) => void | Promise<void>;
   onShiftSubsequent?: (delayMinutes: number) => void | Promise<void>;
 };
 
@@ -384,11 +387,24 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
   const [manualPhotoQuery, setManualPhotoQuery] = useState('');
   const [manualPhotoLoading, setManualPhotoLoading] = useState(false);
   const [manualPhotoError, setManualPhotoError] = useState<string | null>(null);
+  const [photoActionsVisible, setPhotoActionsVisible] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [pendingPhoto, setPendingPhoto] = useState<CompressedSpotPhoto | null>(null);
+  const [photoSuccess, setPhotoSuccess] = useState<string | null>(null);
   const imageFallbackAttemptedRef = useRef(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [moveDayVisible, setMoveDayVisible] = useState(false);
   const [moveTargetDay, setMoveTargetDay] = useState<number | null>(null);
   const [movingDay, setMovingDay] = useState(false);
+  function closePhotoLightbox() {
+    if (photoBusy || manualPhotoLoading) return;
+    setPendingPhoto(null);
+    setPhotoActionsVisible(false);
+    setManualPhotoSearchOpen(false);
+    setManualPhotoError(null);
+    setPhotoSuccess(null);
+    setLightboxVisible(false);
+  }
   const destinationDays = availableDays.filter((day) => day !== item.day_number);
   async function confirmMoveDay() {
     if (!onMoveToDay || moveTargetDay === null || movingDay) return;
@@ -418,12 +434,86 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
       setImageLoadFailed(false);
       setLightboxImageFailed(false);
       setManualPhotoSearchOpen(false);
+      setPhotoActionsVisible(false);
+      setPhotoSuccess('已成功更新景點照片');
     } catch (error: any) {
       setManualPhotoError(error?.message ?? '照片搜尋失敗，請稍後再試。');
     } finally {
       setManualPhotoLoading(false);
     }
   };
+  async function handlePickLocalPhoto() {
+    if (photoBusy || !onUpdateImage) return;
+    setManualPhotoError(null);
+    setPhotoSuccess(null);
+    try {
+      // On web the picker must be opened directly from this button press.
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
+      if (result.canceled || !result.assets?.[0]) return;
+      setPhotoBusy(true);
+      const asset = result.assets[0];
+      const fileName = asset.fileName?.toLowerCase() ?? '';
+      const mimeType = asset.mimeType ?? (fileName.endsWith('.png') ? 'image/png' : fileName.endsWith('.webp') ? 'image/webp' : /\.jpe?g$/u.test(fileName) ? 'image/jpeg' : '');
+      const prepared = await compressSpotPhoto({ uri: asset.uri, width: asset.width, height: asset.height, mimeType }, async ({ uri, width, quality }) => {
+        const context = ImageManipulator.ImageManipulator.manipulate(uri);
+        context.resize({ width, height: null });
+        const rendered = await context.renderAsync();
+        const saved = await rendered.saveAsync({ format: ImageManipulator.SaveFormat.JPEG, compress: quality });
+        return { uri: saved.uri, data: await (await fetch(saved.uri)).arrayBuffer() };
+      });
+      setPendingPhoto(prepared);
+      setLightboxImageFailed(false);
+      setManualPhotoSearchOpen(false);
+    } catch (error) {
+      setManualPhotoError(error instanceof Error ? error.message : '照片選擇失敗，請重試。');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleConfirmLocalPhoto() {
+    if (!pendingPhoto || !onUpdateImage || photoBusy) return;
+    setPhotoBusy(true);
+    setManualPhotoError(null);
+    try {
+      const url = await uploadAndPersistSpotPhoto(
+        { tripId: item.trip_id, itemId: item.id, mimeType: pendingPhoto.mimeType, data: pendingPhoto.data },
+        async (publicUrl) => { await onUpdateImage(item, publicUrl); },
+      );
+      setResolvedImageUrl(url);
+      setImageRevision(Date.now());
+      setImageLoadFailed(false);
+      setLightboxImageFailed(false);
+      setPendingPhoto(null);
+      setPhotoActionsVisible(false);
+      setPhotoSuccess('已成功更新景點照片');
+    } catch (error) {
+      setManualPhotoError(error instanceof Error ? error.message : '照片上傳失敗，請稍後再試。');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleRestoreDefaultPhoto() {
+    if (!onUpdateImage || photoBusy) return;
+    setPhotoBusy(true);
+    setManualPhotoError(null);
+    try {
+      await onUpdateImage(item, null);
+      setResolvedImageUrl(getSpotImageUrl({ ...item, preview_url: null, photo_reference: null }));
+      setImageRevision(Date.now());
+      setImageLoadFailed(false);
+      setLightboxImageFailed(false);
+      setPendingPhoto(null);
+      setManualPhotoSearchOpen(false);
+      setPhotoActionsVisible(false);
+      setPhotoSuccess('已恢復預設圖片');
+    } catch (error) {
+      setManualPhotoError(error instanceof Error ? error.message : '無法恢復預設圖片，請稍後再試。');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
   useEffect(() => {
     let cancelled = false;
     setImageLoadFailed(false);
@@ -447,20 +537,32 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
           {scheduled?.openingWarning ? <View style={styles.warningStack}>
             {scheduled?.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
           </View> : null}
-          <Modal visible={lightboxVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxVisible(false)}>
-            <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxVisible(false)}>
+          <Modal visible={lightboxVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={closePhotoLightbox}>
+            <Pressable style={styles.lightboxBackdrop} onPress={closePhotoLightbox}>
               <View style={styles.lightboxContent}>
                 <Pressable style={styles.lightboxImagePressable} onPress={(event) => event.stopPropagation()}>
-                  {lightboxImageFailed ? <View style={[styles.lightboxImage, styles.lightboxFallback]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={72} accessibilityLabel={`${item.location_name} 無預覽圖`} /><Text style={styles.lightboxFallbackText}>目前無預覽圖</Text></View> : <Image source={{ uri: getSpotImageLightboxUrl(item, undefined, cacheBustedImageUrl(resolvedImageUrl, imageRevision) ?? resolvedImageUrl) }} style={styles.lightboxImage} resizeMode="contain" accessibilityLabel={`${item.location_name} 大圖`} onError={() => setLightboxImageFailed(true)} />}
+                  {lightboxImageFailed ? <View style={[styles.lightboxImage, styles.lightboxFallback]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={72} accessibilityLabel={`${item.location_name} 無預覽圖`} /><Text style={styles.lightboxFallbackText}>目前無預覽圖</Text></View> : <Image source={{ uri: pendingPhoto?.uri ?? getSpotImageLightboxUrl(item, undefined, cacheBustedImageUrl(resolvedImageUrl, imageRevision) ?? resolvedImageUrl) }} style={styles.lightboxImage} resizeMode="contain" accessibilityLabel={`${item.location_name} 大圖`} onError={() => setLightboxImageFailed(true)} />}
                 </Pressable>
                 <Pressable style={styles.lightboxActions} onPress={(event) => event.stopPropagation()}>
-                  {!manualPhotoSearchOpen ? <Pressable accessibilityRole="button" accessibilityLabel="更換照片" style={styles.lightboxReplaceButton} onPress={() => { setManualPhotoError(null); setManualPhotoSearchOpen(true); }}><Text style={styles.lightboxReplaceText}>🔄 更換照片</Text></Pressable> : <View style={styles.lightboxSearchRow}>
-                    <TextInput value={manualPhotoQuery} onChangeText={setManualPhotoQuery} autoFocus placeholder="輸入景點關鍵字" placeholderTextColor="#A8A29E" style={styles.lightboxSearchInput} returnKeyType="search" onSubmitEditing={() => { void handleManualPhotoSearch(); }} />
-                    <Pressable accessibilityRole="button" accessibilityLabel="搜尋替換照片" disabled={manualPhotoLoading || !manualPhotoQuery.trim()} style={[styles.lightboxSearchButton, (manualPhotoLoading || !manualPhotoQuery.trim()) && styles.lightboxSearchButtonDisabled]} onPress={() => { void handleManualPhotoSearch(); }}><Text style={styles.lightboxSearchButtonText}>{manualPhotoLoading ? '搜尋中…' : '搜尋'}</Text></Pressable>
-                  </View>}
+                  {!photoActionsVisible ? <Pressable accessibilityRole="button" accessibilityLabel="更換照片" disabled={!onUpdateImage} style={[styles.lightboxReplaceButton, !onUpdateImage && styles.lightboxSearchButtonDisabled]} onPress={() => { setManualPhotoError(null); setPhotoSuccess(null); setPhotoActionsVisible(true); }}><Text style={styles.lightboxReplaceText}>🔄 更換照片</Text></Pressable> : <>
+                    <View style={styles.lightboxSearchRow}>
+                      <Pressable accessibilityRole="button" disabled={photoBusy || manualPhotoLoading} style={styles.lightboxReplaceButton} onPress={() => { setPendingPhoto(null); setManualPhotoSearchOpen(true); }}><Text style={styles.lightboxReplaceText}>從網路重新搜尋</Text></Pressable>
+                      <Pressable accessibilityRole="button" disabled={photoBusy || manualPhotoLoading} style={styles.lightboxReplaceButton} onPress={() => { void handlePickLocalPhoto(); }}><Text style={styles.lightboxReplaceText}>{photoBusy && !pendingPhoto ? '處理照片中…' : '上傳本機照片'}</Text></Pressable>
+                    </View>
+                    {manualPhotoSearchOpen ? <View style={styles.lightboxSearchRow}>
+                      <TextInput value={manualPhotoQuery} onChangeText={setManualPhotoQuery} autoFocus placeholder="輸入景點關鍵字" placeholderTextColor="#A8A29E" style={styles.lightboxSearchInput} returnKeyType="search" onSubmitEditing={() => { void handleManualPhotoSearch(); }} />
+                      <Pressable accessibilityRole="button" accessibilityLabel="搜尋替換照片" disabled={photoBusy || manualPhotoLoading || !manualPhotoQuery.trim()} style={[styles.lightboxSearchButton, (photoBusy || manualPhotoLoading || !manualPhotoQuery.trim()) && styles.lightboxSearchButtonDisabled]} onPress={() => { void handleManualPhotoSearch(); }}><Text style={styles.lightboxSearchButtonText}>{manualPhotoLoading ? '搜尋中…' : '搜尋'}</Text></Pressable>
+                    </View> : null}
+                    {pendingPhoto ? <View style={styles.lightboxSearchRow}>
+                      <Pressable accessibilityRole="button" disabled={photoBusy} style={styles.lightboxSearchButton} onPress={() => { void handleConfirmLocalPhoto(); }}><Text style={styles.lightboxSearchButtonText}>{photoBusy ? '上傳中…' : '確認更換'}</Text></Pressable>
+                      <Pressable accessibilityRole="button" disabled={photoBusy} style={styles.lightboxReplaceButton} onPress={() => { setPendingPhoto(null); setLightboxImageFailed(false); }}><Text style={styles.lightboxReplaceText}>取消</Text></Pressable>
+                    </View> : null}
+                    {onUpdateImage ? <Pressable accessibilityRole="button" disabled={photoBusy || manualPhotoLoading} style={styles.lightboxReplaceButton} onPress={() => { void handleRestoreDefaultPhoto(); }}><Text style={styles.lightboxReplaceText}>恢復預設圖片</Text></Pressable> : null}
+                  </>}
                   {manualPhotoError ? <Text style={styles.lightboxSearchError}>{manualPhotoError}</Text> : null}
+                  {photoSuccess ? <Text style={styles.lightboxSuccess}>{photoSuccess}</Text> : null}
                 </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="關閉照片預覽" style={styles.lightboxClose} onPress={() => setLightboxVisible(false)}><Text style={styles.lightboxCloseText}>×</Text></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="關閉照片預覽" disabled={photoBusy || manualPhotoLoading} style={styles.lightboxClose} onPress={closePhotoLightbox}><Text style={styles.lightboxCloseText}>×</Text></Pressable>
               </View>
             </Pressable>
           </Modal>
@@ -705,12 +807,13 @@ const styles = {
   lightboxActions: { position: 'absolute', bottom: 34, left: 20, right: 20, alignItems: 'center', gap: 8 } as const,
   lightboxReplaceButton: { minHeight: 44, borderRadius: 22, justifyContent: 'center', paddingHorizontal: 18, backgroundColor: 'rgba(255,255,255,0.14)' } as const,
   lightboxReplaceText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' } as const,
-  lightboxSearchRow: { width: '100%', maxWidth: 520, flexDirection: 'row', alignItems: 'center', gap: 8 } as const,
+  lightboxSearchRow: { width: '100%', maxWidth: 520, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8 } as const,
   lightboxSearchInput: { flex: 1, minWidth: 0, minHeight: 44, borderRadius: 22, paddingHorizontal: 16, backgroundColor: '#FFFFFF', color: '#292524', fontSize: 14 } as const,
   lightboxSearchButton: { minHeight: 44, borderRadius: 22, justifyContent: 'center', paddingHorizontal: 18, backgroundColor: '#8C6D58' } as const,
   lightboxSearchButtonDisabled: { opacity: 0.5 } as const,
   lightboxSearchButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' } as const,
   lightboxSearchError: { color: '#FECACA', fontSize: 12, textAlign: 'center' } as const,
+  lightboxSuccess: { color: '#BBF7D0', fontSize: 12, fontWeight: '700', textAlign: 'center' } as const,
 };
 
 // Compatibility markers retained for previous UI checks: ??銝宏 / ??銝宏 / ?妣 ?? Google Maps 撠

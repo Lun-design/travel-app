@@ -34,4 +34,29 @@ describe('itinerary spot image lightbox', () => {
     expect(source).toContain('cacheBustedImageUrl');
     expect(source).toContain('key={`${item.id}-${imageRevision}`}');
   });
+
+  it('offers device upload with a selected-photo preview and explicit confirmation', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    expect(source).toContain('launchImageLibraryAsync');
+    expect(source).toContain('allowsEditing: true');
+    expect(source).toContain('上傳本機照片');
+    expect(source).toContain('確認更換');
+    expect(source).toContain('uploadAndPersistSpotPhoto');
+    expect(source).toContain('已成功更新景點照片');
+  });
+
+  it('allows restoring the default photo by clearing the persisted preview URL', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    const screen = readFileSync(path.resolve(process.cwd(), 'src', 'app', 'trips', '[id].tsx'), 'utf8');
+    expect(source).toContain('恢復預設圖片');
+    expect(source).toContain('await onUpdateImage(item, null)');
+    expect(screen).toContain('preview_url: imageUrl');
+  });
+
+  it('discards an unconfirmed local photo when the lightbox closes', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
+    expect(source).toContain('function closePhotoLightbox()');
+    expect(source).toContain('onRequestClose={closePhotoLightbox}');
+    expect(source).toContain('setPendingPhoto(null)');
+  });
 });

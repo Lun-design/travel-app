@@ -28,3 +28,15 @@ it('persists a manually replaced preview URL to the itinerary item', async () =>
   expect(query.update).toHaveBeenCalledWith({ preview_url: 'https://cdn.example/new.jpg', photo_reference: null });
   expect(query.eq).toHaveBeenCalledWith('id', 'item-1');
 });
+
+it('clears preview_url when the user restores the default spot image', async () => {
+  const query = {
+    update: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockResolvedValue({ error: null }),
+  };
+  vi.mocked(supabase.from).mockReturnValue(query as never);
+
+  await updateItineraryItemImage('item-1', null);
+
+  expect(query.update).toHaveBeenCalledWith({ preview_url: null, photo_reference: null });
+});
