@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { inferTimezoneFromDestination, isValidTimezone, normalizeTimezone } from '@/lib/timezone';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { DatePickerField, TimePickerField } from './FormPickers';
+import type { Trip } from '@/lib/trips';
 
 type CreateTripInput = {
   title: string;
@@ -13,15 +14,18 @@ type CreateTripInput = {
   default_departure_time?: string | null;
   timezone?: string | null;
 };
+type EditableTripInput = Pick<Trip, 'title' | 'destination' | 'start_date' | 'end_date' | 'default_departure_time' | 'timezone'>;
 
 type Props = {
   visible: boolean;
   userId: string;
   onClose: () => void;
-  onCreate: (input: CreateTripInput) => Promise<void>;
+  onCreate?: (input: CreateTripInput) => Promise<void>;
+  initialTrip?: Trip | null;
+  onUpdate?: (tripId: string, input: EditableTripInput) => Promise<void>;
 };
 
-export function CreateTripModal({ visible, userId, onClose, onCreate }: Props) {
+export function CreateTripModal({ visible, userId, onClose, onCreate, initialTrip = null, onUpdate }: Props) {
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
   const [start, setStart] = useState('');
@@ -31,16 +35,34 @@ export function CreateTripModal({ visible, userId, onClose, onCreate }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!visible) return;
+    setTitle(initialTrip?.title ?? '');
+    setDestination(initialTrip?.destination ?? '');
+    setStart(initialTrip?.start_date ?? '');
+    setEnd(initialTrip?.end_date ?? '');
+    setDeparture(initialTrip?.default_departure_time ?? '');
+    setTimezone(initialTrip?.timezone ?? 'Asia/Taipei');
+    setError('');
+  }, [visible, initialTrip]);
+
   async function submit() {
     setError('');
     if (!title.trim() || !destination.trim() || !start || !end) return setError('請填寫完整行程資料。');
     if (end < start) return setError('結束日期不可早於開始日期。');
     if (departure && !/^([01]\d|2[0-3]):[0-5]\d$/.test(departure)) return setError('每日出發時間請使用 HH:mm 格式。');
-    if (!userId) return setError('找不到登入使用者，請重新登入。');
+    if (!initialTrip && !userId) return setError('找不到登入使用者，請重新登入。');
     if (!isValidTimezone(timezone)) return setError('請輸入有效的 IANA 時區，例如 Asia/Tokyo。');
     setBusy(true);
     try {
-      await onCreate({ title: title.trim(), destination: destination.trim(), start_date: start, end_date: end, created_by: userId, default_departure_time: departure || null, timezone: normalizeTimezone(timezone) });
+      const changes = { title: title.trim(), destination: destination.trim(), start_date: start, end_date: end, default_departure_time: departure || null, timezone: normalizeTimezone(timezone) };
+      if (initialTrip) {
+        if (!onUpdate) throw new Error('目前無法編輯此行程。');
+        await onUpdate(initialTrip.id, changes);
+      } else {
+        if (!onCreate) throw new Error('目前無法建立行程。');
+        await onCreate({ ...changes, created_by: userId });
+      }
       setTitle(''); setDestination(''); setStart(''); setEnd(''); setDeparture(''); setTimezone('Asia/Taipei');
       onClose();
     } catch (cause: any) {
@@ -53,7 +75,7 @@ export function CreateTripModal({ visible, userId, onClose, onCreate }: Props) {
 
   return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
     <View style={styles.container}>
-      <Text style={styles.title}>新增行程</Text>
+      <Text style={styles.title}>{initialTrip ? '編輯行程' : '新增行程'}</Text>
       <TextInput style={styles.input} placeholder="行程名稱" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="目的地" value={destination} onChangeText={setDestination} />
       <DatePickerField label="開始日期" value={start} onChange={setStart} placeholder="2026-01-20" style={styles.input} />
@@ -64,7 +86,7 @@ export function CreateTripModal({ visible, userId, onClose, onCreate }: Props) {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.actions}>
         <Pressable onPress={onClose}><Text>取消</Text></Pressable>
-        <Pressable style={styles.save} onPress={() => void submit()} disabled={busy}><Text style={styles.white}>{busy ? '建立中…' : '建立行程'}</Text></Pressable>
+        <Pressable style={styles.save} onPress={() => void submit()} disabled={busy}><Text style={styles.white}>{busy ? '儲存中…' : initialTrip ? '儲存變更' : '建立行程'}</Text></Pressable>
       </View>
     </View>
   </Modal>;

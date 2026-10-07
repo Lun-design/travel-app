@@ -6,7 +6,7 @@ import { createLocalId, enqueueOfflineMutation, patchOfflineSnapshot, resolveOff
 import { offlineStore } from './offline-store';
 
 export type Trip = { id: string; title: string; destination: string; start_date: string; end_date: string; invite_code: string; created_by: string; default_departure_time: string | null; timezone: string };
-export type TripUpdateInput = Partial<Pick<Trip, 'start_date' | 'end_date' | 'default_departure_time' | 'timezone'>>;
+export type TripUpdateInput = Partial<Pick<Trip, 'title' | 'destination' | 'start_date' | 'end_date' | 'default_departure_time' | 'timezone'>>;
 export type TripMember = { trip_id: string; user_id: string; role: 'owner' | 'editor' | 'viewer'; joined_at: string };
 export type TripMemberWithProfile = TripMember & {
   profile?: {
@@ -177,6 +177,18 @@ export async function updateTrip(id: string, changes: TripUpdateInput, options: 
     }
     throw error;
   }
+}
+
+export async function deleteTrip(id: string): Promise<void> {
+  const { data, error } = await supabase.from('trips').delete().eq('id', id).select('id').maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('找不到可刪除的行程，或你沒有擁有者權限。');
+}
+
+export async function leaveTrip(id: string): Promise<void> {
+  const { data, error } = await supabase.rpc('leave_trip', { p_trip_id: id });
+  if (error) throw error;
+  if (data !== true) throw new Error('無法退出行程，請確認你仍是行程成員。');
 }
 
 export { listItineraryItems, saveItineraryItem, deleteItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule };
