@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, ImageBackground, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { createTrip, deleteTrip, leaveTrip, listTripsWithMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { tripManagementAction } from '@/lib/trip-list';
@@ -111,13 +111,28 @@ export default function HomeScreen() {
       return;
     }
 
+    const deleting = action === 'delete';
+    const title = deleting ? '刪除行程' : '退出行程';
+    const message = deleting
+      ? `確定永久刪除「${trip.title}」及其所有行程資料嗎？`
+      : `確定退出「${trip.title}」嗎？`;
+
+    // React Native Web's Alert.alert is intentionally a no-op. Use the
+    // browser confirmation there so the action callback can actually run.
+    if (Platform.OS === 'web') {
+      if (typeof globalThis.confirm !== 'function' || !globalThis.confirm(message)) return;
+      actionGuard.current.add(trip.id);
+      setTripActionBusyId(trip.id);
+      void performTripAction(trip, action);
+      return;
+    }
+
     actionGuard.current.add(trip.id);
     setTripActionBusyId(trip.id);
-    const deleting = action === 'delete';
     let actionConfirmed = false;
     Alert.alert(
-      deleting ? '刪除行程' : '退出行程',
-      deleting ? `確定永久刪除「${trip.title}」及其所有行程資料嗎？` : `確定退出「${trip.title}」嗎？`,
+      title,
+      message,
       [
         { text: '取消', style: 'cancel', onPress: () => { actionGuard.current.delete(trip.id); setTripActionBusyId(null); } },
         { text: deleting ? '刪除' : '退出', style: 'destructive', onPress: () => { actionConfirmed = true; void performTripAction(trip, action); } },

@@ -25,6 +25,13 @@ describe('home trip actions', () => {
     expect(home).toContain('disabled={isActionBusy}');
   });
 
+  it('uses a working browser confirmation before starting destructive trip actions on web', () => {
+    const home = source('src/app/index.tsx');
+    expect(home).toContain("Platform.OS === 'web'");
+    expect(home).toContain('globalThis.confirm(');
+    expect(home).toContain('performTripAction(trip, action)');
+  });
+
   it('uses an authenticated RPC to let non-owners leave and owner RLS to delete trips', () => {
     const trips = source('lib/trips.ts');
     const migration = source('supabase/migrations/20261007010000_trip_membership_actions.sql');
