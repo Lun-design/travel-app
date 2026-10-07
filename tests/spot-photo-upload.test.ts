@@ -58,6 +58,24 @@ describe('spot photo upload', () => {
 });
 
 describe('spot photo compression policy', () => {
+  it('recovers dimensions when the picker reports zero-sized media', async () => {
+    const { resolveSpotPhotoDimensions } = await import('../lib/spot-photo-upload');
+    const measure = vi.fn().mockResolvedValue({ width: 1200, height: 1800 });
+
+    await expect(resolveSpotPhotoDimensions({ uri: 'blob:photo', width: 0, height: 0 }, measure))
+      .resolves.toEqual({ width: 1200, height: 1800 });
+    expect(measure).toHaveBeenCalledWith('blob:photo');
+  });
+
+  it('passes positive proportional dimensions to the renderer on web and mobile', async () => {
+    const { compressSpotPhoto } = await import('../lib/spot-photo-upload');
+    const render = vi.fn().mockResolvedValue({ uri: 'blob:ready', data: new ArrayBuffer(1200) });
+
+    await compressSpotPhoto({ uri: 'blob:original', width: 3200, height: 2400, mimeType: 'image/jpeg' }, render);
+
+    expect(render).toHaveBeenCalledWith({ uri: 'blob:original', width: 1600, height: 1200, quality: 0.82 });
+  });
+
   it('tries smaller outputs and only returns an image within 2 MiB', async () => {
     const { compressSpotPhoto } = await import('../lib/spot-photo-upload');
     const render = vi.fn()

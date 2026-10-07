@@ -20,7 +20,7 @@ import { getCategoryBadgePalette } from '@/lib/visual-styles';
 import { getCategoryIcon } from '@/lib/category-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { compressSpotPhoto, uploadAndPersistSpotPhoto, type CompressedSpotPhoto } from '@/lib/spot-photo-upload';
+import { compressSpotPhoto, resolveSpotPhotoDimensions, uploadAndPersistSpotPhoto, type CompressedSpotPhoto } from '@/lib/spot-photo-upload';
 
 function cacheBustedImageUrl(url: string | null | undefined, version: number): string | null {
   if (!url) return null;
@@ -454,9 +454,12 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
       const asset = result.assets[0];
       const fileName = asset.fileName?.toLowerCase() ?? '';
       const mimeType = asset.mimeType ?? (fileName.endsWith('.png') ? 'image/png' : fileName.endsWith('.webp') ? 'image/webp' : /\.jpe?g$/u.test(fileName) ? 'image/jpeg' : '');
-      const prepared = await compressSpotPhoto({ uri: asset.uri, width: asset.width, height: asset.height, mimeType }, async ({ uri, width, quality }) => {
+      const dimensions = await resolveSpotPhotoDimensions(asset, (uri) => new Promise((resolve, reject) => {
+        Image.getSize(uri, (width, height) => resolve({ width, height }), reject);
+      }));
+      const prepared = await compressSpotPhoto({ uri: asset.uri, ...dimensions, mimeType }, async ({ uri, width, height, quality }) => {
         const context = ImageManipulator.ImageManipulator.manipulate(uri);
-        context.resize({ width, height: null });
+        context.resize({ width, height });
         const rendered = await context.renderAsync();
         const saved = await rendered.saveAsync({ format: ImageManipulator.SaveFormat.JPEG, compress: quality });
         return { uri: saved.uri, data: await (await fetch(saved.uri)).arrayBuffer() };

@@ -12,7 +12,18 @@ export type SpotPhotoUpload = {
 };
 
 export type CompressedSpotPhoto = { uri: string; data: ArrayBuffer; mimeType: 'image/jpeg' };
-export type SpotPhotoRenderer = (options: { uri: string; width: number; quality: number }) => Promise<{ uri: string; data: ArrayBuffer }>;
+export type SpotPhotoRenderer = (options: { uri: string; width: number; height: number; quality: number }) => Promise<{ uri: string; data: ArrayBuffer }>;
+
+export async function resolveSpotPhotoDimensions(
+  asset: { uri: string; width: number; height: number },
+  measure: (uri: string) => Promise<{ width: number; height: number }>,
+): Promise<{ width: number; height: number }> {
+  const dimensions = asset.width > 0 && asset.height > 0 ? asset : await measure(asset.uri);
+  if (!Number.isFinite(dimensions.width) || !Number.isFinite(dimensions.height) || dimensions.width <= 0 || dimensions.height <= 0) {
+    throw new Error('無法讀取照片尺寸，請換一張照片再試。');
+  }
+  return { width: dimensions.width, height: dimensions.height };
+}
 
 export function validateSpotPhoto(mimeType: string, byteLength: number): void {
   if (!SUPPORTED_PHOTO_TYPES.has(mimeType)) throw new Error('照片僅支援 JPG、PNG 或 WebP。');
@@ -30,7 +41,9 @@ export async function compressSpotPhoto(
     throw new Error('無法讀取照片尺寸，請重新選擇。');
   }
   for (const [maxWidth, quality] of [[1600, 0.82], [1400, 0.68], [1100, 0.54], [900, 0.42]]) {
-    const output = await render({ uri: source.uri, width: Math.min(source.width, maxWidth), quality });
+    const width = Math.max(1, Math.round(Math.min(source.width, maxWidth)));
+    const height = Math.max(1, Math.round(source.height * width / source.width));
+    const output = await render({ uri: source.uri, width, height, quality });
     if (output.data.byteLength > 0 && output.data.byteLength <= MAX_SPOT_PHOTO_BYTES) {
       return { ...output, mimeType: 'image/jpeg' };
     }
