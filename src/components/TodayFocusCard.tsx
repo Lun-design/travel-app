@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import type { ItineraryItem } from '@/lib/itinerary';
 import type { ScheduledItem } from '@/lib/schedule';
 import { createMockWeatherSummary, fetchWeatherForecast, getWearTip, isWeatherAlert, sanitizePersistedWeather, sanitizeWeatherForecast, sanitizeWeatherSummary, type WeatherSummary } from '@/lib/weather-api';
@@ -94,7 +94,7 @@ export function TodayFocusCard({ schedule, items, vouchers, scheduleDate, timezo
 
   function openNavigation() {
     if (!navigationUrl) return;
-    void Linking.openURL(navigationUrl).catch(() => undefined);
+    void Linking.openURL(navigationUrl).catch((error) => Alert.alert('無法開啟導航', error instanceof Error ? error.message : '請檢查網路連線或地圖 App。'));
   }
 
   async function switchToBackup() {
