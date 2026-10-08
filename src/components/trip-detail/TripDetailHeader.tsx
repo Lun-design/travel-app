@@ -8,6 +8,7 @@ import { ProfileAvatar } from '@/components/ProfileAvatar';
 import type { Profile } from '@/lib/profiles';
 import { getProfileDisplayName } from '@/lib/profiles';
 import { EDITORIAL_COLORS } from '@/lib/theme';
+import { MemberProfileModal } from './MemberProfileModal';
 
 type Props = {
   trip: Trip;
@@ -31,6 +32,8 @@ const HEADER_AVATAR_LIMIT = 4;
 const HEADER_NAME_LIMIT = 2;
 
 export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, profile, onProfile, compact = false }: Props) {
+  const [selectedMemberId, setSelectedMemberId] = React.useState<string | null>(null);
+  const selectedMember = members.find((member) => member.user_id === selectedMemberId) ?? null;
   const nextThemeMode = themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
   return <View style={[styles.header, compact && styles.compactHeader, { paddingTop: insets.top }]}>
     <View style={styles.titleRow}>
@@ -42,12 +45,13 @@ export function TripDetailHeader({ trip, members, userId, theme, themeMode, masc
     </View>
     <View style={styles.metaRow}>
       <View style={styles.dateBlock}><Text style={[styles.destination, { color: theme.colors.muted }]}>{trip.destination} · {trip.start_date} – {trip.end_date}</Text></View>
-      <View style={styles.members}>{members.slice(0, HEADER_AVATAR_LIMIT).map((member, index) => <View key={member.user_id} style={{ marginLeft: index ? -9 : 0, borderRadius: 18, borderWidth: 2, borderColor: theme.colors.background }}><ProfileAvatar profile={member.profile} userId={member.user_id} size={34} /></View>)}<Text numberOfLines={1} style={[styles.memberNames, { color: theme.colors.muted }]}>{members.slice(0, HEADER_NAME_LIMIT).map((member) => getProfileDisplayName(member.profile, member.user_id.slice(0, 8))).join('、')}</Text><Pressable style={[styles.invite, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onInvite}><Text style={[styles.inviteText, { color: theme.colors.primary }]}>＋ 邀請</Text></Pressable></View>
-      <Pressable style={styles.profileButton} onPress={onProfile} accessibilityRole="button" accessibilityLabel="編輯個人檔案"><ProfileAvatar profile={profile} userId={userId} size={36} /></Pressable>
+      <View style={styles.members}>{members.slice(0, HEADER_AVATAR_LIMIT).map((member) => <Pressable key={member.user_id} accessibilityRole="button" accessibilityLabel={`查看${getProfileDisplayName(member.profile, '旅伴')}的資料`} onPress={() => setSelectedMemberId(member.user_id)} style={styles.memberButton}><View style={{ borderRadius: 18, borderWidth: 2, borderColor: theme.colors.background }}><ProfileAvatar profile={member.profile} userId={member.user_id} size={34} /></View></Pressable>)}<Text numberOfLines={1} style={[styles.memberNames, { color: theme.colors.muted }]}>{members.slice(0, HEADER_NAME_LIMIT).map((member) => getProfileDisplayName(member.profile, member.user_id.slice(0, 8))).join('、')}</Text><Pressable style={[styles.invite, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onInvite}><Text style={[styles.inviteText, { color: theme.colors.primary }]}>＋ 邀請</Text></Pressable></View>
+      <Pressable style={styles.profileButton} onPress={() => members.some((member) => member.user_id === userId) ? setSelectedMemberId(userId) : onProfile()} accessibilityRole="button" accessibilityLabel="查看我的資料"><ProfileAvatar profile={profile} userId={userId} size={36} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`切換主題，目前為${themeMode === 'light' ? '明亮' : themeMode === 'dark' ? '暗黑' : '跟隨系統'}`} style={[styles.themeButton, { backgroundColor: theme.colors.surfaceMuted }]} onPress={() => onThemeModeChange(nextThemeMode)}><Text style={styles.themeIcon}>{themeMode === 'light' ? '☀️' : themeMode === 'dark' ? '🌙' : '📱'}</Text></Pressable>
       {onShare ? <Pressable style={[styles.settings, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onShare}><Text style={[styles.settingsText, { color: theme.colors.primary }]}>🔗 分享行程</Text></Pressable> : null}
       {trip.created_by === userId ? <Pressable style={[styles.settings, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onSettings}><Text style={[styles.settingsText, { color: theme.colors.primary }]}>⚙️ 行程設定</Text></Pressable> : null}
     </View>
+    <MemberProfileModal member={selectedMember} theme={theme} onClose={() => setSelectedMemberId(null)} onEdit={selectedMember?.user_id === userId ? () => { setSelectedMemberId(null); onProfile(); } : undefined} />
   </View>;
 }
 
@@ -63,6 +67,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, fontWeight: '800' },
   destination: {},
   members: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
+  memberButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   memberNames: { maxWidth: 120, flexShrink: 1, marginLeft: 8, fontSize: 12 },
   invite: { marginLeft: 12, borderRadius: 13, paddingHorizontal: 12, paddingVertical: 9 },
   inviteText: { fontWeight: '700' },
