@@ -9,6 +9,7 @@ import { RecommendationPanel } from '@/components/RecommendationPanel';
 import { TimePickerField } from './FormPickers';
 
 type Props = {
+  focusedPlaceId?: string | null;
   tripId: string;
   userId: string;
   places: TripPlace[];
@@ -20,7 +21,7 @@ type Props = {
   onTimezoneDetected?: (timezone: string) => Promise<void>;
 };
 
-export function TripPlacesPanel({ tripId, userId, places, days, destination, themeMode, onChanged, onScheduled, onTimezoneDetected }: Props) {
+export function TripPlacesPanel({ tripId, userId, places, days, destination, themeMode, onChanged, onScheduled, onTimezoneDetected, focusedPlaceId }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<GeocodingResult[]>([]);
@@ -225,7 +226,7 @@ export function TripPlacesPanel({ tripId, userId, places, days, destination, the
 
     <View style={styles.listHeader}><Text style={[styles.sectionTitle, { color: theme.colors.text }]}>尚未排入行程 ({savedPlaces.length})</Text></View>
     {savedPlaces.length === 0 ? <View style={[styles.empty, { borderColor: theme.colors.border }]}><Text style={[styles.emptyText, { color: theme.colors.muted }]}>目前還沒有收藏景點，先搜尋一個吧！</Text></View> : <View style={styles.list}>
-      {savedPlaces.map((place) => <View key={place.id} style={[styles.card, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+      {savedPlaces.map((place) => <View key={place.id} nativeID={'place-' + place.id} style={[styles.card, { borderColor: focusedPlaceId === place.id ? theme.colors.primary : theme.colors.border, borderWidth: focusedPlaceId === place.id ? 2 : 1, backgroundColor: theme.colors.surface }]}>
         <View style={styles.cardCopy}><Text style={[styles.cardTitle, { color: theme.colors.text }]}>{place.title}</Text>{place.address ? <Text numberOfLines={2} style={[styles.cardAddress, { color: theme.colors.muted }]}>{place.address}</Text> : null}{place.notes ? <Text style={[styles.cardNotes, { color: theme.colors.muted }]}>{place.notes}</Text> : null}</View>
         <View style={styles.cardActions}><Pressable onPress={() => { setSelectedDay(days[0] ?? 1); setSelectedPlace(place); }} style={[styles.smallButton, { backgroundColor: theme.colors.primary }]} disabled={Boolean(deletingPlaceId)}><Text style={styles.buttonText}>排入行程</Text></Pressable><Pressable onPress={() => openEdit(place)} style={[styles.smallButton, { borderColor: theme.colors.border }]} disabled={Boolean(deletingPlaceId)}><Text style={[styles.smallButtonText, { color: theme.colors.text }]}>編輯</Text></Pressable><Pressable disabled={deletingPlaceId === place.id} onPress={() => void handleDelete(place)} style={[styles.smallButton, { borderColor: theme.colors.border, opacity: deletingPlaceId === place.id ? 0.55 : 1 }]}><Text style={[styles.smallButtonText, { color: theme.colors.muted }]}>{deletingPlaceId === place.id ? '刪除中…' : '刪除'}</Text></Pressable></View>
       </View>)}

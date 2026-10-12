@@ -37,6 +37,8 @@ import { createReminderScheduler, getNotificationPermission, loadReminderPrefere
 import { preserveItineraryTimes } from '@/lib/route-optimization';
 import { updateItineraryItemImage } from '@/lib/itinerary-api';
 import { UndoToast } from '@/components/UndoToast';
+import { TripSearchModal } from '@/components/TripSearchModal';
+import { getTripSearchDestination, type TripSearchResult } from '@/lib/trip-search';
 
 export default function TripDetailScreen() {
   const scrollAfterSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,6 +59,10 @@ export default function TripDetailScreen() {
   }, []);
   const [day, setDay] = useState(1);
   const [tab, setTab] = useState<TripDetailTab>('timeline');
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchTarget, setSearchTarget] = useState<TripSearchResult | null>(null);
+  const [focusedExpenseId, setFocusedExpenseId] = useState<string | null>(null);
+  const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(() => getDefaultMapOpen(width));
   const [isMapLoading, setIsMapLoading] = useState(false);
   const [isDayTransitioning, setIsDayTransitioning] = useState(false);
@@ -94,6 +100,36 @@ export default function TripDetailScreen() {
   const reminderItemsRef = useRef<ItineraryItem[]>(data.items);
   const days = useMemo(() => data.trip ? tripDayNumbers(data.trip.start_date, data.trip.end_date) : [1], [data.trip]);
   const visibleItems = useMemo(() => sortItineraryItemsByPosition(data.items.filter((item) => item.day_number === day && !item.is_backup)), [data.items, day]);
+  useEffect(() => {
+    if (!searchTarget || searchVisible || isDayTransitioning) return;
+    const target = searchTarget;
+    const timer = setTimeout(() => {
+      const prefix = target.kind === 'item' ? 'itinerary-item' : target.kind;
+      if (Platform.OS === 'web' && typeof document !== 'undefined') document.getElementById(prefix + '-' + target.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      else if (target.kind === 'item') {
+        const index = visibleItems.findIndex((item) => item.id === target.id);
+        if (index >= 0) timelineScrollRef.current?.scrollTo({ y: index * 160, animated: true });
+      }
+      setSearchTarget(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [searchTarget, searchVisible, isDayTransitioning, tab, visibleItems]);
+
+  function selectSearchResult(result: TripSearchResult) {
+    if (!data.trip) return;
+    const target = getTripSearchDestination({ tripId: data.trip.id, items: data.items, vouchers: data.vouchers, expenses: data.expenses, places: data.places }, result);
+    if (!target) { setUndoNotice('此內容已變更或刪除，請重新搜尋。'); return; }
+    setSearchVisible(false);
+    if (target.tab === 'documents') { setPreviewVoucher(target.voucher); return; }
+    setTab(target.tab);
+    if (target.tab === 'timeline') {
+      handleDayChange(target.day); setFocusedItemId(target.id);
+      if (target.previewBackup) { setEditingItem(data.items.find((item) => item.id === target.id) ?? null); setInsertPosition(null); setItemModal(true); }
+    }
+    else if (target.tab === 'expenses') setFocusedExpenseId(target.id);
+    else setFocusedPlaceId(target.id);
+    setSearchTarget(result);
+  }
 
   useEffect(() => { void loadThemeMode().then(setThemeMode); }, []);
   useEffect(() => { reminderItemsRef.current = data.items; }, [data.items]);
@@ -321,7 +357,7 @@ export default function TripDetailScreen() {
 
   return <ActiveTripContext.Provider value={trip.id}><View style={[styles.container, { backgroundColor: theme.isDark ? theme.colors.background : '#F7F5F0', paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: layout.screenPaddingTop, paddingBottom: 22 + insets.bottom }]}>
     <MainScroll style={styles.mainScroll} {...(tab === 'timeline' || tab === 'places' ? { contentContainerStyle: styles.mainContent, keyboardShouldPersistTaps: 'handled' as const } : {})}>
-    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onShare={() => setShareVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
+    <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onShare={() => setShareVisible(true)} onProfile={() => setProfileVisible(true)} onSearch={() => setSearchVisible(true)} compact={layout.compact} />
      {/* Offline state replaces the legacy offlineBar: 📡 離線模式：已載入快取行程 */}
     {data.realtimeNotice ? <View style={[styles.realtimeBar, { backgroundColor: theme.colors.surfaceMuted, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.muted }]}>↻ {data.realtimeNotice}</Text></View> : null}
     <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} syncing={data.syncing} undoPending={data.undoPending} error={data.syncError} onRetry={() => { void data.retrySync(); }} onResolve={(id, resolution) => { void data.trackMutation(() => data.resolveConflict(id, resolution)).catch(() => undefined); }} />
@@ -330,17 +366,18 @@ export default function TripDetailScreen() {
     {/* 📥 一鍵匯入行程 is available from the timeline's more-actions menu. */}
     {/* Map toggle labels: 🗺️ 查看地圖路線 (點擊展開) / 🗺️ 隱藏地圖 */}
     {tab === 'timeline' && <TimelinePanel key={refreshKey} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setInsertPosition(null); setItemModal(true); }} onDelete={deleteItem} onUpdateImage={updateItemImage} onReorder={data.reorderItems} onMoveToDay={moveItemToDay} onShiftSubsequent={data.shiftSchedule} onApplyRouteOptimization={applyRouteOptimization} onAddAtPosition={(position) => { setEditingItem(null); setInsertPosition(position); setItemModal(true); }} onAdd={() => { setEditingItem(null); setInsertPosition(null); setItemModal(true); }} onImport={() => { setImportAction('import'); setImportVisible(true); }} onClearAll={() => { setImportAction('clear'); setImportVisible(true); }} />}
-    {tab === 'expenses' && <ExpensesPanel tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onExpenseSettled={data.reload} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
+    {tab === 'expenses' && <ExpensesPanel focusedExpenseId={focusedExpenseId} tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onExpenseSettled={data.reload} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} refreshToken={data.packingRevision} /></ScrollView></View>}
-    {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} onChanged={data.reload} /></View>}
-    {tab === 'places' && <TripPlacesPanel tripId={tripId!} userId={data.userId} places={data.places} days={days} destination={trip.destination} themeMode={themeMode} onChanged={refreshPlaces} onScheduled={handlePlaceScheduled} onTimezoneDetected={async (timezone) => { if (timezone !== trip.timezone) { await data.saveTripSettings({ timezone }); await data.reload(); } }} />}
+    {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel initialVouchers={data.vouchers} themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} onChanged={data.reload} /></View>}
+    {tab === 'places' && <TripPlacesPanel focusedPlaceId={focusedPlaceId} tripId={tripId!} userId={data.userId} places={data.places} days={days} destination={trip.destination} themeMode={themeMode} onChanged={refreshPlaces} onScheduled={handlePlaceScheduled} onTimezoneDetected={async (timezone) => { if (timezone !== trip.timezone) { await data.saveTripSettings({ timezone }); await data.reload(); } }} />}
     </MainScroll>
     {tab === 'timeline' && <Pressable accessibilityRole="button" style={[styles.addSpot, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth, backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={{ color: '#ffffff', fontWeight: '800', fontSize: layout.fabFontSize }}>＋ 新增景點／活動</Text></Pressable>}
     <UndoToast label={data.undoLabel || undoNotice} canUndo={data.undoPending} busy={data.syncing} bottom={layout.fabBottom + insets.bottom + 64} onUndo={() => { const returnDay = data.undoReturnDay; if (data.undoLastAction()) { if (returnDay) handleDayChange(returnDay); setUndoNotice('已復原上次操作'); } }} />
     <ItineraryItemModal visible={itemModal} item={editingItem} day={day} insertPosition={insertPosition} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onRefresh={refreshAfterItemSave} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); setItemModal(false); } : undefined} />
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
-    <VoucherPreviewModal voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />
+    <VoucherPreviewModal userId={data.userId} voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />
+    <TripSearchModal visible={searchVisible} data={{ tripId: trip.id, items: data.items, vouchers: data.vouchers, expenses: data.expenses, places: data.places }} theme={theme} isOffline={data.isOffline} onClose={() => setSearchVisible(false)} onSelect={selectSearchResult} />
     <TripSettingsModal visible={settingsVisible} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} remindersEnabled={remindersEnabled} notificationPermission={notificationPermission} onReminderToggle={(enabled) => { void toggleReminders(enabled); }} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); await data.reload(); setRefreshKey((current) => current + 1); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
     <UserProfileModal visible={profileVisible} profile={data.profile} themeMode={themeMode} onClose={() => setProfileVisible(false)} onSaved={(updated) => { data.setProfile(updated); data.setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member)); }} />
     <ShareTripModal visible={shareVisible} tripId={trip.id} userId={data.userId} themeMode={themeMode} onClose={() => setShareVisible(false)} />

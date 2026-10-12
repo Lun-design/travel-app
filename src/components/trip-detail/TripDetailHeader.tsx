@@ -24,6 +24,7 @@ type Props = {
   onThemeModeChange: (mode: ThemeMode) => void;
   onSettings: () => void;
   onShare?: () => void;
+  onSearch?: () => void;
   profile?: Profile | null;
   onProfile: () => void;
   compact?: boolean;
@@ -32,7 +33,7 @@ type Props = {
 const HEADER_AVATAR_LIMIT = 4;
 const HEADER_NAME_LIMIT = 2;
 
-export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, profile, onProfile, compact = false }: Props) {
+export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, onSearch, profile, onProfile, compact = false }: Props) {
   const [selectedMemberId, setSelectedMemberId] = React.useState<string | null>(null);
   const selectedMember = members.find((member) => member.user_id === selectedMemberId) ?? null;
   const nextThemeMode = themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
@@ -45,6 +46,7 @@ export function TripDetailHeader({ trip, members, userId, theme, themeMode, masc
       <PuppyMascot puppy="-11" size={mascotSize} style={styles.mascot} accessibilityLabel="旅程裝飾" />
     </View>
     <View style={styles.metaRow}>
+      {onSearch ? <Pressable accessibilityRole="button" accessibilityLabel="搜尋此行程" style={[styles.settings, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onSearch}><Text style={[styles.settingsText, { color: theme.colors.primary }]}>⌕ 搜尋行程</Text></Pressable> : null}
       <View style={styles.dateBlock}><Text style={[styles.destination, { color: theme.colors.muted }]}>{trip.destination} · {trip.start_date} – {trip.end_date}</Text></View>
       <View style={styles.members}>
         {members.slice(0, HEADER_AVATAR_LIMIT).map((member) => <Pressable key={member.user_id} accessibilityRole="button" accessibilityLabel={`查看${getProfileDisplayName(member.profile, '旅伴')}的資料`} onPress={() => setSelectedMemberId(member.user_id)} style={styles.memberButton}><View style={{ borderRadius: 18, borderWidth: 2, borderColor: theme.colors.background }}><ProfileAvatar profile={member.profile} userId={member.user_id} size={34} /></View></Pressable>)}

@@ -20,9 +20,10 @@ type Props = {
   onDelete: (expense: Expense) => Promise<void>;
   onExpenseSettled?: () => void | Promise<void>;
   onAdd: () => void;
+  focusedExpenseId?: string | null;
 };
 
-export function ExpensesPanel({ tripId, userId, expenses, members, rates, rateLabel, themeMode, onEdit, onDelete, onExpenseSettled, onAdd }: Props) {
+export function ExpensesPanel({ tripId, userId, expenses, members, rates, rateLabel, themeMode, onEdit, onDelete, onExpenseSettled, onAdd, focusedExpenseId }: Props) {
   const [settlementRefreshKey, setSettlementRefreshKey] = useState(0);
   async function handleExpenseSettled() {
     setSettlementRefreshKey((value) => value + 1);
@@ -31,7 +32,7 @@ export function ExpensesPanel({ tripId, userId, expenses, members, rates, rateLa
 
   return <ScrollView contentContainerStyle={styles.panel}>
     <BudgetDashboard key={`budget-${settlementRefreshKey}`} tripId={tripId} userId={userId} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} themeMode={themeMode} />
-    <ExpenseList tripId={tripId} userId={userId} themeMode={themeMode} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} onEdit={onEdit} onDelete={onDelete} onExpenseSettled={handleExpenseSettled} />
+    <ExpenseList tripId={tripId} userId={userId} themeMode={themeMode} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} onEdit={onEdit} onDelete={onDelete} onExpenseSettled={handleExpenseSettled} focusedExpenseId={focusedExpenseId} />
     <Pressable style={styles.primary} onPress={onAdd}><Text style={styles.buttonText}>新增費用</Text></Pressable>
   </ScrollView>;
 }

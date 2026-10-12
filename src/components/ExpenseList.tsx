@@ -19,9 +19,10 @@ type Props = {
   themeMode?: ThemeMode;
   rates?: Partial<Record<SupportedCurrency, number>>;
   rateLabel?: string;
+  focusedExpenseId?: string | null;
 };
 
-export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelete, onExpenseSettled, themeMode = 'system', rates, rateLabel }: Props) {
+export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelete, onExpenseSettled, themeMode = 'system', rates, rateLabel, focusedExpenseId }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [settlingId, setSettlingId] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
     {rateLabel ? <Text style={[styles.rateLabel, { color: theme.colors.muted }]}>{rateLabel}</Text> : null}
     {expenses.map((expense) => {
       const isSettled = Boolean(expense.is_settled) || settledIds.has(expense.id);
-      return <View key={expense.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      return <View key={expense.id} nativeID={'expense-' + expense.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: focusedExpenseId === expense.id ? theme.colors.primary : theme.colors.border, borderWidth: focusedExpenseId === expense.id ? 2 : 1 }]}>
         <View style={styles.top}>
           <View style={styles.details}>
             <Text numberOfLines={2} style={[styles.title, { color: theme.colors.text }]}>{expense.title}</Text>

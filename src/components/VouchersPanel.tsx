@@ -12,11 +12,12 @@ import { updateItineraryItemReservationTags } from '@/lib/itinerary-api';
 import { normalizeReservationTags } from '@/lib/reservation-tags';
 import { getVoucherCategoryLabel, voucherCategoryOptions, type VoucherCategory } from '@/lib/voucher-categories';
 import { groupVouchersByDate } from '@/lib/voucher-date-grouping';
+const EMPTY_VOUCHERS: Voucher[] = [];
 
-export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onChanged }: { tripId: string; userId: string; items: ItineraryItem[]; themeMode?: ThemeMode; onChanged?: () => void | Promise<void> }) {
+export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onChanged, initialVouchers = EMPTY_VOUCHERS }: { tripId: string; userId: string; items: ItineraryItem[]; themeMode?: ThemeMode; onChanged?: () => void | Promise<void>; initialVouchers?: Voucher[] }) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
-  const [allVouchers, setAllVouchers] = useState<Voucher[]>([]);
+  const [allVouchers, setAllVouchers] = useState<Voucher[]>(initialVouchers);
   const [categoryFilter, setCategoryFilter] = useState<VoucherCategory | 'all'>('all');
   const [showExpired, setShowExpired] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
@@ -30,8 +31,14 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onC
   const [bindingItemId, setBindingItemId] = useState<string | null>(null);
   const [bindingBusy, setBindingBusy] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
+  useEffect(() => {
+    setAllVouchers(initialVouchers);
+    const groups = groupVouchersByDate(initialVouchers);
+    setVouchers([...groups.future, ...groups.undated]);
+  }, [initialVouchers]);
 
   async function load() {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     try {
       const nextVouchers = await listVouchers(tripId);
       setAllVouchers(nextVouchers);
@@ -160,7 +167,7 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onC
     </Modal>
     <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} onClose={() => setUploading(false)} onUploaded={async () => { await load(); await onChanged?.(); }} />
     <VoucherMetadataModal visible={editingVoucher !== null} voucher={editingVoucher} onClose={() => setEditingVoucher(null)} onSaved={async (updated) => { setVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry)); await onChanged?.(); }} />
-    <VoucherPreviewModal voucher={preview} onClose={() => setPreview(null)} />
+    <VoucherPreviewModal voucher={preview} userId={userId} onClose={() => setPreview(null)} />
   </ScrollView>;
 }
 
