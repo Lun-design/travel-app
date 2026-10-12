@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { buildDocumentPath } from './documents';
-import { normalizeVoucherFileType, type Voucher, type VoucherCategory } from './vouchers';
+import { normalizeVoucherFileType, resolveVoucherUploadMimeType, validateVoucherUploadSize, type Voucher, type VoucherCategory } from './vouchers';
 
 export type UploadVoucherInput = {
   tripId: string;
@@ -35,12 +35,13 @@ export async function listVouchers(tripId: string): Promise<Voucher[]> {
 }
 
 export async function uploadVoucher(input: UploadVoucherInput): Promise<Voucher> {
-  const fileType = normalizeVoucherFileType(input.fileType);
-  if (!fileType) throw new Error('僅支援圖片或 PDF 票券。');
+  const mimeType = resolveVoucherUploadMimeType(input.fileName, input.fileType);
+  validateVoucherUploadSize(input.data.byteLength);
+  const fileType = normalizeVoucherFileType(mimeType);
 
   const path = buildDocumentPath(input.tripId, input.userId, input.fileName);
   const stored = await supabase.storage.from('travel-documents').upload(path, input.data, {
-    contentType: input.fileType,
+    contentType: mimeType,
     upsert: false,
   });
   if (stored.error) throw stored.error;

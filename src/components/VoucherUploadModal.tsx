@@ -1,10 +1,11 @@
 import * as DocumentPicker from 'expo-document-picker';
-import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { uploadVoucher } from '@/lib/vouchers-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { DatePickerField, TimePickerField } from './FormPickers';
+import { getVoucherUploadErrorMessage, resolveVoucherUploadMimeType, validateVoucherUploadSize, VOUCHER_UPLOAD_MIME_TYPES } from '@/lib/vouchers';
 
 export function VoucherUploadModal({ visible, tripId, userId, items, onClose, onUploaded }: {
   visible: boolean;
@@ -21,6 +22,8 @@ export function VoucherUploadModal({ visible, tripId, userId, items, onClose, on
   const [usageTime, setUsageTime] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const busyRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
@@ -30,31 +33,44 @@ export function VoucherUploadModal({ visible, tripId, userId, items, onClose, on
       setUsageDate('');
       setUsageTime('');
       setNotes('');
+      setUploadError('');
     }
   }, [visible]);
 
   async function choose() {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
+    setUploadError('');
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync({ type: [...VOUCHER_UPLOAD_MIME_TYPES], copyToCacheDirectory: true, base64: false });
       if (result.canceled) return;
-      const file = result.assets[0];
-      const data = await (await fetch(file.uri)).arrayBuffer();
-      await uploadVoucher({ tripId, userId, itemId, title, reservationNumber, usageAt: usageDate && usageTime ? `${usageDate}T${usageTime}:00` : usageDate ? `${usageDate}T00:00:00` : null, notes, fileName: file.name, fileType: file.mimeType ?? 'application/octet-stream', data });
+      const file = result.assets?.[0];
+      if (!file) throw new Error('未取得檔案，請重新選擇。');
+      const mimeType = resolveVoucherUploadMimeType(file.name, file.mimeType);
+      if (file.size !== undefined) validateVoucherUploadSize(file.size);
+      const data = file.file ? await file.file.arrayBuffer() : await (async () => {
+        const response = await fetch(file.uri);
+        if (!response.ok) throw new Error('無法讀取選取的檔案，請重新選擇。');
+        return response.arrayBuffer();
+      })();
+      await uploadVoucher({ tripId, userId, itemId, title, reservationNumber, usageAt: usageDate && usageTime ? `${usageDate}T${usageTime}:00` : usageDate ? `${usageDate}T00:00:00` : null, notes, fileName: file.name, fileType: mimeType, data });
       await onUploaded();
       onClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('[VoucherUpload] failed', error);
-      Alert.alert('上傳票券失敗', error?.message ?? '請稍後再試。');
+      setUploadError(getVoucherUploadErrorMessage(error));
     } finally {
       setBusy(false);
+      busyRef.current = false;
     }
   }
 
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
     <View style={styles.backdrop}><View style={styles.card}>
       <Text style={styles.title}>新增預約與票券</Text>
-      <Text style={styles.hint}>支援圖片與 PDF，可綁定到時間軸上的景點、航班或飯店。</Text>
+      <Text style={styles.hint}>支援 JPG、PNG、WebP 與 PDF（最大 10 MB），可綁定到景點、航班或飯店。</Text>
+      {uploadError ? <Text accessibilityRole="alert" style={styles.error}>{uploadError}</Text> : null}
       <TextInput style={styles.input} placeholder="票券名稱（選填）" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="預約編號（選填）" value={reservationNumber} onChangeText={setReservationNumber} />
       <Text style={styles.label}>綁定行程項目（選填）</Text>
@@ -76,6 +92,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 22, gap: 14, maxHeight: '90%' },
   title: { fontSize: 22, fontWeight: '800', color: EDITORIAL_COLORS.charcoal },
   hint: { color: EDITORIAL_COLORS.taupe },
+  error: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderRadius: 8, padding: 10, fontSize: 13 },
   label: { color: EDITORIAL_COLORS.charcoal, fontWeight: '700' },
   input: { minHeight: 48, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 13 },
   notes: { minHeight: 76, textAlignVertical: 'top' },

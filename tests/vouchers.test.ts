@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeVoucherFileType } from '../lib/vouchers';
-import { deleteVoucher, getVoucherPreviewUrl, updateVoucher } from '../lib/vouchers-api';
+import { deleteVoucher, getVoucherPreviewUrl, updateVoucher, uploadVoucher } from '../lib/vouchers-api';
 
 const supabaseMock = vi.hoisted(() => ({
   storage: { from: vi.fn() },
@@ -21,6 +21,26 @@ describe('voucher helpers', () => {
 });
 
 describe('voucher storage API', () => {
+  it.each(['image/gif', 'image/svg+xml', 'image/heic'])('rejects %s before any Storage or database request', async (fileType) => {
+    await expect(uploadVoucher({ tripId: 'trip', userId: 'user', title: '票券', fileName: 'ticket.gif', fileType, data: new ArrayBuffer(100) })).rejects.toThrow(/JPG|PNG|WebP|PDF/);
+    expect(supabaseMock.storage.from).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+  it('rejects empty or oversized files before Storage', async () => {
+    const input = { tripId: 'trip', userId: 'user', title: 'ticket', fileName: 'ticket.png', fileType: 'image/png' };
+    await expect(uploadVoucher({ ...input, data: new ArrayBuffer(0) })).rejects.toThrow(/空|讀取/);
+    await expect(uploadVoucher({ ...input, data: new ArrayBuffer(10485761) })).rejects.toThrow(/10 MB/);
+    expect(supabaseMock.storage.from).not.toHaveBeenCalled();
+  });
+  it('infers a missing MIME type for a supported file and persists the uploaded ticket', async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    supabaseMock.storage.from.mockReturnValue({ upload });
+    const insert = vi.fn().mockReturnValue({ select: () => ({ single: async () => ({ data: { id: 'new-ticket' }, error: null }) }) });
+    supabaseMock.from.mockReturnValue({ insert });
+    await expect(uploadVoucher({ tripId: 'trip', userId: 'user', title: 'ticket', fileName: 'ticket.PNG', fileType: 'application/octet-stream', data: new ArrayBuffer(100) })).resolves.toMatchObject({ id: 'new-ticket' });
+    expect(upload).toHaveBeenCalledWith(expect.any(String), expect.any(ArrayBuffer), { contentType: 'image/png', upsert: false });
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ file_type: 'image' }));
+  });
   it('surfaces storage errors and does not delete the row on failure', async () => {
     supabaseMock.storage.from.mockReturnValue({ remove: vi.fn().mockResolvedValue({ error: new Error('Storage permission denied') }) });
     await expect(deleteVoucher({ id: 'v1', file_path: 't/file' })).rejects.toThrow('Storage permission denied');
@@ -31,7 +51,10 @@ describe('voucher storage API', () => {
     supabaseMock.from.mockReturnValue({ delete: () => ({ eq: vi.fn().mockResolvedValue({ error: new Error('Database permission denied') }) }) });
     await expect(deleteVoucher({ id: 'v1', file_path: 't/file' })).rejects.toThrow('Database permission denied');
   });
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    supabaseMock.storage.from.mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: new Error('Storage rejected file') }) });
+  });
 
   it('creates a signed Storage URL for image previews', async () => {
     const createSignedUrl = vi.fn().mockResolvedValue({ data: { signedUrl: 'https://signed.example/ticket.jpg' }, error: null });
