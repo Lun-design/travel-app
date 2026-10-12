@@ -16,7 +16,7 @@ vi.mock('@/lib/theme', async () => await import('../lib/theme'));
 import { TripDetailHeader } from '../src/components/trip-detail/TripDetailHeader';
 import { MemberProfileModal } from '../src/components/trip-detail/MemberProfileModal';
 
-type ElementProps = { children?: React.ReactNode; accessibilityLabel?: string; onPress?: () => void; onClose?: () => void; member?: TripMemberWithProfile | null; onEdit?: () => void };
+type ElementProps = { children?: React.ReactNode; accessibilityLabel?: string; onPress?: () => void; onClose?: () => void; member?: TripMemberWithProfile | null; onEdit?: () => void; members?: TripMemberWithProfile[]; visible?: boolean; onSelect?: (id: string) => void };
 function elements(node: React.ReactNode): React.ReactElement<ElementProps>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!React.isValidElement<ElementProps>(node)) return [];
@@ -34,6 +34,19 @@ const members: TripMemberWithProfile[] = ['owner', 'editor', 'viewer'].map((role
 }));
 
 describe('trip member avatar interactions', () => {
+  it('lets overflow members open their details through the all-members list', () => {
+    let selected: string | null = null;
+    vi.spyOn(React, 'useState').mockImplementation(() => [selected, (value: unknown) => { selected = value as string | null; }] as ReturnType<typeof React.useState>);
+    const many = [...members, ...Array.from({ length: 4 }, (_, i) => ({ ...members[1], user_id: `extra-${i}`, profile: { ...members[1].profile!, display_name: `extra-${i}` } }))];
+    const render = () => TripDetailHeader({ trip, members: many, userId: 'owner', theme: getAppTheme('light'), themeMode: 'light', mascotSize: 40, insets: { top: 0, bottom: 0, left: 0, right: 0 }, onBack: vi.fn(), onInvite: vi.fn(), onThemeModeChange: vi.fn(), onSettings: vi.fn(), onProfile: vi.fn() });
+    const overflow = elements(render()).find((element) => element.props.accessibilityLabel === '查看全部旅伴');
+    expect(overflow?.props.onPress).toBeTypeOf('function');
+    overflow!.props.onPress!();
+    const list = elements(render()).find((element) => element.props.members && element.props.visible);
+    expect(list?.props.members).toHaveLength(7);
+    list!.props.onSelect!('extra-3');
+    expect(elements(render()).find((element) => element.props.member?.user_id === 'extra-3')?.props.member?.profile?.display_name).toBe('extra-3');
+  });
   it.each(['owner', 'editor', 'viewer'])('opens the correct member details for %s and closes again', (id) => {
     let selected: string | null = null;
     vi.spyOn(React, 'useState').mockImplementation(() => [selected, (value: unknown) => { selected = value as string | null; }] as ReturnType<typeof React.useState>);

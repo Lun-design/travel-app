@@ -377,6 +377,8 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
     mode: segment?.mode ?? 'DRIVING',
   });
   const placeAddress = formatPlaceAddress(item.address);
+  const [expandedDetails, setExpandedDetails] = useState(false);
+  const hasLongDetails = (placeAddress?.length ?? 0) > 80 || (item.notes?.length ?? 0) > 80;
   const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));
   const [imageRevision, setImageRevision] = useState(() => Date.now());
   const [favorite, setFavorite] = useState(false);
@@ -604,8 +606,9 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
                 </Pressable>
               </Modal>
               {reservationTagLabels(item.reservation_tags).length > 0 ? <View style={reservationTagStyles.reservationTags}>{reservationTagLabels(item.reservation_tags).map((label) => <Text key={label} style={[reservationTagStyles.reservationTag, { color: theme.colors.primary, borderColor: theme.colors.border }]}>{label}</Text>)}</View> : null}
-              {placeAddress ? <Text style={[styles.address, { color: '#8E8E93', fontSize: 13 }]}>{placeAddress}</Text> : null}
-              {item.notes ? <Text style={[styles.notes, { color: '#8E8E93', fontSize: 13 }]}>{item.notes}</Text> : null}
+              {placeAddress ? <Text selectable numberOfLines={isMobile && hasLongDetails && !expandedDetails ? 2 : undefined} style={[styles.address, { color: '#8E8E93', fontSize: 13 }]}>{placeAddress}</Text> : null}
+              {item.notes ? <Text selectable numberOfLines={isMobile && hasLongDetails && !expandedDetails ? 2 : undefined} style={[styles.notes, { color: '#8E8E93', fontSize: 13 }]}>{item.notes}</Text> : null}
+              {isMobile && hasLongDetails ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: expandedDetails }} style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setExpandedDetails((value) => !value)}><Text style={{ fontSize: 12, color: theme.colors.primary }}>{expandedDetails ? '收合詳細資訊' : '展開詳細資訊'}</Text></Pressable> : null}
               <Pressable accessibilityRole="link" style={styles.navigationButton} onPress={() => { void Linking.openURL(navigationUrl).catch((error) => Alert.alert('無法開啟導航', error instanceof Error ? error.message : '請檢查網路連線或地圖 App。')); }}><PuppyMascot puppy={navigationPuppyId(item.category)} size={20} style={styles.navigationPuppy} accessibilityLabel="導航小狗" /><Text numberOfLines={1} style={styles.navigation}>🧭 開啟 Google Maps 導航</Text></Pressable>
               <View style={[styles.actions, compactStyles.hidden]}>
                 {onMoveUp ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="上移景點" disabled={!canMoveUp} onPress={onMoveUp}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}

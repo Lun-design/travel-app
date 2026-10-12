@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getTrip, listTripMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
-import { deleteItineraryItem, listItineraryItems, saveItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule } from '@/lib/itinerary-api';
+import { deleteItineraryItem, listItineraryItems, moveItineraryItemToDay, saveItineraryItem, updateItineraryItemsOrder, updateItineraryItemsSchedule } from '@/lib/itinerary-api';
 import type { ItineraryItem, ItineraryItemSaveInput } from '@/lib/itinerary';
 import { applyItineraryOrder, sanitizeLoadedItineraryItems, sortItineraryItemsByStartTime } from '@/lib/itinerary';
 import { calculateBalances, deleteExpense, listExpenses, saveExpense, type Expense, type ExpenseSplit } from '@/lib/expenses-api';
@@ -9,10 +9,13 @@ import { exchangeRateService, getDefaultExchangeRateSnapshot, type ExchangeRateS
 import { listVouchers } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
 import { listTripPlaces, type TripPlace } from '@/lib/trip-places-api';
-import { getCurrentProfile, updateCurrentProfile, type Profile } from '@/lib/profiles';
+import { getCurrentProfile, getProfileDisplayName, updateCurrentProfile, type Profile } from '@/lib/profiles';
 import { offlineStore, type OfflineMutation } from '@/lib/offline-store';
 import { offlineSyncService } from '@/lib/offline-replay';
 import { applyRealtimeChange, subscribeToTripRealtime, type RealtimeChange, type RealtimeClientLike } from '@/lib/realtime-collaboration';
+import { moveItineraryItemAcrossDays } from '@/lib/itinerary-move';
+import { useUndoPreview } from './useUndoPreview';
+import { describeCollaborativeUpdate } from '@/lib/travel-ux';
 
 export function useTripDetailData(tripId: string | undefined) {
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -28,6 +31,10 @@ export function useTripDetailData(tripId: string | undefined) {
   const [error, setError] = useState('');
   const [isOffline, setIsOffline] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [syncingCount, setSyncingCount] = useState(0);
+  const [syncError, setSyncError] = useState('');
+  const failedMutationRef = useRef<(() => Promise<unknown>) | null>(null);
+  const retrySyncBusyRef = useRef(false);
   const [syncConflicts, setSyncConflicts] = useState<OfflineMutation[]>([]);
   const [realtimeNotice, setRealtimeNotice] = useState('');
   const [packingRevision, setPackingRevision] = useState(0);
@@ -35,6 +42,11 @@ export function useTripDetailData(tripId: string | undefined) {
   const currentUserIdRef = useRef('');
   const realtimeNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const offlineScope = useMemo(() => ({ userId: userId || 'anonymous', tripId: tripId || '' }), [tripId, userId]);
+  const reportSyncError = useCallback((cause: unknown) => {
+    const message = cause && typeof cause === 'object' && 'message' in cause ? cause.message : null;
+    setSyncError(typeof message === 'string' && message.trim() ? message : '儲存失敗，請重試。');
+  }, []);
+  const undoPreview = useUndoPreview(tripId ?? '', items, reportSyncError);
 
   const refreshSyncStatus = useCallback(async (scope = offlineScope) => {
     const [pending, conflicts] = await Promise.all([
@@ -44,6 +56,23 @@ export function useTripDetailData(tripId: string | undefined) {
     setPendingSyncCount(pending.length);
     setSyncConflicts(conflicts);
   }, [offlineScope]);
+
+  const trackMutation = useCallback(async <T,>(task: () => Promise<T>): Promise<T> => {
+    setSyncingCount((count) => count + 1);
+    setSyncError('');
+    try {
+      const result = await task();
+      await refreshSyncStatus().catch(reportSyncError);
+      failedMutationRef.current = null;
+      return result;
+    } catch (cause) {
+      failedMutationRef.current = task;
+      reportSyncError(cause);
+      throw cause;
+    } finally {
+      setSyncingCount((count) => Math.max(0, count - 1));
+    }
+  }, [refreshSyncStatus, reportSyncError]);
 
   const reload = useCallback(async () => {
     if (!tripId) return;
@@ -126,17 +155,17 @@ export function useTripDetailData(tripId: string | undefined) {
     const updateOnlineState = () => setIsOffline(!navigator.onLine);
     const handleOnline = () => {
       updateOnlineState();
-      void offlineSyncService.sync(offlineScope)
+      void trackMutation(() => offlineSyncService.sync(offlineScope))
         .then(() => refreshSyncStatus())
         .then(() => reload())
         .catch((error) => console.error('[TripDetail] reconnect sync failed', error));
     };
     updateOnlineState(); window.addEventListener('online', handleOnline); window.addEventListener('offline', updateOnlineState);
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', updateOnlineState); };
-  }, [offlineScope, refreshSyncStatus, reload]);
+  }, [offlineScope, refreshSyncStatus, reload, trackMutation]);
 
-  const showRealtimeNotice = useCallback(() => {
-    setRealtimeNotice('行程已由隊友更新');
+  const showRealtimeNotice = useCallback((notice = '行程已由隊友更新') => {
+    setRealtimeNotice(notice);
     if (realtimeNoticeTimerRef.current) clearTimeout(realtimeNoticeTimerRef.current);
     realtimeNoticeTimerRef.current = setTimeout(() => setRealtimeNotice(''), 5000);
   }, []);
@@ -153,7 +182,10 @@ export function useTripDetailData(tripId: string | undefined) {
 
   const handleRealtimeChange = useCallback((change: RealtimeChange) => {
     const actor = change.record.updated_by ?? change.oldRecord.updated_by;
-    if (actor && actor !== currentUserIdRef.current) showRealtimeNotice();
+    if (actor && actor !== currentUserIdRef.current) {
+      const member = members.find((member) => member.user_id === actor);
+      showRealtimeNotice(describeCollaborativeUpdate(change, getProfileDisplayName(member?.profile, '旅伴')));
+    }
 
     if (change.table === 'itinerary_items') {
       setItems((current) => sortItineraryItemsByStartTime(sanitizeLoadedItineraryItems(applyRealtimeChange(current, change))));
@@ -164,50 +196,65 @@ export function useTripDetailData(tripId: string | undefined) {
     } else if (change.table === 'packing_items') {
       setPackingRevision((current) => current + 1);
     }
-  }, [refreshRealtimeExpenses, showRealtimeNotice]);
+  }, [members, refreshRealtimeExpenses, showRealtimeNotice]);
 
   useEffect(() => {
     if (!tripId) return;
     return subscribeToTripRealtime(supabase as unknown as RealtimeClientLike, tripId, handleRealtimeChange);
   }, [handleRealtimeChange, tripId]);
 
-  const saveItem = useCallback((input: ItineraryItemSaveInput) => saveItineraryItem(input, { offlineScope }), [offlineScope]);
-  const removeItem = useCallback((id: string) => deleteItineraryItem(id, { offlineScope }), [offlineScope]);
+  const saveItem = useCallback(async (input: ItineraryItemSaveInput) => {
+    await undoPreview.flush();
+    return trackMutation(() => saveItineraryItem(input, { offlineScope }));
+  }, [offlineScope, trackMutation, undoPreview.flush]);
+  const removeItem = useCallback(async (id: string) => {
+    const target = undoPreview.items.find((item) => item.id === id);
+    if (!target) return;
+    const apply = (current: ItineraryItem[]) => current.filter((item) => item.id !== id);
+    await undoPreview.stage({ key: `delete:${id}`, label: `已刪除「${target.location_name}」`, apply, returnDay: target.day_number,
+      commit: () => trackMutation(async () => { await deleteItineraryItem(id, { offlineScope }); setItems(apply); }),
+    });
+  }, [offlineScope, trackMutation, undoPreview.items, undoPreview.stage]);
   const saveOrder = useCallback((order: { id: string; position: number }[]) => updateItineraryItemsOrder(order, { offlineScope }), [offlineScope]);
-  const removeExpense = useCallback((id: string) => deleteExpense(id, { offlineScope }), [offlineScope]);
-  const saveExpenseRecord = useCallback((expense: Partial<Expense> & { trip_id: string; payer_id: string }, splits: Omit<ExpenseSplit, 'expense_id'>[]) => saveExpense(expense, splits, { offlineScope }), [offlineScope]);
+  const removeExpense = useCallback((id: string) => trackMutation(() => deleteExpense(id, { offlineScope })), [offlineScope, trackMutation]);
+  const saveExpenseRecord = useCallback((expense: Partial<Expense> & { trip_id: string; payer_id: string }, splits: Omit<ExpenseSplit, 'expense_id'>[]) => trackMutation(() => saveExpense(expense, splits, { offlineScope })), [offlineScope, trackMutation]);
 
   const reorderItems = useCallback(async (order: { id: string; position: number }[]) => {
-    const previous = items;
-    setItems((current) => applyItineraryOrder(current, order));
-    try {
-      await saveOrder(order);
-      await reload();
-    } catch (cause) {
-      setItems(previous);
-      throw cause;
-    }
-  }, [items, reload, saveOrder]);
+    const changes = order.map((entry) => ({ ...entry }));
+    const apply = (current: ItineraryItem[]) => applyItineraryOrder(current, changes);
+    await undoPreview.stage({ key: `order:${JSON.stringify(changes)}`, label: '已調整景點順序', apply,
+      commit: () => trackMutation(async () => { await saveOrder(changes); setItems(apply); }),
+    });
+  }, [saveOrder, trackMutation, undoPreview.stage]);
+
+  const moveItemToDay = useCallback(async (item: ItineraryItem, targetDay: number) => {
+    const apply = (current: ItineraryItem[]) => moveItineraryItemAcrossDays(current, item.id, targetDay);
+    await undoPreview.stage({ key: `move:${item.id}:${targetDay}`, label: `已將「${item.location_name}」移至 Day ${targetDay}`, apply, returnDay: item.day_number,
+      commit: () => trackMutation(async () => { await moveItineraryItemToDay(item.id, targetDay, { offlineScope }); setItems(apply); }),
+    });
+  }, [offlineScope, trackMutation, undoPreview.stage]);
 
   const shiftSchedule = useCallback(async (changes: { id: string; time: string | null }[]) => {
+    await undoPreview.flush();
     const previous = items;
     const byId = new Map(changes.map((change) => [change.id, change.time]));
     setItems((current) => sortItineraryItemsByStartTime(current.map((item) => byId.has(item.id) ? { ...item, time: byId.get(item.id) ?? null } : { ...item })));
     try {
-      await updateItineraryItemsSchedule(changes, { offlineScope });
+      await trackMutation(() => updateItineraryItemsSchedule(changes, { offlineScope }));
       await reload();
     } catch (cause) {
       setItems(previous);
       throw cause;
     }
-  }, [items, offlineScope, reload]);
+  }, [items, offlineScope, reload, trackMutation, undoPreview.flush]);
 
   const saveTripSettings = useCallback(async (changes: Parameters<typeof updateTrip>[1]) => {
     if (!trip) throw new Error('找不到此行程。');
-    const updated = await updateTrip(trip.id, changes, { offlineScope });
+    await undoPreview.flush();
+    const updated = await trackMutation(() => updateTrip(trip.id, changes, { offlineScope }));
     setTrip(updated);
     return updated;
-  }, [offlineScope, trip]);
+  }, [offlineScope, trip, trackMutation, undoPreview.flush]);
 
   const lockRate = useCallback(async (currency: string, rate: number) => {
     setRateSnapshot(await exchangeRateService.setManualRate(currency, rate));
@@ -224,10 +271,26 @@ export function useTripDetailData(tripId: string | undefined) {
     if (resolution === 'use-remote') await reload();
   }, [refreshSyncStatus, reload]);
 
+  const retrySync = useCallback(async () => {
+    if (retrySyncBusyRef.current) return;
+    retrySyncBusyRef.current = true;
+    try {
+      await undoPreview.flush();
+      const failedTask = failedMutationRef.current;
+      if (failedTask) await trackMutation(failedTask);
+      await trackMutation(() => offlineSyncService.sync(offlineScope));
+      await reload();
+    } catch (cause) { reportSyncError(cause); }
+    finally { retrySyncBusyRef.current = false; }
+  }, [offlineScope, reload, reportSyncError, trackMutation, undoPreview.flush]);
+
   return {
-    trip, setTrip, members, setMembers, items, setItems, expenses, setExpenses, vouchers, setVouchers, places, setPlaces, profile, setProfile, userId,
+    trip, setTrip, members, setMembers, items: undoPreview.items, setItems, expenses, setExpenses, vouchers, setVouchers, places, setPlaces, profile, setProfile, userId,
     rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, realtimeNotice, packingRevision, offlineScope,
-    reload, reloadPlaces, resolveConflict, saveItem, removeItem, reorderItems, shiftSchedule, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
+    reload, reloadPlaces, resolveConflict, saveItem, removeItem, reorderItems, moveItemToDay, shiftSchedule, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
+    syncing: syncingCount > 0, syncError, retrySync, trackMutation,
+    undoLabel: undoPreview.label, undoPending: undoPreview.pending, undoReturnDay: undoPreview.returnDay,
+    undoLastAction: undoPreview.undo, flushUndo: undoPreview.flush,
   };
 }
 

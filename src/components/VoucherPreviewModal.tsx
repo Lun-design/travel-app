@@ -23,6 +23,7 @@ export function VoucherPreviewModal({ voucher, onClose }: { voucher: Voucher | n
     <View style={styles.backdrop}>
       <View style={styles.card}>
         <Text style={styles.title}>{voucher?.title}</Text>
+        {voucher?.reservation_number ? <Text selectable style={{ color: EDITORIAL_COLORS.taupe }}>預約編號：{voucher.reservation_number}</Text> : null}
         {url && voucher?.file_type === 'image' ? <Image source={{ uri: url }} resizeMode="contain" style={styles.image} /> : <View style={styles.pdf}><Text style={styles.pdfIcon}>{voucher?.file_type === 'pdf' ? '📄' : '🎫'}</Text><Text>{url ? '票券已準備好預覽' : '正在產生安全預覽連結…'}</Text></View>}
         <View style={styles.actions}>
           {url ? <Pressable style={styles.open} onPress={() => void Linking.openURL(url).catch((error) => Alert.alert('無法開啟票券', error?.message ?? '請確認裝置已安裝可開啟此檔案的 App。'))}><Text style={styles.white}>開啟票券</Text></Pressable> : null}

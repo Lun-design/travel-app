@@ -7,8 +7,6 @@ import { getThemeForMode, MOBILE_ACCENT_COFFEE, type ThemeMode } from '@/lib/the
 import { loadThemeMode, saveThemeMode } from '@/lib/theme-preference';
 import { tripDayNumbers } from '@/lib/trip-dates';
 import { saveItineraryItemAndRefresh, sortItineraryItemsByPosition, sortItineraryItemsByStartTime, type ItineraryItem } from '@/lib/itinerary';
-import { moveItineraryItemAcrossDays } from '@/lib/itinerary-move';
-import { moveItineraryItemToDay } from '@/lib/itinerary-api';
 import { importTripItems, clearTripItems } from '@/lib/itinerary-import-api';
 import type { ImportMode } from '@/lib/itinerary-import-service';
 import { listTrips } from '@/lib/trips';
@@ -19,7 +17,6 @@ import { ExpenseModal } from '@/components/ExpenseModal';
 import { InviteTripModal } from '@/components/InviteTripModal';
 import { ItineraryItemModal } from '@/components/ItineraryItemModal';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
-import { OfflineBanner } from '@/components/OfflineBanner';
 import { PackingPanel } from '@/components/PackingPanel';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { TimelinePanel } from '@/components/trip-detail/TimelinePanel';
@@ -37,9 +34,9 @@ import { mapDraftToTargetTrip, type ImportedItineraryPayload, type ImportedTripD
 import { useTripDetailData } from '@/hooks/useTripDetailData';
 import { ActiveTripContext } from '@/contexts/ActiveTripContext';
 import { createReminderScheduler, getNotificationPermission, loadReminderPreference, registerNotificationServiceWorker, requestNotificationPermission, saveReminderPreference, showReminderNotification, type NotificationPermissionState } from '@/lib/notifications';
-import { replaceOptimizedRouteItems } from '@/lib/route-optimizer';
 import { preserveItineraryTimes } from '@/lib/route-optimization';
 import { updateItineraryItemImage } from '@/lib/itinerary-api';
+import { UndoToast } from '@/components/UndoToast';
 
 export default function TripDetailScreen() {
   const scrollAfterSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,8 +77,20 @@ export default function TripDetailScreen() {
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>(() => getNotificationPermission());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [undoNotice, setUndoNotice] = useState('');
+  useEffect(() => {
+    if (!undoNotice) return;
+    const timer = setTimeout(() => setUndoNotice(''), 2500);
+    return () => clearTimeout(timer);
+  }, [undoNotice]);
   const timelineScrollRef = useRef<ScrollView>(null);
   const pendingSavedItemRef = useRef<ItineraryItem | null>(null);
+  const pendingMoveRef = useRef<{ id: string; sourceDay: number; targetDay: number } | null>(null);
+  useEffect(() => {
+    const move = pendingMoveRef.current;
+    if (!data.syncError || data.undoPending || !move || day !== move.targetDay) return;
+    if (data.items.find((item) => item.id === move.id)?.day_number === move.sourceDay) setDay(move.sourceDay);
+  }, [data.syncError, data.undoPending, data.items, day]);
   const reminderItemsRef = useRef<ItineraryItem[]>(data.items);
   const days = useMemo(() => data.trip ? tripDayNumbers(data.trip.start_date, data.trip.end_date) : [1], [data.trip]);
   const visibleItems = useMemo(() => sortItineraryItemsByPosition(data.items.filter((item) => item.day_number === day && !item.is_backup)), [data.items, day]);
@@ -196,47 +205,35 @@ export default function TripDetailScreen() {
     // Route optimization changes order only. Keep persisted times intact;
     // explicit time shifting is handled by the separate schedule action.
     const orderOnlyItems = preserveItineraryTimes(previousItems, optimizedItems);
-    data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, orderOnlyItems));
     try {
       // Persist only positions through the atomic order RPC. This avoids
       // rewriting start_time, notes, coordinates, or any other item fields.
       await data.reorderItems(orderOnlyItems.map((item, position) => ({ id: item.id, position })));
-      // Re-apply the confirmed order as one immutable transition in case the
-      // follow-up read was briefly served from a stale replica.
-      data.setItems((currentItems) => replaceOptimizedRouteItems(currentItems, orderOnlyItems));
+      // The data hook keeps the order in an undo preview until it is persisted.
       setRefreshKey((current) => current + 1);
       setDay(orderOnlyItems[0]?.day_number ?? day);
     } catch (error) {
-      data.setItems([...previousItems]);
       throw error;
     }
   }
   async function moveItemToDay(item: ItineraryItem, targetDay: number) {
     if (!tripId || !days.includes(targetDay) || targetDay === item.day_number) throw new Error('請選擇有效的其他行程日。');
-    const previousItems = data.items;
-    const movedItems = moveItineraryItemAcrossDays(previousItems, item.id, targetDay);
-    data.setItems(movedItems);
-    try {
-      await moveItineraryItemToDay(item.id, targetDay, { offlineScope: data.offlineScope });
-    } catch (error) {
-      data.setItems(previousItems);
-      throw error;
-    }
-    await data.reload();
-    // A stale replica read must not undo the confirmed move; offline reads use
-    // the updated snapshot and the same helper is idempotent for its new day.
-    data.setItems((currentItems) => moveItineraryItemAcrossDays(currentItems, item.id, targetDay));
+    await data.moveItemToDay(item, targetDay);
+    pendingMoveRef.current = { id: item.id, sourceDay: item.day_number, targetDay };
     setRefreshKey((current) => current + 1);
     setDay(targetDay);
   }
-  async function deleteItem(item: ItineraryItem) { await data.removeItem(item.id); await data.reload(); }
+  async function deleteItem(item: ItineraryItem) {
+    try { await data.removeItem(item.id); }
+    catch (cause) { Alert.alert('刪除景點失敗', cause instanceof Error ? cause.message : '請查看同步狀態並重試。'); }
+  }
   async function updateItemImage(item: ItineraryItem, imageUrl: string | null) {
     const previousUrl = item.preview_url ?? null;
     data.setItems((currentItems) => currentItems.map((currentItem) => currentItem.id === item.id
       ? { ...currentItem, preview_url: imageUrl }
       : currentItem));
     try {
-      await updateItineraryItemImage(item.id, imageUrl, { offlineScope: data.offlineScope });
+      await data.trackMutation(() => updateItineraryItemImage(item.id, imageUrl, { offlineScope: data.offlineScope }));
     } catch (error: any) {
       data.setItems((currentItems) => currentItems.map((currentItem) => currentItem.id === item.id
         ? { ...currentItem, preview_url: previousUrl }
@@ -261,6 +258,7 @@ export default function TripDetailScreen() {
   async function deleteExpense(expense: any) { await data.removeExpense(expense.id); await data.reload(); }
   async function refreshPlaces() { await data.reloadPlaces(); }
   async function importIntoTrip(draft: ImportedTripDraft, targetTripId: string, dayOffset: number, previewPayloads: ImportedItineraryPayload[], mode: ImportMode = 'merge', destination = ''): Promise<ImportResult> {
+    await data.flushUndo();
     const target = importTrips.find(entry => entry.id === targetTripId) ?? (targetTripId === trip.id ? trip : null);
     if (!target) throw new Error('找不到要匯入的目標行程。');
     // Persist exactly what the preview displayed. Re-mapping the draft here
@@ -282,7 +280,8 @@ export default function TripDetailScreen() {
     return { targetTripId, ...result, failed: 0 };
   }
   async function clearAllItems(): Promise<ImportResult> {
-    const result = await clearTripItems(trip.id);
+    await data.flushUndo();
+    const result = await data.trackMutation(() => clearTripItems(trip.id));
     data.setItems([]);
     await data.reload();
     setRefreshKey(current => current + 1);
@@ -296,6 +295,7 @@ export default function TripDetailScreen() {
     setFocusedItemId(itemId);
   }
   async function handleSwitchToBackupPlan(primaryId: string, backupId: string) {
+    await data.flushUndo();
     const result = switchToBackupPlan(data.items, primaryId);
     const primary = result.items.find((item) => item.id === primaryId);
     const backup = result.items.find((item) => item.id === backupId);
@@ -323,9 +323,8 @@ export default function TripDetailScreen() {
     <MainScroll style={styles.mainScroll} {...(tab === 'timeline' || tab === 'places' ? { contentContainerStyle: styles.mainContent, keyboardShouldPersistTaps: 'handled' as const } : {})}>
     <TripDetailHeader trip={trip} members={data.members} userId={data.userId} profile={data.profile} theme={theme} themeMode={themeMode} mascotSize={headerMascotSize} insets={insets} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} onInvite={() => setInviteVisible(true)} onThemeModeChange={changeThemeMode} onSettings={() => setSettingsVisible(true)} onShare={() => setShareVisible(true)} onProfile={() => setProfileVisible(true)} compact={layout.compact} />
      {/* Offline state replaces the legacy offlineBar: 📡 離線模式：已載入快取行程 */}
-     <OfflineBanner isOffline={data.isOffline} />
     {data.realtimeNotice ? <View style={[styles.realtimeBar, { backgroundColor: theme.colors.surfaceMuted, borderColor: theme.colors.border }]}><Text style={[styles.offlineText, { color: theme.colors.muted }]}>↻ {data.realtimeNotice}</Text></View> : null}
-    <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} onResolve={(id, resolution) => { void data.resolveConflict(id, resolution); }} />
+    <OfflineSyncBanner isOffline={data.isOffline} pendingCount={data.pendingSyncCount} conflicts={data.syncConflicts} syncing={data.syncing} undoPending={data.undoPending} error={data.syncError} onRetry={() => { void data.retrySync(); }} onResolve={(id, resolution) => { void data.trackMutation(() => data.resolveConflict(id, resolution)).catch(() => undefined); }} />
     {data.error ? <Text style={styles.error}>{data.error}</Text> : null}
     <TripDetailTabs value={tab} onChange={setTab} theme={theme} />
     {/* 📥 一鍵匯入行程 is available from the timeline's more-actions menu. */}
@@ -337,7 +336,8 @@ export default function TripDetailScreen() {
     {tab === 'places' && <TripPlacesPanel tripId={tripId!} userId={data.userId} places={data.places} days={days} destination={trip.destination} themeMode={themeMode} onChanged={refreshPlaces} onScheduled={handlePlaceScheduled} onTimezoneDetected={async (timezone) => { if (timezone !== trip.timezone) { await data.saveTripSettings({ timezone }); await data.reload(); } }} />}
     </MainScroll>
     {tab === 'timeline' && <Pressable accessibilityRole="button" style={[styles.addSpot, { right: layout.fabRight, bottom: layout.fabBottom + insets.bottom, paddingHorizontal: layout.fabPaddingHorizontal, paddingVertical: layout.fabPaddingVertical, maxWidth: layout.fabMaxWidth, backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary }]} onPress={() => { setEditingItem(null); setItemModal(true); }}><Text numberOfLines={1} style={{ color: '#ffffff', fontWeight: '800', fontSize: layout.fabFontSize }}>＋ 新增景點／活動</Text></Pressable>}
-    <ItineraryItemModal visible={itemModal} item={editingItem} day={day} insertPosition={insertPosition} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onRefresh={refreshAfterItemSave} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); await data.reload(); setItemModal(false); } : undefined} />
+    <UndoToast label={data.undoLabel || undoNotice} canUndo={data.undoPending} busy={data.syncing} bottom={layout.fabBottom + insets.bottom + 64} onUndo={() => { const returnDay = data.undoReturnDay; if (data.undoLastAction()) { if (returnDay) handleDayChange(returnDay); setUndoNotice('已復原上次操作'); } }} />
+    <ItineraryItemModal visible={itemModal} item={editingItem} day={day} insertPosition={insertPosition} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onRefresh={refreshAfterItemSave} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); setItemModal(false); } : undefined} />
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
     <VoucherPreviewModal voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />

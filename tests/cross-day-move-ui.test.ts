@@ -27,9 +27,12 @@ describe('cross-day move timeline wiring', () => {
   it('optimistically moves the item, restores it on failure, and selects the destination day', () => {
     const detail = source('src/app/trips/[id].tsx');
     expect(detail).toContain('async function moveItemToDay');
-    expect(detail).toContain('moveItineraryItemAcrossDays');
-    expect(detail).toContain('await moveItineraryItemToDay');
-    expect(detail).toContain('data.setItems(previousItems)');
+    const dataHook = source('src/hooks/useTripDetailData.ts');
+    expect(detail).toContain('await data.moveItemToDay(item, targetDay)');
+    expect(dataHook).toContain('moveItineraryItemAcrossDays(current, item.id, targetDay)');
+    expect(dataHook).toContain('await moveItineraryItemToDay');
+    expect(dataHook).toContain('returnDay: item.day_number');
+    expect(detail).toContain('data.undoLastAction()');
     expect(detail).toContain('await data.reload().catch(() => undefined)');
     expect(detail).toContain('setDay(targetDay)');
   });

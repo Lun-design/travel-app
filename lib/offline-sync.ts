@@ -24,12 +24,27 @@ export function isNetworkError(error: unknown): boolean {
 }
 
 function mutationResourceKey(mutation: OfflineMutation): string {
+  // Preserve structural history: a reorder can depend on an intermediate
+  // day move, so replacing that move with only the final target is unsafe.
+  if (mutation.entity === 'itinerary' && (mutation.operation === 'move-day' || mutation.operation === 'reorder')) return `itinerary:${mutation.id}`;
+  // Moving, editing and ordering are independent operations on an itinerary
+  // row. Coalescing them together can silently discard a pending day move.
+  if (mutation.entity === 'itinerary') return `${mutation.entity}:${mutation.operation}:${mutation.resourceId}`;
   return `${mutation.entity}:${mutation.resourceId}`;
 }
 
 function compareNewest(left: OfflineMutation, right: OfflineMutation): number {
   const timestamp = right.clientTimestamp.localeCompare(left.clientTimestamp);
   return timestamp || right.id.localeCompare(left.id);
+}
+
+function compareReplayOrder(left: OfflineMutation, right: OfflineMutation): number {
+  if (left.entity === 'itinerary' && right.entity === 'itinerary') {
+    return left.clientTimestamp.localeCompare(right.clientTimestamp) || left.id.localeCompare(right.id);
+  }
+  if (left.entity === 'itinerary') return -1;
+  if (right.entity === 'itinerary') return 1;
+  return compareNewest(left, right);
 }
 
 export function createLocalId(prefix: string, now = new Date()): string {
@@ -83,7 +98,7 @@ export function createOfflineSyncService(options: OfflineSyncOptions) {
       }
     }
 
-    for (const mutation of [...newestByResource.values()].sort(compareNewest)) {
+    for (const mutation of [...newestByResource.values()].sort(compareReplayOrder)) {
       try {
         await options.execute(mutation);
         await store.removeMutation(mutation.id);

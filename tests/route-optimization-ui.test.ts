@@ -32,7 +32,10 @@ describe('route optimization UI callback chain', () => {
     const timeline = timelineSource();
 
     expect(detail).toContain('const orderOnlyItems = preserveItineraryTimes(previousItems, optimizedItems);');
-    expect(detail).toContain('replaceOptimizedRouteItems(currentItems, orderOnlyItems)');
+    expect(detail).toContain('await data.reorderItems(orderOnlyItems.map');
+    const dataHook = readFileSync('src/hooks/useTripDetailData.ts', 'utf8');
+    expect(dataHook).toContain('applyItineraryOrder(current, changes)');
+    expect(dataHook).toContain('undoPreview.stage');
     expect(timeline).toContain("Alert.alert('路線最佳化完成'");
   });
 });
