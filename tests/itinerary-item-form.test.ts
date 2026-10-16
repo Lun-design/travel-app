@@ -110,7 +110,8 @@ describe('itinerary item form validation', () => {
     expect(canSaveItineraryItem(formatFlightTitle(flight!))).toBe(true);
 
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryItemModal.tsx'), 'utf8');
-    expect(source).toContain('await submitItineraryItem(payload, onSave,');
+    expect(source).toContain('await submitItineraryItem(payload, persist,');
+    expect(source).toContain('keepOpen && onSaveAndContinue ? onSaveAndContinue : onSave');
     expect(source).toContain('disabled={!titleValid || saving}');
     expect(source).toContain('setAddress(getFlightDestinationAddress(flight) ?? \'\')');
     expect(source).not.toContain('setDuration(flight.durationMinutes === null ? \'\' : String(flight.durationMinutes))');

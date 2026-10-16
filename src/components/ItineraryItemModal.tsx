@@ -9,7 +9,7 @@ import { canSaveItineraryItem, submitItineraryItem, type ItineraryItem, type Ope
 import { canAutocompletePlaces, createDebouncedGeocodingSearch, fetchOverpassOpeningHours, getGeocodingAttribution, searchPlaces, type GeocodingResult } from '@/lib/geocoding';
 import { fetchGooglePlaceDetails, hasGooglePlacesApiKey, searchGooglePlaces } from '@/lib/google-places';
 import { formatFlightTitle, formatTimeHHmm, getFlightDestinationAddress, parseFlightText, parseItineraryNote } from '@/lib/ai-parser';
-import { tripDayNumberForDate } from '@/lib/trip-dates';
+import { tripDayNumberForDate, tripDayNumbers } from '@/lib/trip-dates';
 import { ManualLocationMap } from './ManualLocationMap';
 import { OpeningHoursEditor } from './OpeningHoursEditor';
 import { EDITORIAL_COLORS } from '@/lib/theme';
@@ -31,12 +31,13 @@ type Props = {
   userId?: string;
   onClose: () => void;
   onSave?: (data: any) => Promise<void>;
+  onSaveAndContinue?: (data: any) => Promise<void>;
   /** Force a full trip read after the mutation so mobile/web clients see the persisted row. */
   onRefresh?: () => Promise<void>;
   onDelete?: () => Promise<void>;
 };
 
-export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, insertPosition, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onRefresh, onDelete }: Props) {
+export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, insertPosition, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onSaveAndContinue, onRefresh, onDelete }: Props) {
   const route = useLocalSearchParams<{ id?: string | string[]; tripId?: string | string[] }>();
   const activeTripId = useActiveTripId();
   const contextInput = { tripId, itemTripId: item?.trip_id, routeId: route.id, routeTripId: route.tripId, activeTripId, day: dayProp, dayIndex };
@@ -72,11 +73,19 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   const [saveMessage, setSaveMessage] = useState('');
   const [saveHovered, setSaveHovered] = useState(false);
   const suppressNextSearch = useRef(false);
+  const savingRef = useRef(false);
+  const formVersion = useRef(0);
+  const searchVersion = useRef(0);
+  const nextInsertPosition = useRef<number | null | undefined>(insertPosition);
+  const insertionDay = useRef(day);
   const searchController = useRef(createDebouncedGeocodingSearch(searchPlaces, 400));
   const autocompleteEnabled = canAutocompletePlaces();
   const titleValid = canSaveItineraryItem(name);
 
   useEffect(() => {
+    formVersion.current++;
+    searchVersion.current++;
+    savingRef.current = false;
     if (!visible) return;
     setName(item?.location_name ?? '');
     setAddress(item?.address ?? '');
@@ -93,7 +102,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setPhotoReference(item?.photo_reference ?? item?.photoReference ?? null);
     setResults([]);
     setSearchMessage('');
-    setShowMore(false);
+    setShowMore(Boolean(item));
     setShowOpeningHours(false);
     setShowAiInput(false);
     setAiInput('');
@@ -104,8 +113,12 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setSaving(false);
     setSaveMessage('');
     setSaveHovered(false);
+    nextInsertPosition.current = insertPosition;
+    insertionDay.current = day;
     searchController.current.cancel();
-  }, [visible, item, day]);
+    return () => { formVersion.current++; searchVersion.current++; searchController.current.cancel(); };
+    // Day changes after a confirmed save must not erase a continued draft.
+  }, [visible, item?.id, context.tripId]);
 
   useEffect(() => {
     if (!visible || !autocompleteEnabled) return;
@@ -120,11 +133,14 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     }
     setSearching(true);
     setSearchMessage('');
+    const request = ++searchVersion.current;
     searchController.current.schedule(name, (nextResults) => {
+      if (request !== searchVersion.current) return;
       setResults(nextResults);
       setSearching(false);
       setSearchMessage(nextResults.length ? '' : '找不到結果，請確認名稱或手動調整地圖位置。');
     }, (error) => {
+      if (request !== searchVersion.current) return;
       setSearching(false);
       setSearchMessage(error instanceof Error ? error.message : '搜尋失敗，請稍後再試。');
     });
@@ -132,32 +148,40 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   }, [autocompleteEnabled, name, visible]);
 
   async function search() {
+    if (savingRef.current) return;
     if (name.trim().length < 2) {
       setSearchMessage('請輸入至少 2 個字元再搜尋。');
       return;
     }
     searchController.current.cancel();
+    const request = ++searchVersion.current;
     setSearching(true);
     setSearchMessage('');
     try {
       const nextResults = await searchPlaces(name);
+      if (request !== searchVersion.current) return;
       setResults(nextResults);
       setSearchMessage(nextResults.length ? '' : '找不到結果，請確認名稱或手動調整地圖位置。');
     } catch (error) {
+      if (request !== searchVersion.current) return;
       setSearchMessage(error instanceof Error ? error.message : '搜尋失敗，請稍後再試。');
     } finally {
-      setSearching(false);
+      if (request === searchVersion.current) setSearching(false);
     }
   }
 
   async function chooseResult(result: GeocodingResult): Promise<boolean> {
+    if (savingRef.current) return false;
+    const request = ++searchVersion.current;
     let selectedResult = result;
     if (result.provider === 'google' && result.googlePlaceId) {
       setSearching(true);
       setSearchMessage('正在載入 Google Places 詳細資料…');
       try {
         selectedResult = await fetchGooglePlaceDetails(result.googlePlaceId);
+        if (request !== searchVersion.current) return false;
       } catch (error) {
+        if (request !== searchVersion.current) return false;
         console.error('[ItineraryItemModal] Google Place details lookup failed', error);
         setSearching(false);
         setSearchMessage('Google 景點詳細資料取得失敗，請稍後再試或改用其他結果。');
@@ -185,6 +209,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     }
     try {
       const overpassHours = await fetchOverpassOpeningHours(selectedResult);
+      if (request !== searchVersion.current) return false;
       if (overpassHours) {
         setOpeningHours(overpassHours);
         setAutoHoursStatus('found');
@@ -194,6 +219,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         setSearchMessage('已自動帶入地圖位置；未找到營業時間，可手動設定。');
       }
     } catch (error) {
+      if (request !== searchVersion.current) return false;
       console.error('[ItineraryItemModal] Overpass opening-hours lookup skipped', error);
       setAutoHoursStatus('missing');
       setSearchMessage('已帶入地圖位置；營業時間查詢暫時不可用，可手動設定。');
@@ -201,8 +227,9 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     return true;
   }
 
-  async function save() {
-    if (saving) return;
+  async function save(keepOpen = false) {
+    if (savingRef.current) return;
+    const operation = formVersion.current;
     if (!titleValid) {
       setSaveMessage('\u8acb\u5148\u8f38\u5165\u666f\u9ede\u540d\u7a31\u518d\u5132\u5b58');
       Alert.alert('欄位未完成', '請輸入景點名稱。');
@@ -214,7 +241,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       trip_id: resolveItineraryContext(contextInput).tripId,
       created_by: item?.created_by || userId || '',
       day_number: safeDay,
-      position: insertPosition ?? item?.position ?? undefined,
+      position: item?.position ?? (safeDay === insertionDay.current ? nextInsertPosition.current ?? undefined : undefined),
       location_name: name.trim(),
       address: address.trim() || null,
       time: formatTimeHHmm(time) ?? (time.trim() || null),
@@ -233,9 +260,11 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       reservation_tags: reservationTags,
     };
 
+    savingRef.current = true;
     setSaving(true);
     try {
-      const submitted = await submitItineraryItem(payload, onSave, async (safePayload) => {
+      const persist = keepOpen && onSaveAndContinue ? onSaveAndContinue : onSave;
+      const submitted = await submitItineraryItem(payload, persist, async (safePayload) => {
         if (!safePayload.trip_id) throw new Error('找不到行程 ID (Trip ID missing)');
         const { data, error } = await supabase.auth.getUser();
         if (error) throw error;
@@ -243,18 +272,36 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         await saveItineraryItem({ ...safePayload, created_by: item?.created_by || data.user.id }, { offlineScope: { tripId: safePayload.trip_id, userId: data.user.id } });
       });
       if (!submitted) { setSaveMessage('請輸入景點名稱。'); return; }
-      await onRefresh?.();
+      if (operation !== formVersion.current) return;
+      let refreshFailed = false;
+      try { await onRefresh?.(); }
+      catch (error) { refreshFailed = true; console.error('[ItineraryItemModal] refresh failed after confirmed save', error); }
+      if (operation !== formVersion.current) return;
+      if (keepOpen && !item) {
+        if (safeDay === insertionDay.current && nextInsertPosition.current != null) nextInsertPosition.current++;
+        searchController.current.cancel();
+        searchVersion.current++;
+        setSearching(false); setAiParsing(false);
+        setName(''); setAddress(''); setTime(''); setCategory('spot'); setEstimatedCost('');
+        setOpeningHours(null); setAutoHoursStatus('idle'); setDifficulty(''); setNotes('');
+        setReservationTags([]); setLat(null); setLng(null); setPhotoReference(null);
+        setResults([]); setSearchMessage(''); setParsedDate(null); setAiInput(''); setAiMessage('');
+        setShowAiInput(false); setShowOpeningHours(false); setShowMore(false);
+        setSaveMessage(`已儲存，可繼續新增${refreshFailed ? '（清單同步稍後重試）' : ''}`);
+        return;
+      }
       setSavedAndClosed(true);
       if (typeof onClose === 'function') {
         try { onClose(); } catch (closeError) { console.error('[ItineraryItemModal] close failed after save', closeError); }
       }
     } catch (error) {
+      if (operation !== formVersion.current) return;
       console.error('[ItineraryItemModal] save failed', error);
       setSaveMessage(error instanceof Error && error.message ? error.message : '\u666f\u9ede\u5132\u5b58\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66');
       const message = error instanceof Error && error.message ? error.message : '景點儲存失敗，請稍後再試。';
       Alert.alert('儲存失敗', message);
     } finally {
-      setSaving(false);
+      if (operation === formVersion.current) { savingRef.current = false; setSaving(false); }
     }
   }
 
@@ -269,6 +316,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   }
 
   async function parseAiInput() {
+    if (savingRef.current) return;
     const text = aiInput.trim();
     if (!text) {
       setAiMessage('請先貼上航班簡訊或輸入行程速記');
@@ -317,13 +365,18 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     setName(locationName);
     setResults([]);
     setSearching(true);
+    let request = ++searchVersion.current;
     try {
       const choices = hasGooglePlacesApiKey() ? await searchGooglePlaces(locationName) : await searchPlaces(locationName);
+      if (request !== searchVersion.current) return;
       if (!choices.length) {
         setAiMessage(`找不到「${locationName}」，請手動調整地點或重新輸入`);
         return;
       }
-      const applied = await chooseResult(choices[0]);
+      const applying = chooseResult(choices[0]);
+      request = searchVersion.current;
+      const applied = await applying;
+      if (request !== searchVersion.current) return;
       if (applied) {
         const dateLabel = note.date ? `（${note.date}${dateResult.status === 'mapped' && dateResult.day ? `，已套用 Day ${dateResult.day}` : dateResult.status === 'outside' ? '，不在目前行程範圍' : '，請確認對應 Day'}）` : '';
         setAiMessage(`已帶入「${locationName}」的地址、座標與營業時間${dateLabel}`);
@@ -331,11 +384,11 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         setAiMessage(`已解析「${locationName}」，但無法取得地點詳細資料`);
       }
     } catch (error) {
+      if (request !== searchVersion.current) return;
       console.error('[ItineraryItemModal] AI place lookup failed', error);
       setAiMessage('景點搜尋失敗，請檢查網路或改用手動搜尋');
     } finally {
-      setSearching(false);
-      setAiParsing(false);
+      if (request === searchVersion.current) { setSearching(false); setAiParsing(false); }
     }
   }
 
@@ -345,6 +398,8 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
       <Text style={styles.kicker}>DAY {selectedDay}</Text>
       <Text style={styles.title}>{item ? '編輯景點／活動' : '新增景點／活動'}</Text>
+      {!item ? <Text style={styles.hoursHint}>先填名稱與天數即可儲存，其他資料可稍後補上。</Text> : null}
+      {!item ? <><Text style={styles.label}>安排天數</Text><ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.chips}>{tripDayNumbers(tripStartDate ?? '', tripEndDate ?? '').map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`選擇 Day ${value}`} accessibilityState={{ selected: selectedDay === value }} disabled={saving} onPress={() => setSelectedDay(value)} style={[styles.chip, selectedDay === value && styles.selected]}><Text style={selectedDay === value ? styles.white : styles.chipText}>{`Day ${value}`}</Text></Pressable>)}</View></ScrollView></> : null}
 
       <Text style={styles.label}>景點名稱</Text>
       <Pressable accessibilityRole="button" style={styles.aiToggle} onPress={() => { setShowAiInput((current) => !current); setAiMessage(''); }}>
@@ -366,21 +421,21 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         {aiMessage ? <Text style={styles.aiMessage}>{aiMessage}</Text> : null}
       </View> : null}
       <View style={styles.searchRow}>
-        <TextInput style={[styles.input, styles.flex]} placeholder="例如：台北 101" value={name} onChangeText={setName} onSubmitEditing={() => void search()} returnKeyType="search" />
+        <TextInput editable={!saving} style={[styles.input, styles.flex]} placeholder="例如：台北 101" value={name} onChangeText={(value) => { searchVersion.current++; searchController.current.cancel(); setSearching(false); setAiParsing(false); setResults([]); setName(value); }} onSubmitEditing={() => void search()} returnKeyType="search" />
         <Pressable accessibilityRole="button" accessibilityLabel="搜尋景點" style={styles.search} onPress={() => void search()} disabled={searching}>{searching ? <ActivityIndicator color="white" /> : <Text style={styles.white}>搜尋</Text>}</Pressable>
       </View>
       {category !== 'flight' ? <Text style={styles.searchHint}>{autocompleteEnabled ? '停止輸入 400ms 後會自動搜尋；也可按搜尋。' : '可按 Enter 或搜尋按鈕查詢 OpenStreetMap。'}</Text> : null}
       {category !== 'flight' && results.length ? <View style={styles.results}>{results.map((result) => <Pressable key={result.id} style={styles.result} onPress={() => chooseResult(result)}><Text style={styles.resultTitle}>{result.title}</Text><Text style={styles.resultAddress} numberOfLines={2}>{result.displayName}</Text>{result.openingHours ? <Text style={styles.resultHours}>✓ 找到營業時間</Text> : null}</Pressable>)}<Text style={styles.attribution}>{attribution}</Text></View> : null}
       {category !== 'flight' && searchMessage ? <Text style={styles.searchMessage}>{searchMessage}</Text> : null}
 
+      <Pressable accessibilityRole="button" accessibilityLabel="更多景點設定" accessibilityState={{ expanded: showMore }} style={styles.moreButton} onPress={() => setShowMore((current) => !current)}><Text style={styles.moreText}>{showMore ? '收合更多設定' : '更多設定（地址、時間、費用、營業時間）'}</Text></Pressable>
+      {showMore ? <View style={styles.morePanel}>
       <Text style={styles.label}>地址</Text>
       <TextInput style={styles.input} placeholder="可由搜尋結果自動帶入" value={address} onChangeText={setAddress} />
       <Text style={styles.label}>開始時間（可選）</Text>
       <TimePickerField label="開始時間" value={time} onChange={setTime} placeholder="09:30" style={styles.input} />
       {parsedDate ? <Text style={styles.parsedDateHint}>解析日期：{parsedDate}（儲存時將使用 Day {selectedDay}）</Text> : null}
 
-      <Pressable style={styles.moreButton} onPress={() => setShowMore((current) => !current)}><Text style={styles.moreText}>{showMore ? '收合進階設定' : '展開進階設定（類別、營業時間）'}</Text></Pressable>
-      {showMore ? <View style={styles.morePanel}>
         <View style={styles.compactFieldRow}>
           <View style={styles.compactField}>
             <Text style={styles.label}>景點類型</Text>
@@ -410,6 +465,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
 
       <View pointerEvents="auto" style={styles.actions}>
         <Pressable onPress={onClose}><Text style={styles.cancel}>取消</Text></Pressable>
+        {!item && onSaveAndContinue ? <Pressable accessibilityRole="button" accessibilityLabel="儲存並新增下一筆" disabled={!titleValid || saving} onPress={() => void save(true)} style={[styles.chip, saving && styles.saveDisabled]}><Text style={styles.moreText}>儲存並新增下一筆</Text></Pressable> : null}
         {item && onDelete ? <Pressable onPress={() => Alert.alert('刪除景點', '確定要刪除這個景點嗎？', [{ text: '取消' }, { text: '刪除', style: 'destructive', onPress: onDelete }])}><Text style={styles.delete}>刪除</Text></Pressable> : null}
         <Pressable
           accessibilityRole="button"
@@ -423,7 +479,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
           {saving ? <ActivityIndicator color="white" /> : <Text style={styles.white}>儲存</Text>}
         </Pressable>
       </View>
-      {saveMessage ? <View pointerEvents="none" style={styles.saveToast}><Text style={styles.saveToastText}>{saveMessage}</Text></View> : null}
+      {saveMessage ? <View pointerEvents="none" style={[styles.saveToast, saveMessage.startsWith('已儲存') && { backgroundColor: EDITORIAL_COLORS.terracottaSoft }]}><Text accessibilityLiveRegion="polite" style={[styles.saveToastText, saveMessage.startsWith('已儲存') && { color: EDITORIAL_COLORS.terracotta }]}>{saveMessage}</Text></View> : null}
     </ScrollView>
   </Modal>;
 }
@@ -470,7 +526,7 @@ const styles = StyleSheet.create({
   hoursToggleText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   hoursLoading: { color: EDITORIAL_COLORS.terracotta, fontSize: 12 },
   hoursHint: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 17 },
-  actions: { position: 'relative', zIndex: 9999, elevation: 9999, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 20, marginTop: 12, paddingTop: 8, backgroundColor: EDITORIAL_COLORS.paper, width: '100%', minHeight: 64 },
+  actions: { position: 'relative', zIndex: 9999, elevation: 9999, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 12, paddingTop: 8, backgroundColor: EDITORIAL_COLORS.paper, width: '100%', minHeight: 64 },
   cancel: { color: EDITORIAL_COLORS.taupe, fontWeight: '600', minHeight: 44, paddingVertical: 12 },
   delete: { color: EDITORIAL_COLORS.dangerText, fontWeight: '700', minHeight: 44, paddingVertical: 12 },
   save: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 13 },

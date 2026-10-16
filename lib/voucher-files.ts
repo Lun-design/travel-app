@@ -1,7 +1,7 @@
 import type { Voucher } from './vouchers';
 import type { OfflineScope } from './offline-store';
 import { validateVoucherUploadSize } from './vouchers';
-export type VoucherFileStore = { read: (key: string) => Promise<Blob | null>; write: (key: string, blob: Blob) => Promise<void> };
+export type VoucherFileStore = { read: (key: string) => Promise<Blob | null>; write: (key: string, blob: Blob) => Promise<void>; has?: (key: string) => Promise<boolean> };
 type FileOptions = { store: VoucherFileStore; getRemoteUrl: () => Promise<string>; isOffline?: boolean; fetcher?: typeof fetch; signal?: AbortSignal };
 // Existing logout cleanup removes every cache with this prefix.
 export const VOUCHER_FILE_CACHE = 'travel-planner-runtime-voucher-files-v1';
@@ -14,6 +14,10 @@ export function canStoreVoucherOffline(): boolean {
 }
 export function createBrowserVoucherFileStore(): VoucherFileStore {
   return {
+    async has(key) {
+      if (!canStoreVoucherOffline()) throw new Error('此裝置不支援離線票券儲存。');
+      return Boolean(await (await caches.open(VOUCHER_FILE_CACHE)).match(key));
+    },
     async read(key) {
       if (!canStoreVoucherOffline()) return null;
       const response = await (await caches.open(VOUCHER_FILE_CACHE)).match(key);
