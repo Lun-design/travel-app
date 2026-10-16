@@ -17,7 +17,7 @@ export const shortcutPreferences = {
     globalThis.localStorage.setItem(key, value);
   },
 };
-export function parseShortcutPins(raw: string | null): ShortcutPin[] {
+export function parseShortcutPins(raw: string | null, limit = 12): ShortcutPin[] {
   try {
     const values: unknown = JSON.parse(raw ?? '[]');
     if (!Array.isArray(values)) return [];
@@ -27,7 +27,7 @@ export function parseShortcutPins(raw: string | null): ShortcutPin[] {
       const key = `${v.kind}:${v.id}`;
       if (seen.has(key)) return false;
       seen.add(key); return true;
-    }).slice(0, 12);
+    }).slice(0, limit);
   } catch { return []; }
 }
 export function resolveShortcutItems(pins: readonly ShortcutPin[], items: readonly ItineraryItem[], tripId: string) {

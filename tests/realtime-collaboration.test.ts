@@ -44,7 +44,7 @@ describe('realtime collaboration', () => {
     const unsubscribe = subscribeToTripRealtime(client, 'trip-1', onChange);
 
     expect(client.channel).toHaveBeenCalledWith('trip-realtime:trip-1');
-    expect(channel.on).toHaveBeenCalledTimes(4);
+    expect(channel.on).toHaveBeenCalledTimes(6);
     expect(vi.mocked(channel.on).mock.calls.map((call) => call[1])).toEqual(expect.arrayContaining([
       expect.objectContaining({ table: 'itinerary_items', filter: 'trip_id=eq.trip-1' }),
       expect.objectContaining({ table: 'trip_places', filter: 'trip_id=eq.trip-1' }),

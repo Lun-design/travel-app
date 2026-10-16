@@ -33,7 +33,7 @@ export function describeCollaborativeUpdate(change: RealtimeChange, name: string
   const record = change.eventType === 'DELETE' ? change.oldRecord : change.record;
   const day = Number(record.day_number);
   const dayLabel = Number.isInteger(day) && day > 0 ? `Day ${day} ` : '';
-  const labels = { itinerary_items: '行程', trip_places: '靈感收藏', expenses: '旅費', packing_items: '打包清單' };
+  const labels = { itinerary_items: '行程', trip_places: '靈感收藏', expenses: '旅費', packing_items: '打包清單', vouchers: '票券', trip_info_pins: '住宿／集合資訊' };
   const title = typeof record.location_name === 'string' ? record.location_name.slice(0, 60) : '';
   const verb = change.eventType === 'DELETE' ? '刪除了' : change.eventType === 'INSERT' ? '新增了' : '更新了';
   return `${name.trim() || '旅伴'}${verb} ${dayLabel}${title || labels[change.table]}`;

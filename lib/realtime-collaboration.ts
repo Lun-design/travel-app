@@ -1,5 +1,5 @@
 /** Tables whose rows are scoped to a trip and can be shared in real time. */
-export const REALTIME_TRIP_TABLES = ['itinerary_items', 'trip_places', 'expenses', 'packing_items'] as const;
+export const REALTIME_TRIP_TABLES = ['itinerary_items', 'trip_places', 'expenses', 'packing_items', 'vouchers', 'trip_info_pins'] as const;
 export type RealtimeTripTable = typeof REALTIME_TRIP_TABLES[number];
 export type RealtimeEventType = 'INSERT' | 'UPDATE' | 'DELETE';
 export type RealtimeRecord = Record<string, any>;

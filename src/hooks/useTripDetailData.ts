@@ -38,6 +38,7 @@ export function useTripDetailData(tripId: string | undefined) {
   const [syncConflicts, setSyncConflicts] = useState<OfflineMutation[]>([]);
   const [realtimeNotice, setRealtimeNotice] = useState('');
   const [packingRevision, setPackingRevision] = useState(0);
+  const [shortcutRevision, setShortcutRevision] = useState(0);
   const reloadRequestRef = useRef(0);
   const currentUserIdRef = useRef('');
   const realtimeNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +96,7 @@ export function useTripDetailData(tripId: string | undefined) {
         return;
       }
       const cached = await offlineStore.getSnapshot(scope);
+      if (requestId !== reloadRequestRef.current) return;
       const resolvedVouchers = voucherData ?? cached?.vouchers ?? [];
       const resolvedPlaces = placeData ?? (cached?.tripPlaces as TripPlace[] | undefined) ?? [];
       const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
@@ -103,6 +105,7 @@ export function useTripDetailData(tripId: string | undefined) {
       const cleanedItemData = sanitizeLoadedItineraryItems(itemData);
       currentUserIdRef.current = auth?.id ?? '';
       setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(cleanedItemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]); setPlaces(resolvedPlaces);
+      setShortcutRevision((value) => value + 1);
       await offlineStore.putSnapshot(scope, {
         trip: tripData,
         members: resolvedMembers,
@@ -141,6 +144,7 @@ export function useTripDetailData(tripId: string | undefined) {
     });
   }, [offlineScope, tripId]);
 
+  useEffect(() => () => { reloadRequestRef.current++; }, [tripId]);
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => () => {
     if (realtimeNoticeTimerRef.current) clearTimeout(realtimeNoticeTimerRef.current);
@@ -150,19 +154,40 @@ export function useTripDetailData(tripId: string | undefined) {
     void exchangeRateService.getSnapshot().then((snapshot) => { if (active) setRateSnapshot(snapshot); });
     return () => { active = false; };
   }, []);
+  const catchUpRef = useRef({ reload, trackMutation, refreshSyncStatus, syncingCount, undoPending: undoPreview.pending });
+  catchUpRef.current = { reload, trackMutation, refreshSyncStatus, syncingCount, undoPending: undoPreview.pending };
   useEffect(() => {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+    let active = true, inFlight = false;
     const updateOnlineState = () => setIsOffline(!navigator.onLine);
-    const handleOnline = () => {
+    async function catchUp(refresh: boolean) {
       updateOnlineState();
-      void trackMutation(() => offlineSyncService.sync(offlineScope))
-        .then(() => refreshSyncStatus())
-        .then(() => reload())
-        .catch((error) => console.error('[TripDetail] reconnect sync failed', error));
+      if (!active || inFlight || !navigator.onLine || !userId || catchUpRef.current.syncingCount || catchUpRef.current.undoPending) return;
+      inFlight = true;
+      try {
+        const pending = await offlineStore.listMutations(offlineScope, 'pending');
+        if (!active) return;
+        // Replay before reading cloud rows, otherwise unsent local edits can disappear.
+        if (pending.length) await catchUpRef.current.trackMutation(() => offlineSyncService.sync(offlineScope));
+        if (active && (refresh || pending.length)) await catchUpRef.current.reload();
+      } catch (cause) { if (active) reportSyncError(cause); }
+      finally { inFlight = false; }
+    }
+    const resume = () => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') void catchUp(true); };
+    const visibility = () => { if (document.visibilityState === 'visible') resume(); };
+    updateOnlineState();
+    // Opening an already-online browser must not strand last session's offline queue.
+    void catchUp(false);
+    window.addEventListener('online', resume); window.addEventListener('offline', updateOnlineState);
+    window.addEventListener('focus', resume); window.addEventListener('pageshow', resume);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', visibility);
+    return () => {
+      active = false;
+      window.removeEventListener('online', resume); window.removeEventListener('offline', updateOnlineState);
+      window.removeEventListener('focus', resume); window.removeEventListener('pageshow', resume);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', visibility);
     };
-    updateOnlineState(); window.addEventListener('online', handleOnline); window.addEventListener('offline', updateOnlineState);
-    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', updateOnlineState); };
-  }, [offlineScope, refreshSyncStatus, reload, trackMutation]);
+  }, [offlineScope, userId, reportSyncError]);
 
   const showRealtimeNotice = useCallback((notice = '行程已由隊友更新') => {
     setRealtimeNotice(notice);
@@ -195,13 +220,19 @@ export function useTripDetailData(tripId: string | undefined) {
       void refreshRealtimeExpenses();
     } else if (change.table === 'packing_items') {
       setPackingRevision((current) => current + 1);
+    } else if (change.table === 'vouchers') {
+      setVouchers((current) => applyRealtimeChange(current, change));
+    } else if (change.table === 'trip_info_pins') {
+      setShortcutRevision((current) => current + 1);
     }
   }, [members, refreshRealtimeExpenses, showRealtimeNotice]);
 
+  const realtimeHandlerRef = useRef(handleRealtimeChange);
+  realtimeHandlerRef.current = handleRealtimeChange;
   useEffect(() => {
     if (!tripId) return;
-    return subscribeToTripRealtime(supabase as unknown as RealtimeClientLike, tripId, handleRealtimeChange);
-  }, [handleRealtimeChange, tripId]);
+    return subscribeToTripRealtime(supabase as unknown as RealtimeClientLike, tripId, (change) => realtimeHandlerRef.current(change));
+  }, [tripId]);
 
   const saveItem = useCallback(async (input: ItineraryItemSaveInput) => {
     await undoPreview.flush();
@@ -286,7 +317,7 @@ export function useTripDetailData(tripId: string | undefined) {
 
   return {
     trip, setTrip, members, setMembers, items: undoPreview.items, setItems, expenses, setExpenses, vouchers, setVouchers, places, setPlaces, profile, setProfile, userId,
-    rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, realtimeNotice, packingRevision, offlineScope,
+    rateSnapshot, loading, error, isOffline, pendingSyncCount, syncConflicts, realtimeNotice, packingRevision, shortcutRevision, offlineScope,
     reload, reloadPlaces, resolveConflict, saveItem, removeItem, reorderItems, moveItemToDay, shiftSchedule, removeExpense, saveExpenseRecord, saveTripSettings, lockRate, saveProfile,
     syncing: syncingCount > 0, syncError, retrySync, trackMutation,
     undoLabel: undoPreview.label, undoPending: undoPreview.pending, undoReturnDay: undoPreview.returnDay,

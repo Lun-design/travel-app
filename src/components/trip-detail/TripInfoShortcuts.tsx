@@ -7,39 +7,79 @@ import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { getAppTheme, type AppTheme } from '@/lib/theme';
 import { getTimeContextLabel } from '@/lib/time-context';
+import { listTripInfoPins, setTripInfoPin } from '@/lib/trip-shortcuts-api';
 
-export function TripInfoShortcuts({ tripId, userId, items, timezone, theme = getAppTheme('light') }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; theme?: AppTheme }) {
+export function TripInfoShortcuts({ tripId, userId, items, timezone, refreshToken = 0, canEdit = true, theme = getAppTheme('light') }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; refreshToken?: number; canEdit?: boolean; theme?: AppTheme }) {
   const key = shortcutStorageKey({ userId, tripId });
-  const [stored, setStored] = useState<{ key: string; pins: ShortcutPin[] } | null>(null);
+  const [stored, setStored] = useState<{ key: string; pins: ShortcutPin[]; synced: boolean } | null>(null);
   const [open, setOpen] = useState(false), [picker, setPicker] = useState(false);
   const [kind, setKind] = useState<ShortcutKind>('hotel');
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
-  const generation = useRef(0), busyRef = useRef(false);
+  const [legacy, setLegacy] = useState<ShortcutPin[]>([]);
+  const generation = useRef(0), busyRef = useRef(false), cloudRequest = useRef(0);
   useEffect(() => {
     let active = true;
     generation.current++; busyRef.current = false; setBusy(false); setPicker(false); setOpen(false); setNotice(''); setStored(null);
     if (!userId || userId === 'anonymous') return;
-    void shortcutPreferences.getItem(key).then((raw) => { if (active) setStored({ key, pins: parseShortcutPins(raw) }); }).catch(() => { if (active) setNotice('無法讀取本機快捷資訊，此裝置可能限制儲存，請重試。'); });
+    setLegacy([]);
+    void shortcutPreferences.getItem(key).then((raw) => { if (active) setLegacy(parseShortcutPins(raw)); }).catch(() => { /* Device storage is optional; cloud pins remain available. */ });
     return () => { active = false; generation.current++; };
-  }, [key, retry]);
+  }, [key]);
+  useEffect(() => {
+    let active = true;
+    if (!userId || userId === 'anonymous' || busyRef.current) return;
+    const request = generation.current;
+    const read = ++cloudRequest.current;
+    void listTripInfoPins(tripId).then((loaded) => {
+      if (!active || request !== generation.current || read !== cloudRequest.current || busyRef.current) return;
+      setStored({ key, pins: loaded, synced: true });
+      void shortcutPreferences.setItem(`${key}:cloud`, JSON.stringify(loaded)).catch(() => undefined);
+    }).catch(async (error) => {
+      if (!active || request !== generation.current || read !== cloudRequest.current || busyRef.current) return;
+      setNotice(error instanceof Error ? error.message : '無法讀取雲端快捷資訊，請重試。');
+      try {
+        const cloudCache = await shortcutPreferences.getItem(`${key}:cloud`);
+        const raw = cloudCache ?? await shortcutPreferences.getItem(key);
+        if (active && request === generation.current && read === cloudRequest.current && !busyRef.current) setStored({ key, pins: parseShortcutPins(raw, Infinity), synced: false });
+      } catch { /* Keep the visible cloud error if device storage is unavailable too. */ }
+    });
+    return () => { active = false; };
+  }, [key, retry, refreshToken]);
   const ready = stored?.key === key;
   const pins = ready ? stored.pins : [];
   const selected = resolveShortcutItems(pins, items, tripId);
   async function togglePin(item: ItineraryItem) {
-    if (!ready || busyRef.current || item.trip_id !== tripId) return;
+    if (!ready || !stored.synced || !canEdit || busyRef.current || item.trip_id !== tripId) return;
     // Deleted records must not consume the cap or become impossible to unpin.
     const livePins = resolveShortcutItems(pins, items, tripId).map(({ pin }) => pin);
     const exists = livePins.some((p) => p.id === item.id && p.kind === kind);
     const next = exists ? livePins.filter((p) => p.id !== item.id || p.kind !== kind) : [...livePins, { id: item.id, kind }];
-    if (next.length > 12) { setNotice('最多釘選 12 筆重要資訊，請先解除其他項目。'); return; }
-    busyRef.current = true; setBusy(true); setNotice(''); const request = generation.current;
+    if (!exists && next.length > 12) { setNotice('最多釘選 12 筆重要資訊，請先解除其他項目。'); return; }
+    cloudRequest.current++; busyRef.current = true; setBusy(true); setNotice(''); const request = generation.current;
     try {
-      await shortcutPreferences.setItem(key, JSON.stringify(next));
+      await setTripInfoPin(tripId, { id: item.id, kind }, !exists);
       if (request !== generation.current) return;
-      setStored({ key, pins: next }); setPicker(false); setNotice('已更新本機快捷資訊');
-    } catch { if (request === generation.current) setNotice('無法儲存本機快捷資訊，原設定已保留。'); }
-    finally { if (request === generation.current) { busyRef.current = false; setBusy(false); } }
+      setStored({ key, pins: next, synced: true }); setPicker(false); setNotice('已同步快捷資訊，行程成員皆可查看');
+    } catch (error) { if (request === generation.current) setNotice(`無法儲存快捷資訊：${error instanceof Error ? error.message : '請重試'}，原設定已保留。`); }
+    finally { if (request === generation.current) { busyRef.current = false; setBusy(false); setRetry((v) => v + 1); } }
+  }
+  async function importLegacy() {
+    if (!ready || !stored.synced || !canEdit || busyRef.current) return;
+    const request = generation.current;
+    const imported = resolveShortcutItems(legacy, items, tripId).map(({ pin }) => pin);
+    cloudRequest.current++; busyRef.current = true; setBusy(true);
+    try {
+      for (const pin of imported) {
+        if (request !== generation.current) return;
+        await setTripInfoPin(tripId, pin, true);
+      }
+      if (request !== generation.current) return;
+      await shortcutPreferences.setItem(key, '[]');
+      if (request !== generation.current) return;
+      setLegacy([]); setNotice('已將此裝置原有釘選同步至行程');
+    } catch (error) { if (request === generation.current) setNotice(error instanceof Error ? error.message : '匯入失敗，原本機資料仍保留，請重試。'); }
+    finally { if (request === generation.current) { busyRef.current = false; setBusy(false); setRetry((v) => v + 1); } }
   }
   async function act(item: ItineraryItem, action: 'copy' | 'navigate' | 'share', pinKind: ShortcutKind) {
     const request = generation.current;
@@ -59,13 +99,15 @@ export function TripInfoShortcuts({ tripId, userId, items, timezone, theme = get
   }
   return <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
     <View style={styles.header}>
-      <Pressable accessibilityRole="button" accessibilityLabel={open ? '收合重要資訊' : '展開重要資訊'} accessibilityState={{ expanded: open }} style={styles.heading} onPress={() => setOpen((v) => !v)}><Text style={[styles.title, { color: theme.colors.text }]}>住宿／集合資訊 {open ? '⌃' : '⌄'}</Text><Text style={[styles.hint, { color: theme.colors.muted }]}>{selected.length ? `${selected.length} 筆本機釘選` : '將重要地址與集合時間放在手邊'}</Text></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="設定重要資訊" disabled={!ready || busy} style={styles.button} onPress={() => { setPicker(true); setNotice(''); }}><Text style={{ color: theme.colors.primary }}>{ready ? '設定' : '讀取中…'}</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={open ? '收合重要資訊' : '展開重要資訊'} accessibilityState={{ expanded: open }} style={styles.heading} onPress={() => setOpen((v) => !v)}><Text style={[styles.title, { color: theme.colors.text }]}>住宿／集合資訊 {open ? '⌃' : '⌄'}</Text><Text style={[styles.hint, { color: theme.colors.muted }]}>{selected.length ? `${selected.length} 筆行程共用釘選` : '將重要地址與集合時間放在手邊'}</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="設定重要資訊" disabled={!ready || !stored.synced || busy || !canEdit} style={styles.button} onPress={() => { setPicker(true); setNotice(''); }}><Text style={{ color: theme.colors.primary }}>{!canEdit ? '僅供查看' : ready && stored.synced ? '設定' : notice ? '尚未連線' : '讀取中…'}</Text></Pressable>
     </View>
     {notice ? <Text accessibilityLiveRegion="polite" style={[styles.feedback, { color: theme.colors.primary }]}>{notice}</Text> : null}
-    {!ready && notice ? <Pressable accessibilityRole="button" style={styles.button} onPress={() => setRetry((v) => v + 1)}><Text style={{ color: theme.colors.primary }}>重試載入</Text></Pressable> : null}
+    {ready && !stored.synced ? <Text style={[styles.feedback, { color: theme.colors.muted }]}>顯示此裝置快取，尚未同步；連線後請重試。</Text> : null}
+    {(!ready || !stored.synced) && notice ? <Pressable accessibilityRole="button" style={styles.button} onPress={() => setRetry((v) => v + 1)}><Text style={{ color: theme.colors.primary }}>重試載入</Text></Pressable> : null}
+    {legacy.length > 0 && canEdit ? <Pressable accessibilityRole="button" accessibilityLabel="匯入本機釘選至雲端" disabled={!ready || !stored.synced || busy} style={styles.button} onPress={() => void importLegacy()}><Text style={{ color: theme.colors.primary }}>將此裝置原有釘選同步至行程</Text></Pressable> : null}
     {open ? <View style={styles.body}>
-      <Text style={[styles.hint, { color: theme.colors.muted }]}>釘選只保存在此裝置，不改動景點；分享不會附上私人備註。</Text>
+      <Text style={[styles.hint, { color: theme.colors.muted }]}>釘選儲存於雲端，行程成員共用；分享不會附上私人備註。</Text>
       {!selected.length ? <Text style={[styles.hint, { color: theme.colors.muted }]}>點「設定」選擇既有景點作為住宿或集合資訊。</Text> : null}
       {selected.map(({ pin, item }) => <View key={`${pin.kind}:${pin.id}`} style={[styles.info, { backgroundColor: theme.colors.surfaceMuted }]}>
         <Text style={[styles.title, { color: theme.colors.text }]}>{pin.kind === 'hotel' ? '住宿' : '集合'} · {item.location_name}</Text>
@@ -77,7 +119,7 @@ export function TripInfoShortcuts({ tripId, userId, items, timezone, theme = get
     </View> : null}
     <Modal visible={picker} transparent animationType="fade" onRequestClose={() => { if (!busyRef.current) setPicker(false); }}>
       <View style={styles.backdrop}><View style={[styles.modal, { backgroundColor: theme.colors.card }]}>
-        <View style={styles.header}><Text style={[styles.title, { color: theme.colors.text }]}>設定本機快捷資訊</Text><Pressable accessibilityRole="button" accessibilityLabel="關閉重要資訊設定" disabled={busy} style={styles.button} onPress={() => setPicker(false)}><Text style={{ color: theme.colors.primary }}>關閉 ×</Text></Pressable></View>
+        <View style={styles.header}><Text style={[styles.title, { color: theme.colors.text }]}>設定行程共用快捷資訊</Text><Pressable accessibilityRole="button" accessibilityLabel="關閉重要資訊設定" disabled={busy} style={styles.button} onPress={() => setPicker(false)}><Text style={{ color: theme.colors.primary }}>關閉 ×</Text></Pressable></View>
         <Text style={[styles.hint, { color: theme.colors.muted }]}>選擇景點即可釘選，再次點擊可解除。不會變更原行程。</Text>
         <View style={styles.actions}>{(['hotel', 'meeting'] as const).map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`選擇${value === 'hotel' ? '住宿' : '集合'}`} accessibilityState={{ selected: kind === value }} disabled={busy} onPress={() => setKind(value)} style={[styles.button, { backgroundColor: kind === value ? theme.colors.primary : theme.colors.surfaceMuted }]}><Text style={{ color: kind === value ? '#FFF' : theme.colors.text }}>{value === 'hotel' ? '住宿' : '集合'}</Text></Pressable>)}</View>
         {notice ? <Text accessibilityRole="alert" style={{ color: theme.colors.primary }}>{notice}</Text> : null}
