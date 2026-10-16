@@ -6,8 +6,9 @@ import { copyVoucherReference } from '@/lib/voucher-files';
 import { getGoogleMapsNavigationUrl } from '@/lib/map-links';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { getAppTheme, type AppTheme } from '@/lib/theme';
+import { getTimeContextLabel } from '@/lib/time-context';
 
-export function TripInfoShortcuts({ tripId, userId, items, theme = getAppTheme('light') }: { tripId: string; userId: string; items: ItineraryItem[]; theme?: AppTheme }) {
+export function TripInfoShortcuts({ tripId, userId, items, timezone, theme = getAppTheme('light') }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; theme?: AppTheme }) {
   const key = shortcutStorageKey({ userId, tripId });
   const [stored, setStored] = useState<{ key: string; pins: ShortcutPin[] } | null>(null);
   const [open, setOpen] = useState(false), [picker, setPicker] = useState(false);
@@ -45,7 +46,7 @@ export function TripInfoShortcuts({ tripId, userId, items, theme = getAppTheme('
     try {
       if (action === 'navigate') await Linking.openURL(getGoogleMapsNavigationUrl(item));
       else {
-        const value = buildShortcutText(item, pinKind);
+        const value = buildShortcutText(item, pinKind, timezone);
         if (action === 'copy') await copyVoucherReference(value);
         else await shareOrCopyText(value, {
           webShare: typeof navigator !== 'undefined' && navigator.share ? (data) => navigator.share(data) : undefined,
@@ -69,6 +70,7 @@ export function TripInfoShortcuts({ tripId, userId, items, theme = getAppTheme('
       {selected.map(({ pin, item }) => <View key={`${pin.kind}:${pin.id}`} style={[styles.info, { backgroundColor: theme.colors.surfaceMuted }]}>
         <Text style={[styles.title, { color: theme.colors.text }]}>{pin.kind === 'hotel' ? '住宿' : '集合'} · {item.location_name}</Text>
         <Text style={[styles.hint, { color: theme.colors.muted }]}>Day {item.day_number}{item.time ? ` · ${item.time.slice(0, 5)}` : ' · 時間未定'}</Text>
+        {item.time ? <Text style={[styles.hint, { color: theme.colors.muted }]}>{getTimeContextLabel(item, timezone)}</Text> : null}
         <Text selectable style={[styles.hint, { color: theme.colors.text }]}>{item.address || '尚未填寫地址，可編輯景點補上'}</Text>
         <View style={styles.actions}>{(['copy', 'navigate', 'share'] as const).map((action) => <Pressable key={action} accessibilityRole="button" accessibilityLabel={`${action === 'copy' ? '複製' : action === 'navigate' ? '導航' : '分享'} ${item.location_name}`} style={styles.button} onPress={() => void act(item, action, pin.kind)}><Text style={{ color: theme.colors.primary }}>{action === 'copy' ? '複製資訊' : action === 'navigate' ? '導航' : '分享旅伴'}</Text></Pressable>)}</View>
       </View>)}

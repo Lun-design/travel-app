@@ -100,7 +100,7 @@ describe('itinerary item form validation', () => {
   it('wires the title-only validation to the modal save button', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryItemModal.tsx'), 'utf8');
     expect(source).toContain('const titleValid = canSaveItineraryItem(name);');
-    expect(source).toContain('disabled={!titleValid || saving}');
+    expect(source).toContain('disabled={!titleValid || saving || !!protection.recovery}');
     expect(source).toContain('zIndex: 9999');
   });
 
@@ -112,7 +112,7 @@ describe('itinerary item form validation', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/ItineraryItemModal.tsx'), 'utf8');
     expect(source).toContain('await submitItineraryItem(payload, persist,');
     expect(source).toContain('keepOpen && onSaveAndContinue ? onSaveAndContinue : onSave');
-    expect(source).toContain('disabled={!titleValid || saving}');
+    expect(source).toContain('disabled={!titleValid || saving || !!protection.recovery}');
     expect(source).toContain('setAddress(getFlightDestinationAddress(flight) ?? \'\')');
     expect(source).not.toContain('setDuration(flight.durationMinutes === null ? \'\' : String(flight.durationMinutes))');
   });

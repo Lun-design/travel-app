@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import type { Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
@@ -6,6 +6,9 @@ import { buildSplitAmounts, convertToTwd, normalizeCurrency, SUPPORTED_CURRENCIE
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getProfileDisplayName } from '@/lib/profiles';
 import { sumReceiptItems, type ReceiptItem } from '@/lib/receipt-ocr';
+import { useFormDraft } from '../hooks/useFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
+import { FormModalLayout } from './FormModalLayout';
 
 type Props = {
   visible: boolean;
@@ -36,6 +39,8 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
   const [lockingRate, setLockingRate] = useState(false);
   const [manualRate, setManualRate] = useState('');
   const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState('');
 
   function updateReceiptItem(index: number, change: Partial<ReceiptItem>) {
     setReceiptItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...change } : item));
@@ -53,7 +58,17 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
     setSplitMode('amount');
     setCategory(expense?.category && expense.category !== 'general' ? expense.category : '其他');
     setReceiptItems(expense?.receipt_items ?? []);
-  }, [visible, expense, userId, members]);
+    setManualRate(''); setSaveError('');
+  }, [visible, expense?.id, userId, tripId]);
+
+  const initialSplits = expense?.splits ?? [];
+  const draftValue = { title, amount, currency, payer, selected, splitMode, splitValues, category, manualRate, receiptItems };
+  const protection = useFormDraft({ visible, scope: { userId, tripId: tripId || expense?.trip_id || members[0]?.trip_id || '', form: 'expense', recordId: expense?.id ?? 'new' },
+    initial: { title: expense?.title ?? '', amount: expense ? String(expense.amount) : '', currency: normalizeCurrency(expense?.currency), payer: expense?.payer_id ?? userId, selected: initialSplits.length ? initialSplits.map((s) => s.user_id) : members.map((m) => m.user_id), splitValues: Object.fromEntries(initialSplits.map((s) => [s.user_id, String(s.amount)])), splitMode: 'amount', category: expense?.category && expense.category !== 'general' ? expense.category : '其他', manualRate: '', receiptItems: expense?.receipt_items ?? [] },
+    value: draftValue, busy: saving || lockingRate, onClose,
+    validate: (v) => ['title', 'amount', 'currency', 'payer', 'category', 'manualRate'].every((k) => typeof v[k] === 'string') && ['amount', 'ratio'].includes(String(v.splitMode)) && Array.isArray(v.selected) && v.selected.every((id) => typeof id === 'string' && members.some((m) => m.user_id === id)) && members.some((m) => m.user_id === v.payer) && !!v.splitValues && typeof v.splitValues === 'object' && !Array.isArray(v.splitValues) && Object.values(v.splitValues).every((x) => typeof x === 'string') && Array.isArray(v.receiptItems) && v.receiptItems.every((x) => x && typeof x.name === 'string' && typeof x.price === 'number' && Number.isFinite(x.price) && (x.quantity == null || typeof x.quantity === 'number')),
+    onRestore: (data) => { const v = data as typeof draftValue; setTitle(v.title); setAmount(v.amount); setCurrency(normalizeCurrency(v.currency)); setPayer(v.payer); setSelected(v.selected); setSplitMode(v.splitMode); setSplitValues(v.splitValues); setCategory(v.category); setManualRate(v.manualRate); setReceiptItems(v.receiptItems); },
+  });
 
   const total = Number(amount);
   const receiptSum = sumReceiptItems(receiptItems);
@@ -63,6 +78,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
   }, [total, selected, splitValues, splitMode]);
 
   async function save() {
+    if (savingRef.current || protection.recovery) return;
     const currentTripId = tripId || expense?.trip_id || members[0]?.trip_id || '';
     if (!title.trim()) return Alert.alert('欄位未完成', '請輸入旅費項目名稱。');
     if (!Number.isFinite(total) || total <= 0) return Alert.alert('金額格式錯誤', '請輸入大於 0 的數字。');
@@ -74,14 +90,15 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
       Alert.alert('分攤設定錯誤', error instanceof Error ? error.message : '請檢查自訂分攤金額或比例。');
       return;
     }
-    setSaving(true);
+    savingRef.current = true; setSaveError(''); setSaving(true);
     try {
       await onSave({ ...(expense?.id ? { id: expense.id } : {}), trip_id: currentTripId, payer_id: payer, title: title.trim(), amount: total, currency: normalizeCurrency(currency), category, ...((receiptItems.length || expense?.receipt_items?.length) ? { receipt_items: receiptItems.map((item) => ({ ...item, name: item.name.trim() })) } : {}) }, selected.map((user_id) => ({ user_id, amount: amounts[user_id] })));
-      onClose();
+      protection.markSaved(); onClose();
     } catch (error: any) {
       console.error('[ExpenseModal] save failed', error);
+      setSaveError(error?.message || '儲存旅費失敗，輸入與草稿已保留。');
       Alert.alert('儲存旅費失敗', error?.message || '請確認付款人與分攤成員是有效的 Supabase UUID。');
-    } finally { setSaving(false); }
+    } finally { savingRef.current = false; setSaving(false); }
   }
 
   async function lockManualRate() {
@@ -102,8 +119,10 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
     }
   }
 
-  return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
+  const footer = <View style={styles.actions}><Pressable accessibilityRole="button" accessibilityLabel="取消旅費編輯" style={{ minHeight: 44, justifyContent: 'center' }} disabled={saving} onPress={protection.requestClose}><Text style={{ color: theme.colors.muted }}>取消</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="儲存旅費" style={styles.save} disabled={saving} onPress={() => void save()}><Text style={styles.white}>{saving ? '儲存中…' : '儲存旅費'}</Text></Pressable></View>;
+  return <Modal visible={visible} animationType="slide" onRequestClose={protection.requestClose}>
+    <FormModalLayout contentStyle={styles.container} backgroundColor={theme.colors.background} footer={footer} blocked={saving || lockingRate || !!protection.recovery} notice={<FormDraftNotice protection={protection} />}>
+      {saveError ? <Text accessibilityRole="alert" style={{ color: EDITORIAL_COLORS.dangerText }}>{saveError}</Text> : null}
       <Text style={[styles.title, { color: theme.colors.text }]}>{expense ? '編輯旅費' : '新增旅費'}</Text>
       <TextInput style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="項目名稱，例如：晚餐" placeholderTextColor={theme.colors.muted} value={title} onChangeText={setTitle} />
       <View style={styles.row}><TextInput style={[styles.input, styles.flex, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} placeholder="金額" placeholderTextColor={theme.colors.muted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} /><View style={styles.currencyChoices}>{SUPPORTED_CURRENCIES.map((option) => <Pressable key={option} style={[styles.currencyChip, normalizeCurrency(currency) === option && styles.selected]} onPress={() => setCurrency(option)}><Text style={normalizeCurrency(currency) === option ? styles.white : { color: theme.colors.text }}>{option}</Text></Pressable>)}</View></View>
@@ -123,8 +142,7 @@ export function ExpenseModal({ visible, tripId, expense, members, userId, themeM
       <Text style={[styles.label, { color: theme.colors.text }]}>分攤方式：自訂分攤</Text>
       <View style={styles.chips}><Pressable style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, splitMode === 'amount' && styles.selected]} onPress={() => setSplitMode('amount')}><Text style={splitMode === 'amount' ? styles.white : { color: theme.colors.text }}>金額</Text></Pressable><Pressable style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, splitMode === 'ratio' && styles.selected]} onPress={() => setSplitMode('ratio')}><Text style={splitMode === 'ratio' ? styles.white : { color: theme.colors.text }}>比例 %</Text></Pressable></View>
       <View style={styles.memberRows}>{members.map((member) => { const checked = selected.includes(member.user_id); return <View key={member.user_id} style={styles.memberRow}><Pressable style={[styles.chip, { backgroundColor: theme.colors.surfaceMuted }, checked && styles.selected]} onPress={() => setSelected((current) => checked ? current.filter((id) => id !== member.user_id) : [...current, member.user_id])}><Text style={checked ? styles.white : { color: theme.colors.text }}>{checked ? '✓ ' : ''}{getProfileDisplayName(member.profile, member.user_id.slice(0, 8))}</Text></Pressable>{checked ? <TextInput style={[styles.splitInput, { color: theme.colors.text, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]} keyboardType="decimal-pad" placeholder={splitMode === 'ratio' ? '比例 %' : '自訂金額'} placeholderTextColor={theme.colors.muted} value={splitValues[member.user_id] ?? ''} onChangeText={(value) => setSplitValues((current) => ({ ...current, [member.user_id]: value }))} /> : null}<Text style={[styles.previewAmount, { color: theme.colors.muted }]}>{splitAmounts[member.user_id] === undefined ? '' : `≈ ${splitAmounts[member.user_id].toFixed(2)}`}</Text></View>; })}</View>
-      <View style={styles.actions}><Pressable onPress={onClose}><Text style={{ color: theme.colors.muted }}>取消</Text></Pressable><Pressable style={styles.save} disabled={saving} onPress={() => void save()}><Text style={styles.white}>{saving ? '儲存中…' : '儲存旅費'}</Text></Pressable></View>
-    </ScrollView>
+    </FormModalLayout>
   </Modal>;
 }
 

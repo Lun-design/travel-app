@@ -316,6 +316,7 @@ function toRoutePoint(item: ItineraryItem): RoutePoint {
 }
 
 type TimelineCardProps = {
+  timeContextLabel?: string;
   item: ItineraryItem;
   segment?: TimelineRouteSegment;
   scheduled?: ScheduledItem;
@@ -360,7 +361,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, availableDays = [], onMoveToDay, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, availableDays = [], onMoveToDay, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent, timeContextLabel }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const { width: viewportWidth } = useWindowDimensions();
   const isMobile = viewportWidth < 600;
@@ -585,6 +586,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
             }} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={34} accessibilityLabel={`${item.category} 類別`} /></View>}
             <Pressable accessibilityRole="button" accessibilityLabel={`放大查看 ${item.location_name}`} style={styles.thumbnailOverlay} onPress={() => { setLightboxImageFailed(!resolvedImageUrl || imageLoadFailed); setLightboxVisible(true); }} />
             <View style={[styles.content, isMobile ? null : safeCardContentStyle, { gap: 8 }]}>
+              {timeContextLabel ? <Text style={{ color: theme.colors.muted, fontSize: 11 }}>{timeContextLabel}</Text> : null}
               <View style={[styles.cardHeader, isMobile && responsiveCardStyles.cardHeaderMobile]}><Text style={[styles.time, { color: theme.colors.primary, backgroundColor: '#E3D8CC', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>{isMobile ? <View style={[styles.categoryWrap, responsiveCardStyles.mobileCategoryWrap]}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View> : <><Text numberOfLines={1} style={[styles.name, cardVisualStyles.headerName, { color: '#1A1A1A', fontSize: 17, fontWeight: '700' }]}>{item.location_name}</Text><View style={styles.categoryWrap}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View></> }</View>{isMobile ? <Text style={[styles.name, responsiveCardStyles.mobileName, { color: '#1A1A1A' }]}>{item.location_name}</Text> : null}
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
               {weather && isWeatherAlert(weather) ? <View style={[styles.weatherAlerts, compactStyles.hidden]}>{weather.precipitationWarning ? <Text style={styles.weatherWarning}>☔ 記得帶傘／降雨預警</Text> : null}{weather.extremeWarning ? <Text style={styles.extremeWarning}>⚠️ 極端天候預警</Text> : null}</View> : null}

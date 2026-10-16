@@ -5,7 +5,7 @@ export type NodeProps = { children?: React.ReactNode; accessibilityLabel?: strin
 export function nodes(node: React.ReactNode): React.ReactElement<NodeProps>[] {
   if (Array.isArray(node)) return node.flatMap(nodes);
   if (!React.isValidElement<NodeProps>(node)) return [];
-  return [node, ...nodes(node.props.children)];
+  return [node, ...nodes(node.props.children), ...nodes(node.props.footer as React.ReactNode), ...nodes(node.props.notice as React.ReactNode)];
 }
 export function text(node: React.ReactNode): string {
   if (Array.isArray(node)) return node.map(text).join(' ');

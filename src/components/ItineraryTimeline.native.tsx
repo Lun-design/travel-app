@@ -17,6 +17,7 @@ import {
   type ItineraryTimelineProps,
 } from './ItineraryTimeline.shared';
 import type { TravelMode } from '@/lib/routes';
+import { getTimeContextLabel } from '@/lib/time-context';
 
 export function ItineraryTimeline({
   items,
@@ -123,6 +124,7 @@ export function ItineraryTimeline({
         <React.Fragment key={item.id}>
           <View collapsable={false} style={timelineRowStyle}>
             <TimelineCard
+              timeContextLabel={item.category === 'flight' || item.location_name.includes('集合') ? getTimeContextLabel(item, scheduleContext?.timezone) : undefined}
               item={item}
               themeMode={themeMode}
               scheduled={scheduleById.get(item.id)}

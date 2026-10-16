@@ -1,5 +1,6 @@
 import type { ItineraryItem } from './itinerary';
 import type { OfflineScope } from './offline-store';
+import { getTimeContextLabel } from './time-context';
 export type ShortcutKind = 'hotel' | 'meeting';
 export type ShortcutPin = { id: string; kind: ShortcutKind };
 export function shortcutStorageKey(scope: OfflineScope) {
@@ -34,6 +35,6 @@ export function resolveShortcutItems(pins: readonly ShortcutPin[], items: readon
   return pins.flatMap((pin) => { const item = byId.get(pin.id); return item ? [{ pin, item }] : []; });
 }
 /** Explicitly excludes notes, booking references and other private metadata. */
-export function buildShortcutText(item: ItineraryItem, kind: ShortcutKind) {
-  return [kind === 'hotel' ? '住宿資訊' : '集合資訊', item.location_name, `Day ${item.day_number}${item.time ? ` · ${item.time.slice(0, 5)}` : ''}`, item.address?.trim()].filter(Boolean).join('\n');
+export function buildShortcutText(item: ItineraryItem, kind: ShortcutKind, timezone?: string) {
+  return [kind === 'hotel' ? '住宿資訊' : '集合資訊', item.location_name, `Day ${item.day_number}${item.time ? ` · ${item.time.slice(0, 5)} · ${getTimeContextLabel(item, timezone)}` : ''}`, item.address?.trim()].filter(Boolean).join('\n');
 }

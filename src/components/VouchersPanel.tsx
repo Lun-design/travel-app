@@ -14,7 +14,7 @@ import { getVoucherCategoryLabel, voucherCategoryOptions, type VoucherCategory }
 import { groupVouchersByDate } from '@/lib/voucher-date-grouping';
 const EMPTY_VOUCHERS: Voucher[] = [];
 
-export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onChanged, initialVouchers = EMPTY_VOUCHERS }: { tripId: string; userId: string; items: ItineraryItem[]; themeMode?: ThemeMode; onChanged?: () => void | Promise<void>; initialVouchers?: Voucher[] }) {
+export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'system', onChanged, initialVouchers = EMPTY_VOUCHERS }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; themeMode?: ThemeMode; onChanged?: () => void | Promise<void>; initialVouchers?: Voucher[] }) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [allVouchers, setAllVouchers] = useState<Voucher[]>(initialVouchers);
@@ -165,8 +165,8 @@ export function VouchersPanel({ tripId, userId, items, themeMode = 'system', onC
         <View style={styles.modalActions}><Pressable disabled={bindingBusy} style={styles.deleteButton} onPress={() => setBindingVoucher(null)}><Text>取消</Text></Pressable><Pressable disabled={bindingBusy} style={styles.bindButton} onPress={() => void bindVoucher()}><Text style={styles.bindText}>{bindingBusy ? '儲存中…' : '確認綁定'}</Text></Pressable></View>
       </View></View>
     </Modal>
-    <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} onClose={() => setUploading(false)} onUploaded={async () => { await load(); await onChanged?.(); }} />
-    <VoucherMetadataModal visible={editingVoucher !== null} voucher={editingVoucher} onClose={() => setEditingVoucher(null)} onSaved={async (updated) => { setVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry)); await onChanged?.(); }} />
+    <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} timezone={timezone} onClose={() => setUploading(false)} onUploaded={async () => { await load(); await onChanged?.(); }} />
+    <VoucherMetadataModal userId={userId} timezone={timezone} visible={editingVoucher !== null} voucher={editingVoucher} onClose={() => setEditingVoucher(null)} onSaved={async (updated) => { setVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry)); await onChanged?.(); }} />
     <VoucherPreviewModal voucher={preview} userId={userId} onClose={() => setPreview(null)} />
   </ScrollView>;
 }

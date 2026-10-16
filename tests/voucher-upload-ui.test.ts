@@ -15,14 +15,18 @@ vi.mock('react-native', () => ({ View: 'div', Text: 'span', TextInput: 'input', 
 vi.mock('@/lib/vouchers-api', () => ({ uploadVoucher: mocks.upload }));
 vi.mock('@/lib/vouchers', async () => await import('../lib/vouchers'));
 vi.mock('@/lib/theme', async () => await import('../lib/theme'));
+vi.mock('@/lib/form-drafts', async () => await import('../lib/form-drafts'));
+vi.mock('@/lib/time-context', async () => await import('../lib/time-context'));
+vi.mock('../src/components/FormModalLayout', () => ({ FormModalLayout: 'form-layout' }));
+vi.mock('../src/components/DraftNavigationGuard', () => ({ DraftNavigationGuard: 'navigation-guard' }));
 vi.mock('../src/components/FormPickers', () => ({ DatePickerField: () => null, TimePickerField: () => null }));
 import { VoucherUploadModal } from '../src/components/VoucherUploadModal';
 
-type Props = { children?: React.ReactNode; onPress?: () => void; accessibilityRole?: string; disabled?: boolean };
+type Props = { children?: React.ReactNode; footer?: React.ReactNode; onPress?: () => void; accessibilityRole?: string; disabled?: boolean };
 function nodes(node: React.ReactNode): React.ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(nodes);
   if (!React.isValidElement<Props>(node)) return [];
-  return [node, ...nodes(node.props.children)];
+  return [node, ...nodes(node.props.children), ...nodes(node.props.footer)];
 }
 function text(node: React.ReactNode): string {
   if (Array.isArray(node)) return node.map(text).join(' ');
@@ -31,17 +35,19 @@ function text(node: React.ReactNode): string {
 }
 function modalHarness() {
   const states: unknown[] = [];
+  const refs: { current: unknown }[] = [];
   let index = 0;
+  let refIndex = 0;
   vi.spyOn(React, 'useState').mockImplementation((initial?: unknown) => {
     const slot = index++;
     if (!(slot in states)) states[slot] = initial;
     return [states[slot], (value: unknown) => { states[slot] = typeof value === 'function' ? value(states[slot]) : value; }] as ReturnType<typeof React.useState>;
   });
   vi.spyOn(React, 'useEffect').mockImplementation(() => undefined);
-  vi.spyOn(React, 'useRef').mockReturnValue({ current: false });
+  vi.spyOn(React, 'useRef').mockImplementation((initial?: unknown) => refs[refIndex++] ?? (refs[refIndex - 1] = { current: initial }));
   const onClose = vi.fn();
   const onUploaded = vi.fn();
-  const render = () => { index = 0; return VoucherUploadModal({ visible: true, tripId: 'trip', userId: 'user', items: [], onClose, onUploaded }); };
+  const render = () => { index = 0; refIndex = 0; return VoucherUploadModal({ visible: true, tripId: 'trip', userId: 'user', items: [], onClose, onUploaded }); };
   const select = () => nodes(render()).find((node) => node.props.onPress && text(node).includes('選擇圖片或 PDF'))!;
   return { render, select, onClose, onUploaded };
 }

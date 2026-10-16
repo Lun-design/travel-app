@@ -15,6 +15,10 @@ import { OpeningHoursEditor } from './OpeningHoursEditor';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { RESERVATION_TAG_OPTIONS, normalizeReservationTags, type ReservationTag } from '@/lib/reservation-tags';
 import { TimePickerField } from './FormPickers';
+import { useFormDraft } from '../hooks/useFormDraft';
+import { FormDraftNotice } from './FormDraftNotice';
+import { FormModalLayout } from './FormModalLayout';
+import { getTimeContextLabel } from '@/lib/time-context';
 
 const categories = ['spot', 'food', 'hotel', 'flight', 'trail', 'outdoor'];
 type AutoHoursStatus = 'idle' | 'loading' | 'found' | 'missing';
@@ -29,6 +33,7 @@ type Props = {
   tripEndDate?: string;
   tripId?: string;
   userId?: string;
+  timezone?: string;
   onClose: () => void;
   onSave?: (data: any) => Promise<void>;
   onSaveAndContinue?: (data: any) => Promise<void>;
@@ -37,7 +42,7 @@ type Props = {
   onDelete?: () => Promise<void>;
 };
 
-export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, insertPosition, tripStartDate, tripEndDate, tripId, userId, onClose, onSave, onSaveAndContinue, onRefresh, onDelete }: Props) {
+export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, insertPosition, tripStartDate, tripEndDate, tripId, userId, timezone, onClose, onSave, onSaveAndContinue, onRefresh, onDelete }: Props) {
   const route = useLocalSearchParams<{ id?: string | string[]; tripId?: string | string[] }>();
   const activeTripId = useActiveTripId();
   const contextInput = { tripId, itemTripId: item?.trip_id, routeId: route.id, routeTripId: route.tripId, activeTripId, day: dayProp, dayIndex };
@@ -147,8 +152,19 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     return () => searchController.current.cancel();
   }, [autocompleteEnabled, name, visible]);
 
+  const initialDraft = { name: item?.location_name ?? '', address: item?.address ?? '', time: formatTimeHHmm(item?.time) ?? item?.time ?? '', category: item?.category ?? 'spot', estimatedCost: item?.estimated_cost != null ? String(item.estimated_cost) : '', openingHours: item?.opening_hours ?? null, difficulty: item?.difficulty ?? '', notes: item?.notes ?? '', reservationTags: normalizeReservationTags(item?.reservation_tags), lat: item?.latitude ?? null, lng: item?.longitude ?? null, photoReference: item?.photo_reference ?? item?.photoReference ?? null, selectedDay: item?.day_number ?? day };
+  const draftValue = { name, address, time, category, estimatedCost, openingHours, difficulty, notes, reservationTags, lat, lng, photoReference, selectedDay };
+  const protection = useFormDraft({ visible: visible && !savedAndClosed, scope: { userId: userId ?? item?.created_by ?? '', tripId: context.tripId, form: 'item', recordId: item?.id ?? 'new' }, initial: initialDraft, value: draftValue, busy: saving, onClose,
+    validate: (v) => ['name', 'address', 'time', 'category', 'estimatedCost', 'difficulty', 'notes'].every((k) => typeof v[k] === 'string') && categories.includes(String(v.category)) && Array.isArray(v.reservationTags) && v.reservationTags.every((t) => typeof t === 'string') && typeof v.selectedDay === 'number' && Number.isInteger(v.selectedDay) && v.selectedDay > 0 && (v.lat === null || typeof v.lat === 'number') && (v.lng === null || typeof v.lng === 'number') && (v.photoReference === null || typeof v.photoReference === 'string') && (v.openingHours === null || (typeof v.openingHours === 'object' && !Array.isArray(v.openingHours))),
+    onRestore: (data) => {
+      const v = data as typeof draftValue;
+      searchVersion.current++; searchController.current.cancel(); suppressNextSearch.current = true;
+      setName(v.name); setAddress(v.address); setTime(v.time); setCategory(v.category); setEstimatedCost(v.estimatedCost); setOpeningHours(v.openingHours); setDifficulty(v.difficulty); setNotes(v.notes); setReservationTags(normalizeReservationTags(v.reservationTags)); setLat(v.lat); setLng(v.lng); setPhotoReference(v.photoReference); setSelectedDay(v.selectedDay); setShowMore(true); setSearching(false); setResults([]);
+    },
+  });
+
   async function search() {
-    if (savingRef.current) return;
+    if (savingRef.current || protection.recovery) return;
     if (name.trim().length < 2) {
       setSearchMessage('請輸入至少 2 個字元再搜尋。');
       return;
@@ -228,7 +244,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
   }
 
   async function save(keepOpen = false) {
-    if (savingRef.current) return;
+    if (savingRef.current || protection.recovery) return;
     const operation = formVersion.current;
     if (!titleValid) {
       setSaveMessage('\u8acb\u5148\u8f38\u5165\u666f\u9ede\u540d\u7a31\u518d\u5132\u5b58');
@@ -261,6 +277,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
     };
 
     savingRef.current = true;
+    searchVersion.current++; searchController.current.cancel(); setSearching(false); setAiParsing(false);
     setSaving(true);
     try {
       const persist = keepOpen && onSaveAndContinue ? onSaveAndContinue : onSave;
@@ -272,6 +289,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         await saveItineraryItem({ ...safePayload, created_by: item?.created_by || data.user.id }, { offlineScope: { tripId: safePayload.trip_id, userId: data.user.id } });
       });
       if (!submitted) { setSaveMessage('請輸入景點名稱。'); return; }
+      protection.markSaved(keepOpen ? { ...initialDraft, name: '', address: '', time: '', category: 'spot', estimatedCost: '', openingHours: null, difficulty: '', notes: '', reservationTags: [], lat: null, lng: null, photoReference: null, selectedDay: safeDay } : undefined);
       if (operation !== formVersion.current) return;
       let refreshFailed = false;
       try { await onRefresh?.(); }
@@ -394,8 +412,14 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
 
   const attribution = getGeocodingAttribution(results);
 
-  return <Modal visible={visible && !savedAndClosed} animationType="slide" onRequestClose={typeof onClose === 'function' ? onClose : undefined}>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
+  const footer = <View pointerEvents="auto" style={styles.actions}>
+    <Pressable accessibilityRole="button" accessibilityLabel="取消景點編輯" disabled={saving} onPress={protection.requestClose}><Text style={styles.cancel}>取消</Text></Pressable>
+    {!item && onSaveAndContinue ? <Pressable accessibilityRole="button" accessibilityLabel="儲存並新增下一筆" disabled={!titleValid || saving || !!protection.recovery} onPress={() => void save(true)} style={[styles.chip, saving && styles.saveDisabled]}><Text style={styles.moreText}>儲存並新增下一筆</Text></Pressable> : null}
+    {item && onDelete ? <Pressable disabled={saving} onPress={() => Alert.alert('刪除景點', '確定要刪除這個景點嗎？', [{ text: '取消' }, { text: '刪除', style: 'destructive', onPress: onDelete }])}><Text style={styles.delete}>刪除</Text></Pressable> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel="儲存景點" onHoverIn={() => setSaveHovered(true)} onHoverOut={() => setSaveHovered(false)} style={({ pressed }) => [styles.save, saveHovered && styles.saveHover, pressed && styles.savePressed, (!titleValid || saving || !!protection.recovery) && styles.saveDisabled]} onPress={() => void save()} disabled={!titleValid || saving || !!protection.recovery}>{saving ? <ActivityIndicator color="white" /> : <Text style={styles.white}>儲存</Text>}</Pressable>
+  </View>;
+  return <Modal visible={visible && !savedAndClosed} animationType="slide" onRequestClose={protection.requestClose}>
+    <FormModalLayout contentStyle={styles.container} footer={footer} blocked={saving || !!protection.recovery} notice={<FormDraftNotice protection={protection} />}>
       <Text style={styles.kicker}>DAY {selectedDay}</Text>
       <Text style={styles.title}>{item ? '編輯景點／活動' : '新增景點／活動'}</Text>
       {!item ? <Text style={styles.hoursHint}>先填名稱與天數即可儲存，其他資料可稍後補上。</Text> : null}
@@ -434,6 +458,7 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
       <TextInput style={styles.input} placeholder="可由搜尋結果自動帶入" value={address} onChangeText={setAddress} />
       <Text style={styles.label}>開始時間（可選）</Text>
       <TimePickerField label="開始時間" value={time} onChange={setTime} placeholder="09:30" style={styles.input} />
+      <Text style={styles.hoursHint}>{getTimeContextLabel({ location_name: name }, timezone)} · 僅標示，不自動換算時間</Text>
       {parsedDate ? <Text style={styles.parsedDateHint}>解析日期：{parsedDate}（儲存時將使用 Day {selectedDay}）</Text> : null}
 
         <View style={styles.compactFieldRow}>
@@ -463,24 +488,8 @@ export function ItineraryItemModal({ visible, item, day: dayProp, dayIndex, inse
         <ManualLocationMap latitude={lat} longitude={lng} onChange={(latitude, longitude) => { setLat(latitude); setLng(longitude); }} />
       </View> : null}
 
-      <View pointerEvents="auto" style={styles.actions}>
-        <Pressable onPress={onClose}><Text style={styles.cancel}>取消</Text></Pressable>
-        {!item && onSaveAndContinue ? <Pressable accessibilityRole="button" accessibilityLabel="儲存並新增下一筆" disabled={!titleValid || saving} onPress={() => void save(true)} style={[styles.chip, saving && styles.saveDisabled]}><Text style={styles.moreText}>儲存並新增下一筆</Text></Pressable> : null}
-        {item && onDelete ? <Pressable onPress={() => Alert.alert('刪除景點', '確定要刪除這個景點嗎？', [{ text: '取消' }, { text: '刪除', style: 'destructive', onPress: onDelete }])}><Text style={styles.delete}>刪除</Text></Pressable> : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="儲存景點"
-          onHoverIn={() => setSaveHovered(true)}
-          onHoverOut={() => setSaveHovered(false)}
-          style={({ pressed }) => [styles.save, saveHovered && styles.saveHover, pressed && styles.savePressed, (!titleValid || saving) && styles.saveDisabled]}
-          onPress={() => void save()}
-          disabled={!titleValid || saving}
-        >
-          {saving ? <ActivityIndicator color="white" /> : <Text style={styles.white}>儲存</Text>}
-        </Pressable>
-      </View>
       {saveMessage ? <View pointerEvents="none" style={[styles.saveToast, saveMessage.startsWith('已儲存') && { backgroundColor: EDITORIAL_COLORS.terracottaSoft }]}><Text accessibilityLiveRegion="polite" style={[styles.saveToastText, saveMessage.startsWith('已儲存') && { color: EDITORIAL_COLORS.terracotta }]}>{saveMessage}</Text></View> : null}
-    </ScrollView>
+    </FormModalLayout>
   </Modal>;
 }
 

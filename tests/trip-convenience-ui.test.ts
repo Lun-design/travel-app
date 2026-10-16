@@ -14,6 +14,7 @@ vi.mock('@/lib/trip-shortcuts', async () => ({ ...await import('../lib/trip-shor
 vi.mock('@/lib/map-links', async () => import('../lib/map-links'));
 vi.mock('@/lib/share-actions', async () => import('../lib/share-actions'));
 vi.mock('@/lib/theme', async () => import('../lib/theme'));
+vi.mock('@/lib/time-context', async () => import('../lib/time-context'));
 import { TripPreparationOverview } from '../src/components/trip-detail/TripPreparationOverview';
 import { TripInfoShortcuts } from '../src/components/trip-detail/TripInfoShortcuts';
 import { TripGettingStarted } from '../src/components/trip-detail/TripGettingStarted';

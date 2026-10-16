@@ -13,6 +13,10 @@ vi.mock('@/lib/trip-dates', async () => import('../lib/trip-dates'));
 vi.mock('@/lib/ai-parser', async () => import('../lib/ai-parser'));
 vi.mock('@/lib/theme', async () => import('../lib/theme'));
 vi.mock('@/lib/reservation-tags', async () => import('../lib/reservation-tags'));
+vi.mock('@/lib/form-drafts', async () => import('../lib/form-drafts'));
+vi.mock('@/lib/time-context', async () => import('../lib/time-context'));
+vi.mock('../src/components/FormModalLayout', () => ({ FormModalLayout: (props: { children: React.ReactNode }) => props.children }));
+vi.mock('../src/components/DraftNavigationGuard', () => ({ DraftNavigationGuard: 'navigation-guard' }));
 vi.mock('@/lib/geocoding', () => ({ canAutocompletePlaces: () => false, createDebouncedGeocodingSearch: () => ({ cancel: vi.fn() }), getGeocodingAttribution: () => '', searchPlaces: mocks.search }));
 vi.mock('@/lib/google-places', () => ({ hasGooglePlacesApiKey: () => false }));
 vi.mock('../src/components/ManualLocationMap', () => ({ ManualLocationMap: 'map' }));
@@ -20,6 +24,8 @@ vi.mock('../src/components/OpeningHoursEditor', () => ({ OpeningHoursEditor: 'ho
 vi.mock('../src/components/FormPickers', () => ({ TimePickerField: 'time-picker' }));
 import { ItineraryItemModal } from '../src/components/ItineraryItemModal';
 import type { ItineraryItem } from '../lib/itinerary';
+import { draftKey } from '../lib/form-drafts';
+import type { FormDraftProtection } from '../src/hooks/useFormDraft';
 
 const props = { visible: true, tripId: 'trip', userId: 'user', day: 1, tripStartDate: '2026-10-23', tripEndDate: '2026-10-25', onClose: vi.fn(), onSave: mocks.save, onSaveAndContinue: mocks.continued, onRefresh: mocks.refresh };
 describe('simple itinerary editor', () => {
@@ -135,5 +141,31 @@ describe('simple itinerary editor', () => {
     press(tree, '儲存並新增下一筆');
     await vi.waitFor(() => expect(mocks.continued).toHaveBeenLastCalledWith(expect.objectContaining({ day_number: 2, position: undefined })));
     h.unmount();
+  });
+  it('invalidates pending searches as soon as save begins, not only after it finishes', async () => {
+    let respond!: (v: unknown[]) => void, finish!: () => void;
+    mocks.search.mockImplementation(() => new Promise((resolve) => { respond = resolve; }));
+    mocks.continued.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const h = harness(() => ItineraryItemModal(props)); h.render(); let tree = h.render();
+    nodes(tree).find((n) => n.props.placeholder === '例如：台北 101')!.props.onChangeText!('儲存中的名稱'); tree = h.render();
+    press(tree, '搜尋景點'); tree = h.render(); press(tree, '儲存並新增下一筆');
+    respond([{ id: 'stale', title: '不應回填的結果', displayName: '舊資料' }]); await Promise.resolve(); await Promise.resolve();
+    expect(text(h.render())).not.toContain('不應回填的結果'); finish(); await Promise.resolve(); await Promise.resolve(); h.unmount();
+  });
+  it('recovers the chosen day and name after closing, then clears the draft after consecutive save', async () => {
+    const values = new Map<string, string>(); const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
+    vi.stubGlobal('localStorage', storage); mocks.continued.mockResolvedValue(undefined);
+    let visible = true;
+    const h = harness(() => ItineraryItemModal({ ...props, visible }));
+    const p = (tree: React.ReactNode) => nodes(tree).find((n) => n.props.protection)!.props.protection as FormDraftProtection;
+    try {
+      h.render(); let tree = h.render(); press(tree, '選擇 Day 2'); tree = h.render();
+      nodes(tree).find((n) => n.props.placeholder === '例如：台北 101')!.props.onChangeText!('草稿景點'); tree = h.render(); h.render();
+      press(tree, '取消景點編輯'); tree = h.render(); expect(p(tree).confirmClose).toBe(true); p(tree).keepAndClose();
+      visible = false; h.render(); visible = true; h.render(); tree = h.render(); expect(p(tree).recovery).not.toBeNull();
+      p(tree).restore(); tree = h.render(); expect(nodes(tree).some((n) => n.props.value === '草稿景點')).toBe(true); expect(text(tree)).toMatch(/DAY\s+2/);
+      press(tree, '儲存並新增下一筆'); await vi.waitFor(() => expect(text(h.render())).toContain('已儲存，可繼續新增'));
+      h.render(); expect(storage.getItem(draftKey({ userId: 'user', tripId: 'trip', form: 'item', recordId: 'new' })!)).toBeNull();
+    } finally { h.unmount(); vi.unstubAllGlobals(); }
   });
 });
