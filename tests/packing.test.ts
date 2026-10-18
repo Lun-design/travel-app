@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, getPackingAvatarIds, hasRainyForecast, isPackingComplete, packingProgress, RAIN_GEAR_NAME, templateItems } from '../lib/packing-utils';
 
 describe('packing suggestions', () => {
+  it('uses the same authoritative checked state for progress and completion', () => {
+    const items = [{ category: '證件', is_checked: true, is_packed: false }];
+    expect(packingProgress(items).completed).toBe(1);
+    expect(isPackingComplete(items)).toBe(true);
+    expect(isPackingComplete([{ category: '證件', is_checked: false, is_packed: true }])).toBe(false);
+  });
   it('deduplicates by normalized item name and category', () => {
     const existing = [{ id: 'existing', name: 'Power bank', category: 'Electronics' }];
     const incoming = [

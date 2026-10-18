@@ -45,8 +45,8 @@ export function normalizePackingItem(row: any): PackingItem {
     ...row,
     name: packingItemName(row),
     item_name: packingItemName(row),
-    is_checked: row.is_packed ?? row.is_checked ?? false,
-    is_packed: row.is_packed ?? row.is_checked ?? false,
+    is_checked: row.is_checked ?? row.is_packed ?? false,
+    is_packed: row.is_checked ?? row.is_packed ?? false,
     assigned_to_all: Boolean(row.assigned_to_all),
   } as PackingItem;
 }

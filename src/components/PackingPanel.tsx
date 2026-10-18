@@ -13,8 +13,9 @@ import { ProfileAvatar } from './ProfileAvatar';
 
 const categories = PACKING_CATEGORIES;
 const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪', '日韓都市'];
+const EMPTY_ITINERARY: ItineraryItem[] = [];
 
-export function PackingPanel({ tripId, userId = 'anonymous', members, destination = '', tripStartDate, items: itineraryItems = [], themeMode, refreshToken = 0 }: {
+export function PackingPanel({ tripId, userId = 'anonymous', members, destination = '', tripStartDate, items: itineraryItems = EMPTY_ITINERARY, themeMode, refreshToken = 0 }: {
   tripId: string;
   userId?: string;
   members: TripMemberWithProfile[];
@@ -34,6 +35,15 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const [assignmentItem, setAssignmentItem] = useState<PackingItem | null>(null);
   const [celebrateVisible, setCelebrateVisible] = useState(false);
   const autoRainGearKey = useRef<string | null>(null);
+  const loadVersion = useRef(0), mutationBusy = useRef(false), refreshAfterMutation = useRef(false);
+  const scopeKey = JSON.stringify([userId, tripId]);
+  const activeScope = useRef(scopeKey);
+  activeScope.current = scopeKey;
+  useEffect(() => {
+    mutationBusy.current = false; refreshAfterMutation.current = false;
+    setMutatingItemId(null); setItems([]); setAssignmentItem(null); setCelebrateVisible(false);
+    autoRainGearKey.current = null;
+  }, [scopeKey]);
   const offlineScope = { userId, tripId };
   const deletePackingItem = (id: string) => deletePackingItemRemote(id, { offlineScope, store: offlineStore });
   const updatePackingItem = (id: string, patch: Parameters<typeof updatePackingItemRemote>[1], options = { offlineScope, store: offlineStore }) => updatePackingItemRemote(id, patch, options);
@@ -60,65 +70,81 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   }
 
   async function load() {
-    try { const loaded = await listPackingItems(tripId, { offlineScope, store: offlineStore }); setItems([...(await ensureRainGear(loaded))]); }
-    catch (error: any) { Alert.alert('載入清單失敗', error?.message ?? '請稍後再試。'); }
+    if (scopeKey !== activeScope.current) return;
+    if (mutationBusy.current) { refreshAfterMutation.current = true; return; }
+    const request = ++loadVersion.current;
+    try {
+      const loaded = await listPackingItems(tripId, { offlineScope, store: offlineStore });
+      if (request !== loadVersion.current) return;
+      const prepared = await ensureRainGear(loaded);
+      if (request === loadVersion.current) setItems([...prepared]);
+    } catch (error: any) { if (request === loadVersion.current) Alert.alert('載入清單失敗', error?.message ?? '請稍後再試。'); }
   }
-  useEffect(() => { void load(); }, [tripId, refreshToken, tripStartDate, itineraryItems]);
+  useEffect(() => { void load(); return () => { loadVersion.current++; }; }, [tripId, userId, refreshToken, tripStartDate, itineraryItems]);
+
+  function beginItemMutation(id: string) {
+    if (mutationBusy.current) return false;
+    mutationBusy.current = true; loadVersion.current++; setMutatingItemId(id); return true;
+  }
+  function finishItemMutation() {
+    if (scopeKey !== activeScope.current) return;
+    mutationBusy.current = false; setMutatingItemId(null);
+    if (refreshAfterMutation.current) { refreshAfterMutation.current = false; void load(); }
+  }
 
   async function toggle(item: PackingItem) {
-    if (mutatingItemId) return;
+    if (!beginItemMutation(item.id)) return;
     const next = !item.is_checked;
-    setMutatingItemId(item.id);
     setItems((current) => current.map((value) => value.id === item.id ? { ...value, is_checked: next, is_packed: next } : value));
     try {
       await updatePackingItem(item.id, { is_checked: next, is_packed: next }, { offlineScope, store: offlineStore });
+      if (scopeKey !== activeScope.current) return;
       const nextItems = items.map((value) => value.id === item.id ? { ...value, is_checked: next, is_packed: next } : value);
       if (next && isPackingComplete(nextItems)) setCelebrateVisible(true);
     }
-    catch { await load(); }
-    finally { setMutatingItemId(null); }
+    catch (error: any) { if (scopeKey === activeScope.current) { await load(); Alert.alert('更新打包狀態失敗', error?.message ?? '請稍後再試。'); } }
+    finally { finishItemMutation(); }
   }
 
   async function assignItem(item: PackingItem) {
-    if (mutatingItemId) return;
     const next = members.find((member) => member.user_id !== item.assigned_to);
     if (!next) return;
-    setMutatingItemId(item.id);
+    if (!beginItemMutation(item.id)) return;
     try {
       await updatePackingItem(item.id, { assigned_to: next.user_id }, { offlineScope, store: offlineStore });
       await load();
     } catch (error: any) {
-      Alert.alert('更新負責人失敗', error?.message ?? '請稍後再試。');
+      if (scopeKey === activeScope.current) Alert.alert('更新負責人失敗', error?.message ?? '請稍後再試。');
     } finally {
-      setMutatingItemId(null);
+      finishItemMutation();
     }
   }
 
   async function assignItemTo(item: PackingItem, assignedTo: string | null, allMembers: boolean) {
-    if (mutatingItemId) return;
-    setMutatingItemId(item.id);
+    if (!beginItemMutation(item.id)) return;
     setItems((current) => current.map((value) => value.id === item.id ? { ...value, assigned_to: assignedTo, assigned_to_all: allMembers } : value));
     try {
       await updatePackingItem(item.id, { assigned_to: assignedTo, assigned_to_all: allMembers }, { offlineScope, store: offlineStore });
+      if (scopeKey !== activeScope.current) return;
       setAssignmentItem(null);
     } catch (error: any) {
+      if (scopeKey !== activeScope.current) return;
       await load();
       Alert.alert('指派失敗', error?.message ?? '請稍後再試。');
     } finally {
-      setMutatingItemId(null);
+      finishItemMutation();
     }
   }
 
   async function removeItem(item: PackingItem) {
-    if (mutatingItemId) return;
-    setMutatingItemId(item.id);
+    if (!beginItemMutation(item.id)) return;
     try {
       await deletePackingItem(item.id);
       await load();
     } catch (error: any) {
-      Alert.alert('刪除項目失敗', error?.message ?? '請稍後再試。');
+      if (scopeKey === activeScope.current) Alert.alert('刪除項目失敗', error?.message ?? '請稍後再試。');
     } finally {
-      setMutatingItemId(null);
+      finishItemMutation();
     }
   }
 

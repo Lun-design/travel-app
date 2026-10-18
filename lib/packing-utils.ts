@@ -40,8 +40,8 @@ export function dedupePackingItems<T extends PackingItemLike>(incoming: T[], exi
     return true;
   });
 }
-export function packingProgress(items: PackingItemLike[]) { const total = items.length; const completed = items.filter((item) => item.is_packed ?? item.is_checked ?? false).length; return { total, completed, percentage: total ? Math.round((completed / total) * 100) : 0 }; }
-export function isPackingComplete(items: PackingItemLike[]) { return items.length > 0 && items.every((item) => item.is_packed ?? item.is_checked ?? false); }
+export function packingProgress(items: PackingItemLike[]) { const total = items.length; const completed = items.filter((item) => item.is_checked ?? item.is_packed ?? false).length; return { total, completed, percentage: total ? Math.round((completed / total) * 100) : 0 }; }
+export function isPackingComplete(items: PackingItemLike[]) { return items.length > 0 && items.every((item) => item.is_checked ?? item.is_packed ?? false); }
 const common: { category: PackingCategory; name: string }[] = [{ category: '證件', name: '身分證／護照' }, { category: '電子產品', name: '手機與充電器' }, { category: '隨身物品', name: '錢包' }];
 const templates: Record<PackingTemplate, { category: PackingCategory; name: string; assigned_to_all?: boolean }[]> = { '國內輕旅行': [...common, { category: '衣物', name: '換洗衣物' }, { category: '藥品', name: '常備藥品' }], '國外海島': [...common, { category: '證件', name: '旅遊保險資料' }, { category: '衣物', name: '泳衣與防曬' }, { category: '隨身物品', name: '墨鏡' }, { category: '藥品', name: '暈船藥' }], '雪國滑雪': [...common, { category: '衣物', name: '保暖外套' }, { category: '衣物', name: '滑雪手套' }, { category: '隨身物品', name: '護唇膏' }, { category: '藥品', name: '暖暖包' }], '日韓都市': [...common, { category: '證件', name: 'Visit Japan Web 填寫', assigned_to_all: true }, { category: '證件', name: '入境卡', assigned_to_all: true }, { category: '隨身物品', name: '日幣現金' }, { category: '隨身物品', name: '韓元現金' }, { category: '隨身物品', name: 'ICOCA/Suica' }, { category: '電子產品', name: '網卡/漫遊' }, { category: '電子產品', name: '日本插頭/轉接頭' }] };
 export function templateItems(template: PackingTemplate) { return templates[template].map((item) => ({ ...item, is_checked: false })); }

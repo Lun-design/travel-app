@@ -12,7 +12,7 @@ import { listTripPlaces, type TripPlace } from '@/lib/trip-places-api';
 import { getCurrentProfile, getProfileDisplayName, updateCurrentProfile, type Profile } from '@/lib/profiles';
 import { offlineStore, type OfflineMutation } from '@/lib/offline-store';
 import { offlineSyncService } from '@/lib/offline-replay';
-import { applyRealtimeChange, subscribeToTripRealtime, type RealtimeChange, type RealtimeClientLike } from '@/lib/realtime-collaboration';
+import { applyRealtimeChange, isOlderRealtimeChange, subscribeToTripRealtime, type RealtimeChange, type RealtimeClientLike } from '@/lib/realtime-collaboration';
 import { moveItineraryItemAcrossDays } from '@/lib/itinerary-move';
 import { useUndoPreview } from './useUndoPreview';
 import { describeCollaborativeUpdate } from '@/lib/travel-ux';
@@ -24,7 +24,13 @@ export function useTripDetailData(tripId: string | undefined) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [places, setPlaces] = useState<TripPlace[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfileState] = useState<Profile | null>(null);
+  const profileRef = useRef<Profile | null>(null), profileSaveVersion = useRef(0);
+  const setProfile = useCallback((update: Profile | null | ((previous: Profile | null) => Profile | null)) => {
+    const next = typeof update === 'function' ? update(profileRef.current) : update;
+    profileSaveVersion.current++;
+    profileRef.current = next; setProfileState(next);
+  }, []);
   const [userId, setUserId] = useState('');
   const [rateSnapshot, setRateSnapshot] = useState<ExchangeRateSnapshot>(() => getDefaultExchangeRateSnapshot());
   const [loading, setLoading] = useState(true);
@@ -78,6 +84,7 @@ export function useTripDetailData(tripId: string | undefined) {
   const reload = useCallback(async () => {
     if (!tripId) return;
     const requestId = ++reloadRequestRef.current;
+    const profileVersionAtStart = profileSaveVersion.current;
     setLoading(true); setError('');
     try {
       const auth = await supabase.auth.getSession().then(({ data }) => data.session?.user ?? null).catch(() => null);
@@ -100,11 +107,16 @@ export function useTripDetailData(tripId: string | undefined) {
       const resolvedVouchers = voucherData ?? cached?.vouchers ?? [];
       const resolvedPlaces = placeData ?? (cached?.tripPlaces as TripPlace[] | undefined) ?? [];
       const memberProfile = auth?.id ? memberData.find((member) => member.user_id === auth.id)?.profile : null;
-      const resolvedProfile = profileData ?? (memberProfile ? { id: auth?.id ?? '', display_name: memberProfile.display_name, full_name: memberProfile.full_name, email: memberProfile.email, avatar_url: memberProfile.avatar_url, updated_at: new Date().toISOString() } : null);
+      // Member metadata has no authoritative version; a synthetic "now" would
+      // incorrectly outrank a later successful profiles read forever.
+      const loadedProfile = profileData ?? (memberProfile ? { id: auth?.id ?? '', display_name: memberProfile.display_name, full_name: memberProfile.full_name, email: memberProfile.email, avatar_url: memberProfile.avatar_url, updated_at: '' } : null);
+      const localProfile = profileRef.current?.id === auth?.id ? profileRef.current : null;
+      const resolvedProfile = localProfile && (!profileData || profileVersionAtStart !== profileSaveVersion.current || isOlderRealtimeChange(localProfile.updated_at, profileData.updated_at)) ? localProfile : loadedProfile;
       const resolvedMembers = resolvedProfile ? memberData.map((member) => member.user_id === resolvedProfile.id ? { ...member, profile: { ...member.profile, display_name: resolvedProfile.display_name, full_name: resolvedProfile.full_name, email: resolvedProfile.email, avatar_url: resolvedProfile.avatar_url } } : member) : memberData;
       const cleanedItemData = sanitizeLoadedItineraryItems(itemData);
       currentUserIdRef.current = auth?.id ?? '';
-      setUserId(auth?.id ?? ''); setProfile(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(cleanedItemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]); setPlaces(resolvedPlaces);
+      profileRef.current = resolvedProfile;
+      setUserId(auth?.id ?? ''); setProfileState(resolvedProfile); setTrip(tripData); setMembers(resolvedMembers); setItems(sortItineraryItemsByStartTime(cleanedItemData)); setExpenses(expenseData); setVouchers(resolvedVouchers as Voucher[]); setPlaces(resolvedPlaces);
       setShortcutRevision((value) => value + 1);
       await offlineStore.putSnapshot(scope, {
         trip: tripData,

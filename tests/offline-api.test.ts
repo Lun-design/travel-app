@@ -124,6 +124,12 @@ describe('offline-aware itinerary API', () => {
     expect(buildPackingUpdatePayload({ name: 'Canonical name', item_name: 'Legacy name' })).toEqual({ name: 'Canonical name' });
   });
 
+  it('keeps canonical checked state when a stale legacy is_packed column disagrees', () => {
+    expect(normalizePackingItem({ id: 'p', is_checked: true, is_packed: false })).toMatchObject({ is_checked: true, is_packed: true });
+    expect(normalizePackingItem({ id: 'p', is_checked: false, is_packed: true })).toMatchObject({ is_checked: false, is_packed: false });
+    expect(normalizePackingItem({ id: 'p', is_packed: true })).toMatchObject({ is_checked: true, is_packed: true });
+  });
+
   it('uses the schema-safe payload for a real packing insert', async () => {
     const single = vi.fn().mockResolvedValue({ data: { id: 'packing-2', trip_id: 'trip-1', category: '證件', name: '護照', is_checked: false, assigned_to: null, assigned_to_all: true, created_at: 'now' }, error: null });
     const insert = vi.fn().mockReturnValue({ select: () => ({ single }) });

@@ -1,5 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import { getCurrentProfile, PRESET_AVATARS, updateCurrentProfile, uploadProfileAvatar, type Profile } from '@/lib/profiles';
 import { getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -21,9 +21,15 @@ export function UserProfileModal({ visible, profile, themeMode = 'system', onClo
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const [busy, setBusy] = useState(false);
+  const editSession = useRef<{ id: string | null } | null>(null);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) { editSession.current = null; return; }
+    // Returning from the OS file picker triggers a focus refresh. A replacement
+    // object for the same account must not erase this open editor's draft.
+    const id = profile?.id ?? null;
+    if (editSession.current && editSession.current.id === id) return;
+    editSession.current = { id };
     setDisplayName(profile?.display_name ?? '');
     setAvatarUrl(profile?.avatar_url ?? null);
     setPendingUpload(null);
