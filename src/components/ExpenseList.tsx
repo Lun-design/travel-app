@@ -62,6 +62,7 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
     {rateLabel ? <Text style={[styles.rateLabel, { color: theme.colors.muted }]}>{rateLabel}</Text> : null}
     {expenses.map((expense) => {
       const isSettled = Boolean(expense.is_settled) || settledIds.has(expense.id);
+      const splits = (Array.isArray(expense.splits) ? expense.splits : []).filter((split) => split && typeof split.user_id === 'string' && split.user_id.trim());
       return <View key={expense.id} nativeID={'expense-' + expense.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: focusedExpenseId === expense.id ? theme.colors.primary : theme.colors.border, borderWidth: focusedExpenseId === expense.id ? 2 : 1 }]}>
         <View style={styles.top}>
           <View style={styles.details}>
@@ -69,11 +70,32 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
             <View style={styles.metaRow}>
               <Text style={[styles.meta, { color: theme.colors.muted }]}>{expense.category || '其他'} · </Text>
               <View style={styles.payer}><ProfileAvatar profile={memberFor(expense.payer_id)?.profile} userId={expense.payer_id} size={24} /><Text numberOfLines={1} style={[styles.meta, { color: theme.colors.muted }]}>{name(expense.payer_id)} 墊付</Text></View>
-              <Text style={[styles.meta, { color: theme.colors.muted }]}> · {expense.splits.length} 人分攤</Text>
+              <Text style={[styles.meta, { color: theme.colors.muted }]}> · {splits.length} 人分攤</Text>
               <Text style={[styles.status, { color: isSettled ? theme.colors.primary : EDITORIAL_COLORS.terracotta }]}>{isSettled ? '✓ 已結清' : '待結清'}</Text>
             </View>
           </View>
           <View style={styles.amountBlock}><Text numberOfLines={1} adjustsFontSizeToFit style={[styles.amount, { color: theme.colors.text }]}>{expense.currency} {Number(expense.amount).toFixed(2)}</Text><Text numberOfLines={1} style={[styles.twdAmount, { color: theme.colors.primary }]}>≈ TWD {convertToTwd(expense.amount, expense.currency, rates).toFixed(2)}</Text></View>
+        </View>
+        <View accessibilityLabel="此筆分攤明細" style={styles.shares}>
+          <Text style={[styles.shareHeading, { color: theme.colors.muted }]}>此筆分攤</Text>
+          <View style={styles.shareRows}>
+            {splits.map((split) => {
+              const raw: unknown = split.amount;
+              const amount = typeof raw === 'number' || (typeof raw === 'string' && raw.trim()) ? Number(raw) : NaN;
+              const amountLabel = Number.isFinite(amount) && amount >= 0
+                ? `${expense.currency} ${amount.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : '金額待確認';
+              return <View key={split.id ?? split.user_id} style={[styles.shareMember, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <ProfileAvatar profile={memberFor(split.user_id)?.profile} userId={split.user_id} size={24} />
+                <View style={styles.shareIdentity}>
+                  <Text style={[styles.shareName, { color: theme.colors.text }]}>{name(split.user_id)}</Text>
+                  {split.user_id === expense.payer_id ? <Text style={[styles.sharePayer, { color: theme.colors.muted }]}>墊付者</Text> : null}
+                </View>
+                <Text style={[styles.shareAmount, { color: theme.colors.text }]}>{amountLabel}</Text>
+              </View>;
+            })}
+            {!splits.length ? <Text style={[styles.meta, { color: theme.colors.muted }]}>尚未設定分攤明細</Text> : null}
+          </View>
         </View>
         <View style={styles.actions}>
           <Pressable disabled={Boolean(deletingId) || Boolean(settlingId)} onPress={() => onEdit(expense)}><Text style={styles.edit}>編輯</Text></Pressable>
@@ -86,6 +108,9 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
 }
 
 const styles = StyleSheet.create({
+  shares: { marginTop: 12, gap: 6 }, shareHeading: { fontSize: 11, fontWeight: '600' }, shareRows: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  shareMember: { flexDirection: 'row', alignItems: 'center', gap: 8, flexBasis: 240, flexGrow: 1, minWidth: 0, maxWidth: '100%', borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10 },
+  shareIdentity: { flex: 1, minWidth: 0, gap: 2 }, shareName: { fontSize: 12, lineHeight: 18, fontWeight: '600' }, sharePayer: { fontSize: 10, lineHeight: 14 }, shareAmount: { fontSize: 12, lineHeight: 18, fontWeight: '700', flexShrink: 1, maxWidth: '50%', textAlign: 'right' },
   list: { width: '100%', maxWidth: '100%', gap: 10 }, rateLabel: { fontSize: 12, fontWeight: '700' }, card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', borderRadius: 15, padding: 15, borderWidth: 1 },
   top: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }, details: { flex: 1, minWidth: 0 }, title: { fontSize: 16, fontWeight: '800' }, metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 5 }, payer: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '55%' }, meta: { fontSize: 12, lineHeight: 18 }, status: { fontSize: 11, fontWeight: '800', marginLeft: 4 }, amountBlock: { maxWidth: '42%', flexShrink: 0, alignItems: 'flex-end' }, amount: { fontSize: 13, fontWeight: '800', textAlign: 'right' }, twdAmount: { fontSize: 11, fontWeight: '700', marginTop: 2 },
   actions: { flexDirection: 'row', gap: 18, marginTop: 12 }, edit: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700', minHeight: 44, paddingVertical: 12 }, settle: { color: EDITORIAL_COLORS.terracotta, fontWeight: '800', minHeight: 44, paddingVertical: 12 }, delete: { color: EDITORIAL_COLORS.dangerText, fontWeight: '700', minHeight: 44, paddingVertical: 12 }, disabled: { opacity: 0.5 }, empty: { width: '100%', maxWidth: '100%', alignItems: 'center', padding: 40, gap: 8, boxSizing: 'border-box' }, icon: { fontSize: 30 }, muted: {},
