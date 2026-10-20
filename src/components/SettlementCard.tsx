@@ -7,6 +7,7 @@ import type { TripMemberWithProfile } from '@/lib/trips';
 import { getProfileDisplayName } from '@/lib/profiles';
 import { ProfileAvatar } from './ProfileAvatar';
 import { createSettlementRecord, deleteSettlementRecord, type SettlementRecord } from '@/lib/settlement-api';
+import { ActionConfirmationModal } from './ActionConfirmationModal';
 
 type Props = {
   settlements: Settlement[];
@@ -30,6 +31,17 @@ export function SettlementCard({ settlements, labelFor, members = [], themeMode 
   const [settlementNote, setSettlementNote] = useState('');
   const [settling, setSettling] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const [pendingHistory, setPendingHistory] = useState<SettlementRecord | null>(null);
+  const [historyError, setHistoryError] = useState(''), [settlementError, setSettlementError] = useState('');
+  const operationBusy = useRef(false), generation = useRef(0);
+  const historyRef = useRef<SettlementRecord | null>(null), selectionRef = useRef<Settlement | null>(null);
+  const scope = JSON.stringify([tripId, userId]);
+  const latest = useRef({ scope, settlements, settlementRecords }); latest.current = { scope, settlements, settlementRecords };
+  useEffect(() => {
+    generation.current++; operationBusy.current = false; historyRef.current = null; selectionRef.current = null;
+    setPendingHistory(null); setSelectedSettlement(null); setHistoryError(''); setSettlementError(''); setSettling(false); setDeletingRecordId(null);
+    return () => { generation.current++; historyRef.current = null; selectionRef.current = null; };
+  }, [scope]);
   const previousCount = useRef(settlements.length);
   const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,45 +74,74 @@ export function SettlementCard({ settlements, labelFor, members = [], themeMode 
   }
 
   function openSettlement(item: Settlement) {
+    if (operationBusy.current) return;
+    selectionRef.current = item; historyRef.current = null; setPendingHistory(null); setSettlementError('');
     setSelectedSettlement(item);
     setSettlementAmount(item.amount.toFixed(2));
     setSettlementNote('');
   }
 
   async function confirmSettlement() {
-    if (!selectedSettlement || !tripId || !userId) {
+    const selected = selectionRef.current;
+    if (operationBusy.current || latest.current.scope !== scope || !selected || selected !== selectedSettlement) return;
+    if (!tripId || !userId) {
       Alert.alert('無法結清', '找不到行程或使用者資訊，請重新開啟行程後再試。');
       return;
     }
+    const live = latest.current.settlements.find((item) => item.from === selected.from && item.to === selected.to && item.currency === selected.currency);
+    if (!live || live.amount !== selected.amount) {
+      selectionRef.current = live ?? null; setSelectedSettlement(live ?? null);
+      setSettlementAmount(live ? live.amount.toFixed(2) : ''); setSettlementError('結清資料已更新，請重新確認金額。'); return;
+    }
     const amount = Number(settlementAmount);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > selectedSettlement.amount + 0.009) {
-      Alert.alert('金額無效', `請輸入 0 到 ${selectedSettlement.amount.toFixed(2)} 之間的金額。`);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > selected.amount + 0.009) {
+      Alert.alert('金額無效', `請輸入大於 0 且不超過 ${selected.amount.toFixed(2)} 的金額。`);
       return;
     }
-    setSettling(true);
+    operationBusy.current = true; const request = generation.current; setSettling(true); setSettlementError('');
     try {
-      const record = await createSettlementRecord({ trip_id: tripId, from_user_id: selectedSettlement.from, to_user_id: selectedSettlement.to, amount, currency: selectedSettlement.currency, note: settlementNote, settled_by: userId });
-      onSettlementCreated?.(record);
-      onSettled?.();
+      const record = await createSettlementRecord({ trip_id: tripId, from_user_id: selected.from, to_user_id: selected.to, amount, currency: selected.currency, note: settlementNote, settled_by: userId });
+      if (request !== generation.current || latest.current.scope !== scope) return;
+      selectionRef.current = null;
       setSelectedSettlement(null);
       setSettlementNote('');
+      try { onSettlementCreated?.(record); onSettled?.(); } catch { Alert.alert('結清已記錄', '更新畫面失敗，請重新整理；請勿重複記錄轉帳。'); }
     } catch (error) {
-      Alert.alert('結清失敗', error instanceof Error ? error.message : '請稍後再試。');
+      if (request === generation.current) setSettlementError(error instanceof Error ? error.message : '結清失敗，請稍後再試。');
     } finally {
-      setSettling(false);
+      if (request === generation.current) { operationBusy.current = false; setSettling(false); }
     }
   }
 
-  async function removeHistoryRecord(record: SettlementRecord) {
-    if (deletingRecordId) return;
-    setDeletingRecordId(record.id);
+  function openHistoryDelete(record: SettlementRecord) {
+    if (operationBusy.current) return;
+    selectionRef.current = null; setSelectedSettlement(null); historyRef.current = record; setPendingHistory(record); setHistoryError('');
+  }
+  function closeHistory() {
+    if (operationBusy.current) return;
+    historyRef.current = null; setPendingHistory(null); setHistoryError('');
+  }
+  function closeSettlement() {
+    if (operationBusy.current) return;
+    selectionRef.current = null; setSelectedSettlement(null); setSettlementError('');
+  }
+  async function removeHistoryRecord() {
+    const record = historyRef.current;
+    if (operationBusy.current || !record || record !== pendingHistory || latest.current.scope !== scope) return;
+    if (!tripId || !userId || record.trip_id !== tripId) { setHistoryError('行程或登入資訊已變更，請重新開啟。'); return; }
+    const live = latest.current.settlementRecords.find((item) => item.id === record.id);
+    if (!live) { setHistoryError('此紀錄已移除，請重新整理行程。'); return; }
+    if (JSON.stringify(live) !== JSON.stringify(record)) { historyRef.current = live; setPendingHistory(live); setHistoryError('紀錄已更新，請重新確認。'); return; }
+    operationBusy.current = true; const request = generation.current; setDeletingRecordId(record.id); setHistoryError('');
     try {
       await deleteSettlementRecord(record.id);
-      onSettlementDeleted?.(record.id);
+      if (request !== generation.current || latest.current.scope !== scope) return;
+      historyRef.current = null; setPendingHistory(null);
+      try { onSettlementDeleted?.(record.id); } catch { Alert.alert('紀錄已刪除', '更新畫面失敗，請重新整理行程。'); }
     } catch (error) {
-      Alert.alert('刪除失敗', error instanceof Error ? error.message : '無法刪除結清紀錄。');
+      if (request === generation.current) setHistoryError(error instanceof Error ? error.message : '無法刪除結清紀錄。');
     } finally {
-      setDeletingRecordId(null);
+      if (request === generation.current) { operationBusy.current = false; setDeletingRecordId(null); }
     }
   }
 
@@ -120,10 +161,20 @@ export function SettlementCard({ settlements, labelFor, members = [], themeMode 
         <View style={styles.actions}><Pressable accessibilityRole="button" onPress={() => void copySettlement()} style={[styles.actionButton, { borderColor: theme.colors.border }]}><Text style={{ color: theme.colors.text, fontWeight: '700' }}>{copied ? '已複製' : '一鍵複製結算文字'}</Text></Pressable></View>
       </> : <Pressable style={styles.complete} onPress={() => setShowCelebration(true)}><PuppyMascot puppy="-2" size={220} accessibilityLabel="分帳完成" /><Text style={[styles.empty, { color: theme.colors.muted }]}>目前沒有需要轉帳的款項</Text><Text style={styles.hint}>大家都已經對好帳囉</Text></Pressable>}
 
-      {settlementRecords.length > 0 ? <View style={styles.history}><Text style={[styles.historyTitle, { color: theme.colors.text }]}>結清歷史紀錄</Text>{settlementRecords.map((record) => <View key={record.id} style={styles.historyRow}><View style={styles.historyTop}><View style={styles.historyCopy}><Text style={[styles.historyText, { color: theme.colors.text }]}>{displayName(record.from_user_id)} → {displayName(record.to_user_id)} {record.currency} {record.amount.toFixed(2)}</Text><Text style={[styles.historyNote, { color: theme.colors.muted }]}>{record.note || '已完成轉帳'} · {new Date(record.settled_at).toLocaleDateString()}</Text></View><Pressable accessibilityRole="button" disabled={deletingRecordId === record.id} onPress={() => void removeHistoryRecord(record)} style={[styles.deleteHistoryButton, { opacity: deletingRecordId === record.id ? 0.5 : 1 }]}><Text style={styles.deleteHistoryText}>{deletingRecordId === record.id ? '刪除中…' : '刪除'}</Text></Pressable></View></View>)}</View> : null}
+      {settlementRecords.length > 0 ? <View style={styles.history}><Text style={[styles.historyTitle, { color: theme.colors.text }]}>結清歷史紀錄</Text>{settlementRecords.map((record) => <View key={record.id} style={styles.historyRow}><View style={styles.historyTop}><View style={styles.historyCopy}><Text style={[styles.historyText, { color: theme.colors.text }]}>{displayName(record.from_user_id)} → {displayName(record.to_user_id)} {record.currency} {record.amount.toFixed(2)}</Text><Text style={[styles.historyNote, { color: theme.colors.muted }]}>{record.note || '已完成轉帳'} · {new Date(record.settled_at).toLocaleDateString()}</Text></View><Pressable accessibilityRole="button" disabled={Boolean(deletingRecordId) || settling} onPress={() => openHistoryDelete(record)} style={[styles.deleteHistoryButton, { opacity: deletingRecordId === record.id ? 0.5 : 1 }]}><Text style={styles.deleteHistoryText}>{deletingRecordId === record.id ? '刪除中…' : '刪除'}</Text></Pressable></View></View>)}</View> : null}
 
       <Modal visible={showCelebration} transparent animationType="fade" onRequestClose={() => setShowCelebration(false)}><View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: theme.colors.surface }]}><PuppyMascot puppy="-2" size={220} accessibilityLabel="分帳完成" /><Text style={[styles.modalTitle, { color: theme.colors.text }]}>分帳完成！</Text><Text style={[styles.modalText, { color: theme.colors.muted }]}>旅費已整理完成，祝你們旅途愉快。</Text><Pressable style={styles.closeButton} onPress={() => setShowCelebration(false)}><Text style={styles.closeText}>關閉</Text></Pressable></View></View></Modal>
-      <Modal visible={Boolean(selectedSettlement)} transparent animationType="fade" onRequestClose={() => { if (!settling) setSelectedSettlement(null); }}><View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: theme.colors.surface }]}><Text style={[styles.modalTitle, { color: theme.colors.text }]}>確認結清</Text><Text style={[styles.modalText, { color: theme.colors.muted }]}>{selectedSettlement ? `${displayName(selectedSettlement.from)} → ${displayName(selectedSettlement.to)} ${selectedSettlement.currency}` : ''}</Text><TextInput value={settlementAmount} onChangeText={setSettlementAmount} keyboardType="decimal-pad" placeholder="轉帳金額" placeholderTextColor={theme.colors.muted} style={[styles.modalInput, { color: theme.colors.text, borderColor: theme.colors.border }]} /><TextInput value={settlementNote} onChangeText={setSettlementNote} placeholder="備註，例如：LINE Pay 已轉" placeholderTextColor={theme.colors.muted} style={[styles.modalInput, { color: theme.colors.text, borderColor: theme.colors.border }]} /><View style={styles.modalActions}><Pressable disabled={settling} style={styles.closeButton} onPress={() => setSelectedSettlement(null)}><Text style={styles.closeText}>取消</Text></Pressable><Pressable disabled={settling} style={[styles.closeButton, { opacity: settling ? 0.6 : 1 }]} onPress={() => void confirmSettlement()}><Text style={styles.closeText}>{settling ? '儲存中…' : '確認結清'}</Text></Pressable></View></View></View></Modal>
+      <ActionConfirmationModal visible={Boolean(selectedSettlement)} title="確認結清" confirmLabel="確認結清" theme={theme} busy={settling} error={settlementError} onCancel={closeSettlement} onConfirm={confirmSettlement}>
+        <Text style={[styles.modalText, { color: theme.colors.muted }]}>{selectedSettlement ? `${displayName(selectedSettlement.from)} → ${displayName(selectedSettlement.to)} ${selectedSettlement.currency}` : ''}</Text>
+        <Text style={{ color: theme.colors.muted }}>僅記錄結清，不會實際轉帳；請確認款項已完成支付。</Text>
+        <TextInput editable={!settling} value={settlementAmount} onChangeText={setSettlementAmount} keyboardType="decimal-pad" placeholder="轉帳金額" placeholderTextColor={theme.colors.muted} style={[styles.modalInput, { color: theme.colors.text, borderColor: theme.colors.border }]} />
+        <TextInput editable={!settling} value={settlementNote} onChangeText={setSettlementNote} placeholder="備註，例如：LINE Pay 已轉" placeholderTextColor={theme.colors.muted} style={[styles.modalInput, { color: theme.colors.text, borderColor: theme.colors.border }]} />
+      </ActionConfirmationModal>
+      <ActionConfirmationModal visible={Boolean(pendingHistory)} title="刪除結清紀錄" confirmLabel="確認刪除結清紀錄" theme={theme} busy={Boolean(deletingRecordId)} error={historyError} onCancel={closeHistory} onConfirm={removeHistoryRecord}>
+        <Text style={{ color: theme.colors.text }}>{pendingHistory ? `${displayName(pendingHistory.from_user_id)} → ${displayName(pendingHistory.to_user_id)} ${pendingHistory.currency} ${pendingHistory.amount.toFixed(2)}` : ''}</Text>
+        <Text style={{ color: theme.colors.muted }}>{pendingHistory ? new Date(pendingHistory.settled_at).toLocaleDateString() : ''}</Text>
+        <Text style={{ color: theme.colors.muted }}>刪除的是記帳紀錄，不會撤銷真實轉帳；剩餘應付會重新計算。</Text>
+      </ActionConfirmationModal>
     </View>
   );
 }

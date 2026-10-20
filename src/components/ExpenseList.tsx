@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import type { Expense } from '@/lib/expenses-api';
 import type { TripMemberWithProfile } from '@/lib/trips';
@@ -6,7 +6,14 @@ import { convertToTwd, type SupportedCurrency } from '@/lib/exchange-rates';
 import { getThemeForMode, type ThemeMode, EDITORIAL_COLORS } from '@/lib/theme';
 import { getProfileDisplayName } from '@/lib/profiles';
 import { ProfileAvatar } from './ProfileAvatar';
-import { settleExpense } from '@/lib/settlement-api';
+import { listSettlementRecordsForExpense, settleExpense, SettlementPreviewChangedError } from '@/lib/settlement-api';
+import { createExpenseSettlementTransfers, type ExpenseSettlementTransfer } from '@/lib/settlement';
+import { ActionConfirmationModal } from './ActionConfirmationModal';
+
+type ExpenseAction = { kind: 'settle' | 'delete'; expense: Expense; scope: string };
+function expenseVersion(item: Expense) {
+  return JSON.stringify([item.id, item.trip_id, item.title, item.payer_id, item.amount, item.currency, item.is_settled, item.splits]);
+}
 
 type Props = {
   expenses: Expense[];
@@ -27,32 +34,76 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [settledIds, setSettledIds] = useState<Set<string>>(new Set());
+  const [action, setAction] = useState<ExpenseAction | null>(null);
+  const [preview, setPreview] = useState<ExpenseSettlementTransfer[] | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false), [actionError, setActionError] = useState('');
+  const scope = JSON.stringify([tripId, userId]);
+  const current = useRef({ expenses, scope, userId }); current.current = { expenses, scope, userId };
+  const activeAction = useRef<ExpenseAction | null>(null), requestId = useRef(0), busy = useRef(false);
+  const lifecycle = useRef(0);
+  useEffect(() => {
+    lifecycle.current++;
+    activeAction.current = null; requestId.current++; busy.current = false;
+    setAction(null); setPreview(null); setActionError(''); setPreviewLoading(false); setDeletingId(null); setSettlingId(null); setSettledIds(new Set());
+    return () => { lifecycle.current++; activeAction.current = null; requestId.current++; };
+  }, [scope]);
   const memberFor = (id: string) => members.find((member) => member.user_id === id);
   const name = (id: string) => getProfileDisplayName(memberFor(id)?.profile, id.slice(0, 8));
 
-  async function remove(expense: Expense) {
-    if (deletingId || settlingId) return;
-    setDeletingId(expense.id);
-    try { await onDelete(expense); }
-    catch (error) { Alert.alert('刪除失敗', error instanceof Error ? error.message : '無法刪除費用。'); }
-    finally { setDeletingId(null); }
+  function cancelAction() {
+    if (busy.current) return;
+    activeAction.current = null; requestId.current++; setAction(null); setPreview(null); setActionError(''); setPreviewLoading(false);
   }
-
-  async function settle(expense: Expense) {
-    if (settlingId || expense.is_settled || settledIds.has(expense.id)) return;
-    if (!tripId || !userId) {
-      Alert.alert('無法結清', '缺少行程或登入資訊，請重新開啟行程後再試。');
+  async function loadPreview(target: ExpenseAction) {
+    if (activeAction.current !== target || current.current.scope !== target.scope || busy.current) return;
+    const request = ++requestId.current; setPreview(null); setPreviewLoading(true); setActionError('');
+    try {
+      const records = await listSettlementRecordsForExpense(target.expense.id);
+      if (request === requestId.current && activeAction.current === target && current.current.scope === target.scope) setPreview(createExpenseSettlementTransfers(target.expense, records));
+    } catch (error) {
+      if (request === requestId.current && activeAction.current === target) setActionError(error instanceof Error ? error.message : '無法取得結清資料，請重新載入預覽。');
+    } finally { if (request === requestId.current && activeAction.current === target) setPreviewLoading(false); }
+  }
+  async function openAction(expense: Expense, kind: ExpenseAction['kind']) {
+    if (busy.current) return;
+    const target = { expense, kind, scope }; activeAction.current = target; requestId.current++;
+    setAction(target); setPreview(null); setActionError(''); setPreviewLoading(false);
+    if (kind === 'settle') await loadPreview(target);
+  }
+  async function confirmAction() {
+    const target = activeAction.current;
+    if (!target || target !== action || busy.current || target.scope !== current.current.scope) return;
+    const expense = current.current.expenses.find((item) => item.id === target.expense.id && item.trip_id === tripId);
+    const actor = current.current.userId;
+    if (!tripId || !actor || !expense) { setActionError('行程、登入資訊或費用已變更，請關閉後重新開啟。'); return; }
+    if (expenseVersion(expense) !== expenseVersion(target.expense)) {
+      const updated = { ...target, expense }; activeAction.current = updated; setAction(updated);
+      if (target.kind === 'settle') await loadPreview(updated);
+      if (activeAction.current === updated && current.current.scope === updated.scope) setActionError('費用資料已更新，請重新確認後再送出。');
       return;
     }
-    setSettlingId(expense.id);
+    if (target.kind === 'settle' && (preview === null || previewLoading || expense.is_settled || settledIds.has(expense.id))) return;
+    busy.current = true; setActionError('');
+    const session = lifecycle.current;
+    if (target.kind === 'delete') setDeletingId(expense.id); else setSettlingId(expense.id);
+    let committed = false;
     try {
-      await settleExpense(expense, userId);
-      setSettledIds((previous) => new Set(previous).add(expense.id));
-      await onExpenseSettled?.(expense.id);
+      if (target.kind === 'delete') await onDelete(expense);
+      else await settleExpense(expense, actor, undefined, preview ?? []);
+      committed = true;
+      if (session !== lifecycle.current || activeAction.current !== target || current.current.scope !== target.scope) return;
+      if (target.kind === 'settle') {
+        setSettledIds((previous) => new Set(previous).add(expense.id));
+        // A refresh failure must not invite repeating an already committed write.
+        try { await onExpenseSettled?.(expense.id); } catch (error) { Alert.alert('結清已記錄', '更新畫面失敗，請重新整理行程；請勿重複結清。'); }
+      }
+      if (activeAction.current === target) { activeAction.current = null; requestId.current++; setAction(null); setPreview(null); }
     } catch (error) {
-      Alert.alert('逐筆結清失敗', error instanceof Error ? error.message : '無法建立結清紀錄。');
+      if (session !== lifecycle.current || activeAction.current !== target || current.current.scope !== target.scope) return;
+      if (error instanceof SettlementPreviewChangedError) setPreview(error.transfers);
+      setActionError(error instanceof Error ? error.message : '操作失敗，請稍後重試。');
     } finally {
-      setSettlingId(null);
+      if (session === lifecycle.current && current.current.scope === target.scope && (activeAction.current === target || committed)) { busy.current = false; setSettlingId(null); setDeletingId(null); }
     }
   }
 
@@ -99,15 +150,29 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
         </View>
         <View style={styles.actions}>
           <Pressable disabled={Boolean(deletingId) || Boolean(settlingId)} onPress={() => onEdit(expense)}><Text style={styles.edit}>編輯</Text></Pressable>
-          {!isSettled ? <Pressable accessibilityRole="button" disabled={Boolean(settlingId) || Boolean(deletingId)} onPress={() => void settle(expense)}><Text style={[styles.settle, settlingId === expense.id && styles.disabled]}>{settlingId === expense.id ? '結清中…' : '結清此筆'}</Text></Pressable> : null}
-          <Pressable disabled={deletingId === expense.id} onPress={() => { if (!settlingId) void remove(expense); }}><Text style={[styles.delete, deletingId === expense.id && styles.disabled]}>刪除</Text></Pressable>
+          {!isSettled ? <Pressable accessibilityRole="button" disabled={Boolean(settlingId) || Boolean(deletingId)} onPress={() => openAction(expense, 'settle')}><Text style={[styles.settle, settlingId === expense.id && styles.disabled]}>{settlingId === expense.id ? '結清中…' : '結清此筆'}</Text></Pressable> : null}
+          <Pressable disabled={Boolean(deletingId) || Boolean(settlingId)} onPress={() => openAction(expense, 'delete')}><Text style={[styles.delete, deletingId === expense.id && styles.disabled]}>刪除</Text></Pressable>
         </View>
       </View>;
     })}
+    <ActionConfirmationModal visible={!!action && action.scope === scope} title={action?.kind === 'delete' ? '刪除費用' : '確認逐筆結清'} confirmLabel={action?.kind === 'delete' ? '確認刪除費用' : '確認記錄結清'} theme={theme} busy={Boolean(settlingId || deletingId)} loading={previewLoading} confirmDisabled={action?.kind === 'settle' && (preview === null || action.expense.is_settled)} error={actionError} onCancel={cancelAction} onConfirm={confirmAction} onRetry={action?.kind === 'settle' && preview === null ? () => loadPreview(action) : undefined}>
+      <Text style={{ color: theme.colors.text, fontWeight: '700' }}>{action?.expense.title}</Text>
+      {action?.kind === 'delete' ? <Text style={{ color: theme.colors.muted }}>{action.expense.currency} {Number(action.expense.amount).toLocaleString('zh-TW', { minimumFractionDigits: 2 })}。刪除後會重新計算分帳，請確認不是只要編輯此筆費用。</Text> : <>
+        <Text style={{ color: theme.colors.muted }}>僅記錄結清，不會實際轉帳；請確認款項已完成支付。</Text>
+        {preview?.map((row) => <View key={`${row.from_user_id}:${row.to_user_id}`} style={styles.transfer}>
+          <View style={styles.transferPerson}><ProfileAvatar profile={memberFor(row.from_user_id)?.profile} userId={row.from_user_id} size={24} /><Text style={{ color: theme.colors.text, flexShrink: 1 }}>{name(row.from_user_id)}</Text></View>
+          <Text style={{ color: theme.colors.muted }}>轉給</Text>
+          <View style={styles.transferPerson}><ProfileAvatar profile={memberFor(row.to_user_id)?.profile} userId={row.to_user_id} size={24} /><Text style={{ color: theme.colors.text, flexShrink: 1 }}>{name(row.to_user_id)}</Text></View>
+          <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>{row.currency} {row.amount.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+        </View>)}
+        {preview?.length === 0 ? <Text style={{ color: theme.colors.muted }}>此筆已無剩餘轉帳款項；確認後只會更新費用結清狀態。</Text> : null}
+      </>}
+    </ActionConfirmationModal>
   </View>;
 }
 
 const styles = StyleSheet.create({
+  transfer: { gap: 5, paddingVertical: 7 }, transferPerson: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   shares: { marginTop: 12, gap: 6 }, shareHeading: { fontSize: 11, fontWeight: '600' }, shareRows: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   shareMember: { flexDirection: 'row', alignItems: 'center', gap: 8, flexBasis: 240, flexGrow: 1, minWidth: 0, maxWidth: '100%', borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10 },
   shareIdentity: { flex: 1, minWidth: 0, gap: 2 }, shareName: { fontSize: 12, lineHeight: 18, fontWeight: '600' }, sharePayer: { fontSize: 10, lineHeight: 14 }, shareAmount: { fontSize: 12, lineHeight: 18, fontWeight: '700', flexShrink: 1, maxWidth: '50%', textAlign: 'right' },

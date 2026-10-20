@@ -1,6 +1,16 @@
 import { supabase } from './supabase';
 import { normalizeCurrency, type SupportedCurrency } from './exchange-rates';
-import { createExpenseSettlementTransfers, type SettlementClearanceRecord, type SettlementExpense } from './settlement';
+import { createExpenseSettlementTransfers, type ExpenseSettlementTransfer, type SettlementClearanceRecord, type SettlementExpense } from './settlement';
+
+export class SettlementPreviewChangedError extends Error {
+  constructor(public readonly transfers: ExpenseSettlementTransfer[]) {
+    super('結清資料已更新，請重新確認金額後再送出。');
+    this.name = 'SettlementPreviewChangedError';
+  }
+}
+function transferKey(rows: readonly ExpenseSettlementTransfer[]) {
+  return JSON.stringify(rows.map((row) => [row.expense_id, row.from_user_id, row.to_user_id, row.currency, row.amount]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+}
 
 export type SettlementRecord = {
   id: string;
@@ -97,9 +107,21 @@ export async function settleExpense(
   expense: SettlementExpense & { id: string; trip_id: string },
   settledBy: string,
   note?: string | null,
+  expectedTransfers?: readonly ExpenseSettlementTransfer[],
 ): Promise<SettleExpenseResult> {
+  if (expectedTransfers) {
+    const { data, error } = await supabase.from('expenses')
+      .select('id,trip_id,payer_id,amount,currency,is_settled,splits:expense_splits(*)')
+      .eq('id', expense.id).eq('trip_id', expense.trip_id).single();
+    if (error) throw error;
+    if (!data || data.id !== expense.id || data.trip_id !== expense.trip_id) throw new Error('費用已變更或無法取得，請重新開啟行程。');
+    expense = { ...data, amount: Number(data.amount), splits: (data.splits ?? []).map((split: { user_id: string; amount: number | string }) => ({ user_id: split.user_id, amount: Number(split.amount) })) };
+  }
   const existing = await listSettlementRecordsForExpense(expense.id);
   const transfers = createExpenseSettlementTransfers(expense, existing as SettlementClearanceRecord[]);
+  // Re-read history immediately before writes; never silently settle an amount
+  // different from the preview the user confirmed. This is not a DB transaction.
+  if (expectedTransfers && transferKey(transfers) !== transferKey(expectedTransfers)) throw new SettlementPreviewChangedError(transfers);
   const created: SettlementRecord[] = [];
   try {
     for (const transfer of transfers) {

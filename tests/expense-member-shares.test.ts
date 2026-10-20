@@ -3,12 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { harness, nodes, text } from './helpers/interaction-harness';
 import type { Expense } from '../lib/expenses-api';
 import type { TripMemberWithProfile } from '../lib/trips';
-vi.mock('react', async (original) => { const a = await original<typeof import('react') & { default: typeof React }>(); return { ...a, useState: (...args: Parameters<typeof React.useState>) => a.default.useState(...args) }; });
+vi.mock('react', async (original) => { const a = await original<typeof import('react') & { default: typeof React }>(); return { ...a, useState: (...args: Parameters<typeof React.useState>) => a.default.useState(...args), useRef: (v: unknown) => a.default.useRef(v), useEffect: (...args: Parameters<typeof React.useEffect>) => a.default.useEffect(...args) }; });
 vi.mock('react-native', () => ({ View: 'div', Text: 'span', Pressable: 'button', Image: 'img', Alert: { alert: vi.fn() }, useColorScheme: () => 'light', StyleSheet: { create: (value: unknown) => value } }));
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 vi.mock('@/lib/profiles', async () => import('../lib/profiles'));
 vi.mock('@/lib/exchange-rates', async () => import('../lib/exchange-rates'));
 vi.mock('@/lib/theme', async () => import('../lib/theme'));
+vi.mock('@/lib/settlement', async () => import('../lib/settlement'));
 vi.mock('@/lib/settlement-api', () => ({ settleExpense: vi.fn() }));
 import { ExpenseList } from '../src/components/ExpenseList';
 import { ProfileAvatar } from '../src/components/ProfileAvatar';
@@ -69,13 +70,13 @@ describe('expense card member breakdown', () => {
     try { expect(text(shares())).toContain('金額待確認'); expect(text(shares())).not.toMatch(/NaN|0\.00/); }
     finally { h.unmount(); }
   });
-  it('keeps editing and deleting wired to the original expense', async () => {
+  it('keeps editing wired to the original expense and does not delete without confirmation', async () => {
     const { h, onEdit, onDelete } = setup(expense);
     try {
       const buttons = nodes(h.render()).filter((node) => node.type === 'button');
       buttons.find((node) => text(node) === '編輯')!.props.onPress!();
       await buttons.find((node) => text(node) === '刪除')!.props.onPress!();
-      expect(onEdit).toHaveBeenCalledWith(expense); expect(onDelete).toHaveBeenCalledWith(expense);
+      expect(onEdit).toHaveBeenCalledWith(expense); expect(onDelete).not.toHaveBeenCalled();
     } finally { h.unmount(); }
   });
 });

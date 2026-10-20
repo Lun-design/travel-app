@@ -41,7 +41,7 @@ describe('UI mutation safety audit', () => {
   it('guards expense deletion while awaiting the parent reload', () => {
     const source = read('src/components/ExpenseList.tsx');
     expect(source).toContain('const [deletingId, setDeletingId]');
-    expect(source).toContain('disabled={deletingId === expense.id}');
+    expect(source).toContain('disabled={Boolean(deletingId) || Boolean(settlingId)}');
   });
 
   it('guards manual exchange-rate locking inside the expense modal', () => {
