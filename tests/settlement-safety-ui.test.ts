@@ -42,6 +42,24 @@ function listHarness() {
   return { h, onDelete, onExpenseSettled, setExpenses: (next: Expense[]) => { expenses = next; }, setTrip: (next: string) => { tripId = next; } };
 }
 beforeEach(() => { api.list.mockResolvedValue([record]); api.settle.mockResolvedValue({}); api.remove.mockResolvedValue(undefined); api.create.mockResolvedValue(record); });
+
+describe('settlement touch targets', () => {
+  it('keeps settlement and history deletion readable, roomy and confirmation-only', () => {
+    const h = harness(() => SettlementCard({ tripId: 't', userId: 'b', members, settlements: [{ from: 'b', to: 'a', amount: 17833, currency: 'TWD' }], settlementRecords: [record], labelFor: id => id === 'a' ? '小白' : '旅伴' }));
+    try {
+      h.render();
+      for (const label of ['標記為已結清', '刪除']) {
+        const control = button(h.render(), label);
+        expect(control.props.accessibilityLabel).toContain('旅伴'); expect(control.props.accessibilityLabel).toContain('小白');
+        expect(control.props.accessibilityState).toMatchObject({ disabled: false });
+        const style = Object.assign({}, ...[control.props.style].flat(Infinity).filter(Boolean));
+        expect(style.minWidth).toBeGreaterThanOrEqual(44); expect(style.minHeight).toBeGreaterThanOrEqual(44);
+      }
+      click(h.render(), '標記為已結清'); expect(api.create).not.toHaveBeenCalled(); click(h.render(), '取消');
+      click(h.render(), '刪除'); expect(api.remove).not.toHaveBeenCalled(); click(h.render(), '取消');
+    } finally { h.unmount(); }
+  });
+});
 describe('expense confirmation safety', () => {
   it('opens a partial-settlement preview with avatars without writing; cancel writes nothing', async () => {
     const { h } = listHarness();

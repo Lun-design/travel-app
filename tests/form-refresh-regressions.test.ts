@@ -52,7 +52,7 @@ describe('background refresh must not undo an active interaction', () => {
     const itinerary = [{ id: 'i', latitude: 34, longitude: 135 }] as Parameters<typeof PackingPanel>[0]['items'];
     const h = harness(() => PackingPanel({ tripId: 't', userId: 'u', members: [], items: itinerary, tripStartDate: '2026-10-23', refreshToken }));
     h.render();
-    const checkbox = () => nodes(h.render()).find((n) => n.type === 'button' && Array.isArray(n.props.style) && n.props.onPress && ['', '✓'].includes(text(n)))!;
+    const checkbox = () => nodes(h.render()).find((n) => n.props.accessibilityRole === 'checkbox' && n.props.accessibilityLabel === '打包：護照')!;
     try {
       await vi.waitFor(() => expect(text(h.render())).toContain('護照'));
       let resolveWeather!: (value: unknown) => void;
@@ -61,9 +61,9 @@ describe('background refresh must not undo an active interaction', () => {
       await vi.waitFor(() => expect(mocks.weather).toHaveBeenCalledTimes(2));
       checkbox().props.onPress!();
       await vi.waitFor(() => { expect(mocks.update).toHaveBeenCalledOnce(); expect(checkbox().props.disabled).toBe(false); });
-      expect(text(checkbox())).toBe('✓');
+      expect(checkbox().props.accessibilityState).toMatchObject({ checked: true });
       resolveWeather({ precipitationProbability: 0 }); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
-      expect(text(checkbox())).toBe('✓');
+      expect(checkbox().props.accessibilityState).toMatchObject({ checked: true });
     } finally { h.unmount(); }
   });
   it('ignores a finishing packing mutation from a previous trip', async () => {
@@ -76,7 +76,7 @@ describe('background refresh must not undo an active interaction', () => {
     const h = harness(() => PackingPanel({ tripId, userId: 'u', members: [] })); h.render();
     try {
       await vi.waitFor(() => expect(text(h.render())).toContain('舊行程護照'));
-      nodes(h.render()).find((n) => n.type === 'button' && Array.isArray(n.props.style) && n.props.onPress && text(n) === '')!.props.onPress!();
+      nodes(h.render()).find((n) => n.props.accessibilityLabel === '打包：舊行程護照')!.props.onPress!();
       tripId = 'next'; h.render();
       finish(); await Promise.resolve(); await Promise.resolve();
       await vi.waitFor(() => expect(text(h.render())).toContain('新行程護照'));

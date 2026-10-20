@@ -11,6 +11,7 @@ import { createExpenseSettlementTransfers, type ExpenseSettlementTransfer } from
 import { ActionConfirmationModal } from './ActionConfirmationModal';
 import { EXPENSE_VIEW_CATEGORIES, filterExpenseView, type ExpenseViewFilters } from '../../lib/expense-view-filters';
 import type { SettlementRecordsState } from '../hooks/useSettlementRecords';
+import { selectionKeyboardProps } from '../../lib/selection-keyboard';
 
 type ExpenseAction = { kind: 'settle' | 'delete'; expense: Expense; scope: string };
 function expenseVersion(item: Expense) {
@@ -125,8 +126,8 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
 
   return <View style={styles.list}>
     <View style={styles.viewFilters}>
-      <Pressable accessibilityRole="checkbox" accessibilityLabel="費用：與我有關" accessibilityState={{ checked: Boolean(filters.mineOnly) }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, mineOnly: !current.mineOnly }))}><Text style={{ color: filters.mineOnly ? theme.colors.primary : theme.colors.muted }}>與我有關{filters.mineOnly ? ' ✓' : ''}</Text></Pressable>
-      {settlementState ? <Pressable accessibilityRole="checkbox" accessibilityLabel="費用：待結清" accessibilityState={{ checked: Boolean(filters.pendingOnly) }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, pendingOnly: !current.pendingOnly }))}><Text style={{ color: filters.pendingOnly ? theme.colors.primary : theme.colors.muted }}>待結清{filters.pendingOnly ? ' ✓' : ''}</Text></Pressable> : null}
+      <Pressable {...selectionKeyboardProps(() => setFilters(current => ({ ...current, mineOnly: !current.mineOnly })))} accessibilityRole="checkbox" accessibilityLabel="費用：與我有關" accessibilityState={{ checked: Boolean(filters.mineOnly) }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, mineOnly: !current.mineOnly }))}><Text style={{ color: filters.mineOnly ? theme.colors.primary : theme.colors.muted }}>與我有關{filters.mineOnly ? ' ✓' : ''}</Text></Pressable>
+      {settlementState ? <Pressable {...selectionKeyboardProps(() => setFilters(current => ({ ...current, pendingOnly: !current.pendingOnly })))} accessibilityRole="checkbox" accessibilityLabel="費用：待結清" accessibilityState={{ checked: Boolean(filters.pendingOnly) }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, pendingOnly: !current.pendingOnly }))}><Text style={{ color: filters.pendingOnly ? theme.colors.primary : theme.colors.muted }}>待結清{filters.pendingOnly ? ' ✓' : ''}</Text></Pressable> : null}
       {[undefined, ...EXPENSE_VIEW_CATEGORIES].map(category => <Pressable key={category ?? 'all'} accessibilityRole="button" accessibilityLabel={`費用類別：${category ?? '全部'}`} accessibilityState={{ selected: filters.category === category }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, category }))}><Text style={{ color: filters.category === category ? theme.colors.primary : theme.colors.muted }}>{category ?? '全部類別'}</Text></Pressable>)}
       {filters.mineOnly || filters.pendingOnly || filters.category ? <Pressable accessibilityRole="button" accessibilityLabel="清除費用篩選" style={styles.filterButton} onPress={() => setFilters({})}><Text style={{ color: theme.colors.primary }}>清除篩選</Text></Pressable> : null}
     </View>
@@ -171,9 +172,9 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
           </View>
         </View>
         <View style={styles.actions}>
-          <Pressable disabled={Boolean(deletingId) || Boolean(settlingId)} onPress={() => onEdit(expense)}><Text style={styles.edit}>編輯</Text></Pressable>
-          {!isSettled ? <Pressable accessibilityRole="button" disabled={Boolean(settlingId) || Boolean(deletingId)} onPress={() => openAction(expense, 'settle')}><Text style={[styles.settle, settlingId === expense.id && styles.disabled]}>{settlingId === expense.id ? '結清中…' : '結清此筆'}</Text></Pressable> : null}
-          <Pressable disabled={Boolean(deletingId) || Boolean(settlingId)} onPress={() => openAction(expense, 'delete')}><Text style={[styles.delete, deletingId === expense.id && styles.disabled]}>刪除</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`編輯費用：${expense.title}`} accessibilityState={{ disabled: Boolean(deletingId) || Boolean(settlingId) }} style={styles.actionButton} disabled={Boolean(deletingId) || Boolean(settlingId)} onPress={() => onEdit(expense)}><Text style={styles.edit}>編輯</Text></Pressable>
+          {!isSettled ? <Pressable accessibilityRole="button" accessibilityLabel={`結清費用：${expense.title}`} accessibilityState={{ disabled: Boolean(settlingId) || Boolean(deletingId), busy: settlingId === expense.id }} style={styles.actionButton} disabled={Boolean(settlingId) || Boolean(deletingId)} onPress={() => openAction(expense, 'settle')}><Text style={[styles.settle, settlingId === expense.id && styles.disabled]}>{settlingId === expense.id ? '結清中…' : '結清此筆'}</Text></Pressable> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel={`刪除費用：${expense.title}`} accessibilityState={{ disabled: Boolean(deletingId) || Boolean(settlingId), busy: deletingId === expense.id }} style={styles.actionButton} disabled={Boolean(deletingId) || Boolean(settlingId)} onPress={() => openAction(expense, 'delete')}><Text style={[styles.delete, deletingId === expense.id && styles.disabled]}>刪除</Text></Pressable>
         </View>
       </View>;
     })}
@@ -195,6 +196,7 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
 
 const styles = StyleSheet.create({
   viewFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  actionButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
   filterButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 18, backgroundColor: EDITORIAL_COLORS.sand },
   transfer: { gap: 5, paddingVertical: 7 }, transferPerson: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   shares: { marginTop: 12, gap: 6 }, shareHeading: { fontSize: 11, fontWeight: '600' }, shareRows: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

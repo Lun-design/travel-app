@@ -2,6 +2,8 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PackingItem } from '../lib/packing-api';
 import { harness, nodes, press, text } from './helpers/interaction-harness';
+// @ts-expect-error RNWeb internal responder has no public declaration; exercise its actual key filtering.
+import PressResponder from 'react-native-web/dist/modules/usePressEvents/PressResponder.js';
 const api = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), alert: vi.fn() }));
 vi.mock('react', async original => {
   const a = await original<typeof import('react') & { default: typeof React }>();
@@ -31,9 +33,77 @@ async function setup(data = rows) {
   return { ...h, setProps: (next: Partial<typeof props>) => { props = { ...props, ...next }; }, input: () => nodes(h.render()).find(n => n.type === 'input')!, names: () => nodes(h.render()).filter(n => n.props.numberOfLines === 2 && text(n).startsWith('物品-')).map(text) };
 }
 beforeEach(() => { api.create.mockResolvedValue(row('new')); api.update.mockResolvedValue(undefined); api.remove.mockResolvedValue(undefined); });
-afterEach(() => { unmount?.(); unmount = undefined; vi.useRealTimers(); });
+afterEach(() => { unmount?.(); unmount = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('packing view and add feedback', () => {
+  it('activates a web checkbox once with Space even though RNWeb delegates only Enter for this role', async () => {
+    vi.stubGlobal('document', {}); const h = await setup();
+    const checkbox = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!;
+    const target = { tagName: 'DIV', getAttribute: () => 'checkbox' };
+    const event = { key: ' ', target, currentTarget: target, repeat: false, preventDefault: vi.fn() };
+    const responder = new PressResponder({ onPress: checkbox.props.onPress });
+    responder.getEventHandlers().onKeyDown(event);
+    (checkbox.props.onKeyDown as ((e: typeof event) => void) | undefined)?.(event);
+    expect(api.update).toHaveBeenCalledOnce(); expect(event.preventDefault).toHaveBeenCalledOnce();
+    responder.reset();
+  });
+  it('preserves the current assignee in the accessible name', async () => {
+    const h = await setup();
+    const row = nodes(h.render()).find(n => n.type === 'div' && n.key === 'all')!;
+    const assign = nodes(row).find(n => n.type === 'button' && text(n).includes('所有人'))!;
+    expect(assign.props.accessibilityLabel).toContain('目前：所有人');
+  });
+  it('announces category expansion and selected assignment choices', async () => {
+    const h = await setup(); press(h.render(), '打包分類：證件');
+    expect(nodes(h.render()).find(n => n.props.accessibilityLabel === '打包分類：證件')!.props.accessibilityState).toMatchObject({ expanded: false });
+    press(h.render(), '打包分類：證件'); press(h.render(), '指派攜帶人：物品-all，目前：所有人');
+    const selected = nodes(h.render()).find(n => n.props.accessibilityLabel === '指派選項：所有人')!;
+    expect(selected.props.accessibilityRole).toBe('radio'); expect(selected.props.accessibilityState).toMatchObject({ checked: true, disabled: false });
+    expect(api.update).not.toHaveBeenCalled();
+  });
+  it('makes the checkbox and item name one spacious accessible target without nested actions', async () => {
+    const h = await setup(); const checkbox = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!;
+    expect(text(checkbox)).toContain('物品-mine');
+    expect(nodes(checkbox).filter(n => n.type === 'button')).toHaveLength(1);
+    const style = Object.assign({}, ...[checkbox.props.style].flat(Infinity).filter(Boolean));
+    expect(style.minHeight).toBeGreaterThanOrEqual(44); expect(style.minWidth).toBeGreaterThanOrEqual(44);
+    expect(checkbox.props.accessibilityState).toMatchObject({ checked: false, disabled: false });
+    press(h.render(), '打包：物品-mine'); await vi.waitFor(() => expect(api.update).toHaveBeenCalledOnce());
+    expect(api.update.mock.calls[0][1]).toEqual({ is_checked: true, is_packed: true });
+  });
+  it('keeps assignment and deletion beside, not inside, the checkbox target', async () => {
+    const h = await setup(); const checkbox = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!;
+    const row = nodes(h.render()).find(n => n.type === 'div' && n.key === 'mine')!;
+    const assign = nodes(row).find(n => n.props.accessibilityLabel === '指派攜帶人：物品-mine，目前：u')!;
+    const remove = nodes(row).find(n => n.props.accessibilityLabel === '刪除打包項目：物品-mine')!;
+    expect(assign).toBeDefined(); expect(remove).toBeDefined();
+    expect(nodes(checkbox)).not.toContain(assign); expect(nodes(checkbox)).not.toContain(remove);
+    for (const button of [assign, remove]) {
+      const style = Object.assign({}, ...[button.props.style].flat(Infinity).filter(Boolean));
+      expect(style.minWidth).toBeGreaterThanOrEqual(44); expect(style.minHeight).toBeGreaterThanOrEqual(44);
+    }
+    assign.props.onPress!(); expect(api.update).not.toHaveBeenCalled(); expect(api.remove).not.toHaveBeenCalled();
+    expect(nodes(h.render()).some(n => n.type === 'dialog' && n.props.visible && text(n).includes('指派攜帶人'))).toBe(true);
+  });
+  it('prevents duplicate name clicks and accurately disables other rows while a shared mutation is pending', async () => {
+    let finish!: () => void;
+    api.update.mockImplementationOnce(() => new Promise<void>(r => { finish = r; }));
+    const h = await setup(); const toggle = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!.props.onPress!;
+    toggle(); toggle(); expect(api.update).toHaveBeenCalledOnce();
+    const current = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!;
+    expect(current.props.accessibilityState).toMatchObject({ checked: true, disabled: true, busy: true });
+    for (const label of ['打包：物品-other', '指派攜帶人：物品-other，目前：v', '刪除打包項目：物品-other']) {
+      const control = nodes(h.render()).find(n => n.props.accessibilityLabel === label)!;
+      expect(control.props.disabled).toBe(true); expect(control.props.accessibilityState).toMatchObject({ disabled: true });
+    }
+    finish(); await vi.waitFor(() => expect(nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-other')!.props.disabled).toBe(false));
+  });
+  it('restores the checkbox after a failed optimistic update using the existing reload path', async () => {
+    api.update.mockRejectedValueOnce(new Error('failed'));
+    const h = await setup(); press(h.render(), '打包：物品-mine');
+    await vi.waitFor(() => expect(api.alert).toHaveBeenCalledWith('更新打包狀態失敗', 'failed'));
+    await vi.waitFor(() => expect(nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!.props.accessibilityState).toMatchObject({ checked: false, disabled: false }));
+  });
   it('filters by category without changing create category or total progress', async () => {
     const h = await setup();
     press(h.render(), '檢視分類：衣物');

@@ -110,6 +110,20 @@ describe('personal summary keeps the original math and controls', () => {
     const h = harness(() => BudgetDashboard({ tripId: 't', userId: 'b', expenses: [expense], members, rates: {}, themeMode: 'light', settlementState: state })); cleanup = h.unmount; h.render();
     return { ...h, setState: (next: Partial<typeof state>) => { state = { ...state, ...next }; } };
   }
+  it('offers accessible 44px budget currency choices and saves the selected original currency', async () => {
+    const h = setup(); press(h.render(), '展開預算與統計');
+    expect(nodes(h.render()).find(n => n.type === 'button' && text(n) === 'JPY')!.props.disabled).toBe(true);
+    await vi.waitFor(() => expect(nodes(h.render()).find(n => n.type === 'button' && text(n) === 'JPY')!.props.disabled).toBe(false));
+    const button = nodes(h.render()).find(n => n.type === 'button' && text(n) === 'JPY')!;
+    const style = Object.assign({}, ...[button.props.style].flat(Infinity).filter(Boolean));
+    expect(style.minHeight).toBeGreaterThanOrEqual(44); expect(style.minWidth).toBeGreaterThanOrEqual(44);
+    expect(button.props.accessibilityRole).toBe('radio'); expect(button.props.accessibilityLabel).toBe('預算幣別：JPY');
+    button.props.onPress!();
+    expect(nodes(h.render()).find(n => n.props.accessibilityLabel === '預算幣別：JPY')!.props.accessibilityState).toMatchObject({ checked: true });
+    await vi.waitFor(() => expect(nodes(h.render()).find(n => n.props.accessibilityLabel === '儲存旅費預算')!.props.disabled).toBe(false));
+    nodes(h.render()).find(n => n.type === 'input')!.props.onChangeText!('30000');
+    await press(h.render(), '儲存旅費預算'); expect(api.save).toHaveBeenCalledWith(expect.objectContaining({ currency: 'JPY', total_amount: 30000 }));
+  });
   it('shows avatar and 17,833 remaining after the real partial settlement', () => {
     const h = setup();
     expect(text(h.render())).toContain('我的剩餘應付 TWD 17,833.00');
@@ -151,6 +165,19 @@ describe('expense list view controls', () => {
     return { ...h, setProps: (next: Partial<typeof props>) => { props = { ...props, ...next }; } };
   }
   const cards = (tree: React.ReactNode) => nodes(tree).filter(n => typeof n.props.nativeID === 'string').map(n => n.props.nativeID);
+  it('gives each original expense action a distinct accessible target at least 44px', () => {
+    const h = setup(); const edit = vi.fn(); h.setProps({ onEdit: edit });
+    const card = nodes(h.render()).find(n => n.props.nativeID === 'expense-e')!;
+    for (const [label, action] of [['編輯費用：住宿費', '編輯'], ['結清費用：住宿費', '結清此筆'], ['刪除費用：住宿費', '刪除']]) {
+      const control = nodes(card).find(n => n.type === 'button' && text(n) === action)!;
+      expect(control.props.accessibilityRole).toBe('button'); expect(control.props.accessibilityLabel).toBe(label);
+      expect(control.props.accessibilityState).toMatchObject({ disabled: false });
+      const style = Object.assign({}, ...[control.props.style].flat(Infinity).filter(Boolean));
+      expect(style.minWidth).toBeGreaterThanOrEqual(44); expect(style.minHeight).toBeGreaterThanOrEqual(44);
+      if (action === '編輯') control.props.onPress!();
+    }
+    expect(edit).toHaveBeenCalledExactlyOnceWith(expense);
+  });
   it('does not present unconfirmed history as an empty outstanding balance', () => {
     const h = setup(); press(h.render(), '費用：待結清');
     h.setProps({ settlementState: { ...ready(), loading: true } });

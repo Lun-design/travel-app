@@ -8,7 +8,8 @@ describe('UI mutation safety audit', () => {
   it('guards packing item mutations against repeated taps', () => {
     const source = read('src/components/PackingPanel.tsx');
     expect(source).toContain('const [mutatingItemId, setMutatingItemId]');
-    expect(source).toContain('disabled={mutatingItemId === item.id}');
+    expect(source).toContain('disabled={Boolean(mutatingItemId)}');
+    expect(source).toContain('if (mutationBusy.current) return false');
   });
 
   it('guards trip-place deletion while refreshing the parent list', () => {
@@ -47,7 +48,8 @@ describe('UI mutation safety audit', () => {
   it('guards manual exchange-rate locking inside the expense modal', () => {
     const source = read('src/components/ExpenseModal.tsx');
     expect(source).toContain('const [lockingRate, setLockingRate]');
-    expect(source).toContain('disabled={lockingRate}');
+    expect(source).toContain('const controlsDisabled = saving || lockingRate || Boolean(protection.recovery)');
+    expect(source).toContain('disabled={controlsDisabled}');
   });
 
   it('clears copy feedback timers when settlement and share modals unmount', () => {
