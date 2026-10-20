@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { inferTimezoneFromDestination, isValidTimezone, normalizeTimezone } from '@/lib/timezone';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { isValidTimezone, normalizeTimezone } from '@/lib/timezone';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { DatePickerField, TimePickerField } from './FormPickers';
+import { TimezonePickerField } from './TimezonePickerField';
 import type { Trip } from '@/lib/trips';
 
 type CreateTripInput = {
@@ -76,14 +77,16 @@ export function CreateTripModal({ visible, userId, onClose, onCreate, initialTri
   return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
     <View style={styles.container}>
       <Text style={styles.title}>{initialTrip ? '編輯行程' : '新增行程'}</Text>
+      <ScrollView style={styles.form} contentContainerStyle={styles.fields} keyboardShouldPersistTaps="handled">
       <TextInput style={styles.input} placeholder="行程名稱" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="目的地" value={destination} onChangeText={setDestination} />
       <DatePickerField label="開始日期" value={start} onChange={setStart} placeholder="2026-01-20" style={styles.input} />
       <DatePickerField label="結束日期" value={end} onChange={setEnd} placeholder="2026-01-23" style={styles.input} />
       <TimePickerField label="預設每日出發時間" value={departure} onChange={setDeparture} placeholder="09:00" style={styles.input} />
-      <View style={styles.timezoneRow}><TextInput style={[styles.input, styles.timezoneInput]} placeholder="目的地時區，例如 Asia/Tokyo" value={timezone} onChangeText={setTimezone} autoCapitalize="none" autoCorrect={false} /><Pressable style={styles.detectTimezone} onPress={() => setTimezone(inferTimezoneFromDestination(destination))}><Text style={styles.detectTimezoneText}>自動判定</Text></Pressable></View>
+      <TimezonePickerField value={timezone} onChange={setTimezone} destination={destination} disabled={busy} />
       <Text style={styles.helper}>時區會用於行程日期、營業時間與天氣資料。</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      </ScrollView>
       <View style={styles.actions}>
         <Pressable onPress={onClose}><Text>取消</Text></Pressable>
         <Pressable style={styles.save} onPress={() => void submit()} disabled={busy}><Text style={styles.white}>{busy ? '儲存中…' : initialTrip ? '儲存變更' : '建立行程'}</Text></Pressable>
@@ -93,13 +96,10 @@ export function CreateTripModal({ visible, userId, onClose, onCreate, initialTri
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 'auto', padding: 24, gap: 14, backgroundColor: EDITORIAL_COLORS.paper, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+  container: { marginTop: 'auto', maxHeight: '95%', padding: 24, gap: 14, backgroundColor: EDITORIAL_COLORS.paper, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+  form: { flexShrink: 1 }, fields: { gap: 14, paddingBottom: 8 },
   title: { fontSize: 24, fontWeight: '800', color: EDITORIAL_COLORS.charcoal },
   input: { minHeight: 48, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 10, padding: 13, backgroundColor: EDITORIAL_COLORS.paper },
-  timezoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  timezoneInput: { flex: 1 },
-  detectTimezone: { minHeight: 48, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, paddingHorizontal: 12, paddingVertical: 13 },
-  detectTimezoneText: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700' },
   helper: { color: EDITORIAL_COLORS.taupe, fontSize: 12 },
   error: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, padding: 10, borderRadius: 8 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 20 },
