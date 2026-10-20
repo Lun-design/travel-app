@@ -1,6 +1,19 @@
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Compare calendar dates, not elapsed hours (which vary around DST). */
+export function tripStatusLabel(startDate: string, endDate: string, today?: string): string {
+  const now = new Date();
+  const localDate = today ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const start = parseUtcDate(startDate);
+  const end = parseUtcDate(endDate);
+  const current = parseUtcDate(localDate);
+  if (start === null || end === null || current === null || end < start) return '日期待確認';
+  if (current < start) return `離出發還有 ${(start - current) / DAY_MS} 天`;
+  if (current > end) return '已結束';
+  return current === start ? '今天出發' : '旅程進行中';
+}
+
 function parseUtcDate(value: string) {
   const match = ISO_DATE.exec(value);
   if (!match) return null;

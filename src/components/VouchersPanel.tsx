@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Image, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { deleteVoucher, getVoucherPreviewUrl, listVouchers, updateVoucher } from '@/lib/vouchers-api';
 import type { Voucher } from '@/lib/vouchers';
@@ -16,8 +16,16 @@ const EMPTY_VOUCHERS: Voucher[] = [];
 
 export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'system', onChanged, initialVouchers = EMPTY_VOUCHERS }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; themeMode?: ThemeMode; onChanged?: () => void | Promise<void>; initialVouchers?: Voucher[] }) {
   const theme = getThemeForMode(themeMode, useColorScheme());
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const scope = `${userId}:${tripId}`;
   const [allVouchers, setAllVouchers] = useState<Voucher[]>(initialVouchers);
+  const [sourceScope, setSourceScope] = useState(scope);
+  // Each visit has its own identity: A -> B -> A must not revive A's old callbacks.
+  const activeScope = useRef({ key: scope });
+  if (activeScope.current.key !== scope) activeScope.current = { key: scope };
+  const visit = activeScope.current;
+  const generation = useRef(0);
+  const mounted = useRef(true);
+  const isCurrentScope = () => mounted.current && activeScope.current === visit;
   const [categoryFilter, setCategoryFilter] = useState<VoucherCategory | 'all'>('all');
   const [showExpired, setShowExpired] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
@@ -32,30 +40,58 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
   const [bindingBusy, setBindingBusy] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
   useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; generation.current += 1; };
+  }, []);
+  useEffect(() => {
+    generation.current += 1;
+    setSourceScope(scope);
     setAllVouchers(initialVouchers);
-    const groups = groupVouchersByDate(initialVouchers);
-    setVouchers([...groups.future, ...groups.undated]);
-  }, [initialVouchers]);
+  }, [initialVouchers, scope]);
+  useEffect(() => {
+    setCategoryFilter('all');
+    setShowExpired(false);
+    setPreviewUrls({});
+    setPreview(null);
+    setEditingVoucher(null);
+    setBindingVoucher(null);
+    setPendingDelete(null);
+    setUploading(false);
+    setDeleting(false);
+    setBindingBusy(false);
+    setToast(null);
+  }, [scope]);
 
   async function load() {
+    if (!isCurrentScope()) return;
+    const request = ++generation.current;
+    const isCurrent = () => isCurrentScope() && request === generation.current;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     try {
       const nextVouchers = await listVouchers(tripId);
+      if (!isCurrent()) return;
       setAllVouchers(nextVouchers);
-      const dateGroups = groupVouchersByDate(nextVouchers);
-      setVouchers([...dateGroups.future, ...dateGroups.undated]);
-      const signedEntries = await Promise.all(nextVouchers
+    } catch (error: any) {
+      if (!isCurrent()) return;
+      setToast(error?.message ? `載入票券失敗：${error.message}` : '載入票券失敗，請稍後再試。');
+    }
+  }
+  useEffect(() => { void load(); }, [scope]);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPreviews() {
+      const signedEntries = await Promise.all(allVouchers
+        .filter((voucher) => voucher.trip_id === tripId)
         .filter((voucher) => voucher.file_type === 'image' && Boolean(voucher.file_path))
         .map(async (voucher) => {
           try { return [voucher.id, await getVoucherPreviewUrl(voucher)] as const; }
           catch { return null; }
         }));
-      setPreviewUrls(Object.fromEntries(signedEntries.filter((entry): entry is readonly [string, string] => Boolean(entry))));
-    } catch (error: any) {
-      setToast(error?.message ? `載入票券失敗：${error.message}` : '載入票券失敗，請稍後再試。');
+      if (!cancelled && isCurrentScope()) setPreviewUrls(Object.fromEntries(signedEntries.filter((entry): entry is readonly [string, string] => Boolean(entry))));
     }
-  }
-  useEffect(() => { void load(); }, [tripId]);
+    if (sourceScope === scope) void loadPreviews();
+    return () => { cancelled = true; };
+  }, [allVouchers, sourceScope, scope]);
   useEffect(() => {
     if (!toast) return;
     const timeout = setTimeout(() => setToast(null), 3500);
@@ -83,13 +119,16 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
         const tags = normalizeReservationTags(target?.reservation_tags);
         if (!tags.includes('ticketed')) await updateItineraryItemReservationTags(bindingItemId, [...tags, 'ticketed']);
       }
-      setVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry));
+      if (!isCurrentScope()) return;
+      generation.current += 1;
+      setAllVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry));
       setBindingVoucher(null);
       await onChanged?.();
     } catch (error: any) {
+      if (!isCurrentScope()) return;
       setToast(error?.message ? `綁定景點失敗：${error.message}` : '綁定景點失敗，請稍後再試。');
     } finally {
-      setBindingBusy(false);
+      if (isCurrentScope()) setBindingBusy(false);
     }
   }
   async function remove(voucher: Voucher) {
@@ -97,7 +136,8 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
     setDeleting(true);
     try {
       await deleteVoucher({ id: voucher.id, file_path: voucher.file_path });
-      setVouchers((current) => current.filter((entry) => entry.id !== voucher.id));
+      if (!isCurrentScope()) return;
+      generation.current += 1;
       setAllVouchers((current) => current.filter((entry) => entry.id !== voucher.id));
       setPreviewUrls((current) => {
         const next = { ...current };
@@ -109,9 +149,10 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
       setPendingDelete(null);
       await onChanged?.();
     } catch (error: any) {
+      if (!isCurrentScope()) return;
       setToast(error?.message ? `刪除票券失敗：${error.message}` : '刪除票券失敗，請稍後再試。');
     } finally {
-      setDeleting(false);
+      if (isCurrentScope()) setDeleting(false);
     }
   }
 
@@ -128,18 +169,18 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
     }
   }
 
+  const dateGroups = groupVouchersByDate(sourceScope === scope ? allVouchers.filter((voucher) => voucher.trip_id === tripId) : []);
+  const source = [...dateGroups.future, ...dateGroups.undated, ...(showExpired ? dateGroups.expired : [])];
+  const vouchers = categoryFilter === 'all' ? source : source.filter((entry) => getVoucherCategoryLabel(entry.category, entry.title).value === categoryFilter);
   const reservationCopyButtons = vouchers.filter((voucher) => Boolean(voucher.reservation_number)).map((voucher) => (
     <Pressable key={`copy-${voucher.id}`} accessibilityRole="button" accessibilityLabel="複製預約編號" style={styles.copyButton} onPress={() => void copyReservationNumber(voucher.reservation_number!)}>
       <Text style={styles.copyText}>複製 {voucher.reservation_number}</Text>
     </Pressable>
   ));
-  const dateGroups = groupVouchersByDate(allVouchers);
   const selectCategory = (value: VoucherCategory | 'all') => {
     setCategoryFilter(value);
-    const source = showExpired ? [...dateGroups.future, ...dateGroups.undated, ...dateGroups.expired] : [...dateGroups.future, ...dateGroups.undated];
-    setVouchers(value === 'all' ? source : source.filter((entry) => getVoucherCategoryLabel(entry.category, entry.title).value === value));
   };
-  const filterButtons = <View style={styles.filterList}>{[{ value: 'all' as const, label: '全部', icon: '' }, ...voucherCategoryOptions].map((option) => <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={`篩選${option.label}`} style={[styles.filterButton, categoryFilter === option.value && styles.filterSelected]} onPress={() => selectCategory(option.value)}><Text style={categoryFilter === option.value ? styles.filterSelectedText : styles.filterText}>{option.icon ? `${option.icon} ` : ''}{option.label}</Text></Pressable>)}<Pressable accessibilityRole="button" accessibilityLabel="展開已過期票券" style={[styles.filterButton, showExpired && styles.filterSelected]} onPress={() => { setShowExpired((current) => !current); selectCategory(categoryFilter); }}><Text style={showExpired ? styles.filterSelectedText : styles.filterText}>已過期 ({dateGroups.expired.length})</Text></Pressable></View>;
+  const filterButtons = <View style={styles.filterList}>{[{ value: 'all' as const, label: '全部', icon: '' }, ...voucherCategoryOptions].map((option) => <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={`篩選${option.label}`} style={[styles.filterButton, categoryFilter === option.value && styles.filterSelected]} onPress={() => selectCategory(option.value)}><Text style={categoryFilter === option.value ? styles.filterSelectedText : styles.filterText}>{option.icon ? `${option.icon} ` : ''}{option.label}</Text></Pressable>)}<Pressable accessibilityRole="button" accessibilityLabel="展開已過期票券" style={[styles.filterButton, showExpired && styles.filterSelected]} onPress={() => setShowExpired((current) => !current)}><Text style={showExpired ? styles.filterSelectedText : styles.filterText}>已過期 ({dateGroups.expired.length})</Text></Pressable></View>;
   return <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]} style={{ backgroundColor: theme.colors.background }}>
     {filterButtons}{reservationCopyButtons.length ? <View style={styles.referenceList}>{reservationCopyButtons}</View> : null}
     {toast ? <Pressable accessibilityRole="alert" style={styles.toast} onPress={() => setToast(null)}><Text style={styles.toastText}>{toast}</Text></Pressable> : null}
@@ -165,8 +206,8 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
         <View style={styles.modalActions}><Pressable disabled={bindingBusy} style={styles.deleteButton} onPress={() => setBindingVoucher(null)}><Text>取消</Text></Pressable><Pressable disabled={bindingBusy} style={styles.bindButton} onPress={() => void bindVoucher()}><Text style={styles.bindText}>{bindingBusy ? '儲存中…' : '確認綁定'}</Text></Pressable></View>
       </View></View>
     </Modal>
-    <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} timezone={timezone} onClose={() => setUploading(false)} onUploaded={async () => { await load(); await onChanged?.(); }} />
-    <VoucherMetadataModal userId={userId} timezone={timezone} visible={editingVoucher !== null} voucher={editingVoucher} onClose={() => setEditingVoucher(null)} onSaved={async (updated) => { setVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry)); await onChanged?.(); }} />
+    <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} timezone={timezone} onClose={() => { if (isCurrentScope()) setUploading(false); }} onUploaded={async () => { if (!isCurrentScope()) return; await load(); if (isCurrentScope()) await onChanged?.(); }} />
+    <VoucherMetadataModal userId={userId} timezone={timezone} visible={editingVoucher !== null} voucher={editingVoucher} onClose={() => { if (isCurrentScope()) setEditingVoucher(null); }} onSaved={async (updated) => { if (!isCurrentScope()) return; generation.current += 1; setAllVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry)); await onChanged?.(); }} />
     <VoucherPreviewModal voucher={preview} userId={userId} onClose={() => setPreview(null)} />
   </ScrollView>;
 }

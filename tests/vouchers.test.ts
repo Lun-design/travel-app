@@ -97,7 +97,7 @@ describe('vouchers panel UI contract', () => {
 
     expect(source).toContain('getVoucherPreviewUrl');
     expect(source).toContain('<Image');
-    expect(source).toContain('setVouchers((current) => current.filter');
+    expect(source).toContain('setAllVouchers((current) => current.filter');
     expect(source).toContain('setPreviewUrls');
   });
 

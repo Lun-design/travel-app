@@ -4,6 +4,7 @@ import { Alert, FlatList, ImageBackground, Platform, Pressable, StyleSheet, Text
 import { supabase } from '@/lib/supabase';
 import { createTrip, deleteTrip, leaveTrip, listTripsWithMembers, updateTrip, type Trip, type TripMemberWithProfile } from '@/lib/trips';
 import { tripManagementAction } from '@/lib/trip-list';
+import { tripStatusLabel } from '@/lib/trip-dates';
 import { CreateTripModal } from '@/components/CreateTripModal';
 import { InviteTripModal } from '@/components/InviteTripModal';
 import { PuppyMascot } from '@/components/PuppyMascot';
@@ -16,11 +17,6 @@ import { cloneTripById } from '@/lib/trip-cloning';
 
 const HOME_AVATAR_LIMIT = 4;
 const TRIP_COVER_URL = 'https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1200';
-
-function daysUntil(date: string) {
-  const diff = Math.ceil((new Date(`${date}T00:00:00`).getTime() - Date.now()) / 86400000);
-  return diff > 0 ? `離出發還有 ${diff} 天` : diff === 0 ? '今天出發' : '旅程進行中';
-}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -179,7 +175,7 @@ export default function HomeScreen() {
             <Pressable style={styles.card}>
               <ImageBackground source={{ uri: TRIP_COVER_URL }} imageStyle={styles.coverImage} style={styles.cover}>
                 <View style={styles.overlay}>
-                  <Text style={styles.countdown}>{daysUntil(item.start_date)}</Text>
+                  <Text style={styles.countdown}>{tripStatusLabel(item.start_date, item.end_date)}</Text>
                   <Text style={styles.cardTitle}>{item.title}</Text>
                   <Text style={styles.cardDestination}>{item.destination}</Text>
                 </View>
