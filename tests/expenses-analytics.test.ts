@@ -6,6 +6,12 @@ import { calculateExpenseAnalytics, EXPENSE_CATEGORIES } from '../lib/expenses-a
 const rates = { TWD: 1, JPY: 0.2, KRW: 0.02, USD: 30, EUR: 32 };
 
 describe('expense analytics', () => {
+  it('converts single-currency balances to TWD without changing the original settlement currency', () => {
+    const result = calculateExpenseAnalytics([{ id: 'jpy', payer_id: 'a', amount: 1000, currency: 'JPY', splits: [{ user_id: 'a', amount: 500 }, { user_id: 'b', amount: 500 }] } as Parameters<typeof calculateExpenseAnalytics>[0][number]], ['a', 'b'], null, rates, [{ from_user_id: 'b', to_user_id: 'a', amount: 100, currency: 'JPY' }]);
+    expect(result.members.find(member => member.memberId === 'b')).toMatchObject({ owedTwd: 100, netTwd: -80 });
+    expect(result.settlementTotals.b.settledOutTwd).toBe(20);
+    expect(result.settlements).toEqual([{ from: 'b', to: 'a', amount: 400, currency: 'JPY' }]);
+  });
   it('keeps empty and zero-budget analytics finite', () => {
     const result = calculateExpenseAnalytics([], [], { amount: 0, currency: 'TWD' }, rates);
     expect(result.totalSpentTwd).toBe(0);

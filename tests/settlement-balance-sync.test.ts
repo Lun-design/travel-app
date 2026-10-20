@@ -23,23 +23,15 @@ const partialClearance: SettlementClearanceRecord = {
 
 describe('settlement balance and clearance synchronization', () => {
   it('ignores realtime refreshes that resolve after the dashboard subscription is disposed', () => {
-    const source = readFileSync(path.resolve(process.cwd(), 'src/components/BudgetDashboard.tsx'), 'utf8');
-    const effectStart = source.indexOf('// Keep clearance history');
-    const realtimeEffect = source.slice(effectStart, source.indexOf('  const analytics', effectStart));
-
-    expect(realtimeEffect).toContain('let active = true;');
-    expect(realtimeEffect).toContain('if (active && refreshId === settlementRefreshRequestId.current) setSettlementRecords(records)');
-    expect(realtimeEffect).toContain('active = false');
+    const source = readFileSync(path.resolve(process.cwd(), 'src/hooks/useSettlementRecords.ts'), 'utf8');
+    expect(source).toContain('mounted.current = false; requestId.current++');
+    expect(source).toContain('current() && request === requestId.current');
   });
 
   it('prevents an older realtime settlement request from overwriting a newer response', () => {
-    const source = readFileSync(path.resolve(process.cwd(), 'src/components/BudgetDashboard.tsx'), 'utf8');
-    const effectStart = source.indexOf('// Keep clearance history');
-    const realtimeEffect = source.slice(effectStart, source.indexOf('  const analytics', effectStart));
-
-    expect(source).toContain('settlementRefreshRequestId = useRef(0)');
-    expect(realtimeEffect).toContain('const refreshId = ++settlementRefreshRequestId.current;');
-    expect(realtimeEffect).toContain('if (active && refreshId === settlementRefreshRequestId.current) setSettlementRecords(records)');
+    const source = readFileSync(path.resolve(process.cwd(), 'src/hooks/useSettlementRecords.ts'), 'utf8');
+    expect(source).toContain('const request = ++requestId.current');
+    expect(source).toContain('current() && request === requestId.current');
   });
 
   it('includes completed transfers in each member net balance', () => {

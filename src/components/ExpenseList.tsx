@@ -9,6 +9,8 @@ import { ProfileAvatar } from './ProfileAvatar';
 import { listSettlementRecordsForExpense, settleExpense, SettlementPreviewChangedError } from '@/lib/settlement-api';
 import { createExpenseSettlementTransfers, type ExpenseSettlementTransfer } from '@/lib/settlement';
 import { ActionConfirmationModal } from './ActionConfirmationModal';
+import { EXPENSE_VIEW_CATEGORIES, filterExpenseView, type ExpenseViewFilters } from '../../lib/expense-view-filters';
+import type { SettlementRecordsState } from '../hooks/useSettlementRecords';
 
 type ExpenseAction = { kind: 'settle' | 'delete'; expense: Expense; scope: string };
 function expenseVersion(item: Expense) {
@@ -27,13 +29,17 @@ type Props = {
   rates?: Partial<Record<SupportedCurrency, number>>;
   rateLabel?: string;
   focusedExpenseId?: string | null;
+  focusRequest?: number;
+  settlementState?: SettlementRecordsState;
 };
 
-export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelete, onExpenseSettled, themeMode = 'system', rates, rateLabel, focusedExpenseId }: Props) {
+export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelete, onExpenseSettled, themeMode = 'system', rates, rateLabel, focusedExpenseId, focusRequest = 0, settlementState }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [settledIds, setSettledIds] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState<ExpenseViewFilters>({});
+  const handledFocus = useRef<string | null>(null);
   const [action, setAction] = useState<ExpenseAction | null>(null);
   const [preview, setPreview] = useState<ExpenseSettlementTransfer[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false), [actionError, setActionError] = useState('');
@@ -45,8 +51,14 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
     lifecycle.current++;
     activeAction.current = null; requestId.current++; busy.current = false;
     setAction(null); setPreview(null); setActionError(''); setPreviewLoading(false); setDeletingId(null); setSettlingId(null); setSettledIds(new Set());
+    setFilters({}); handledFocus.current = null;
     return () => { lifecycle.current++; activeAction.current = null; requestId.current++; };
   }, [scope]);
+  useEffect(() => {
+    const key = focusedExpenseId ? JSON.stringify([scope, focusedExpenseId, focusRequest]) : null;
+    if (!key) { handledFocus.current = null; return; }
+    if (key !== handledFocus.current && expenses.some(expense => expense.id === focusedExpenseId)) { handledFocus.current = key; setFilters({}); }
+  }, [focusedExpenseId, focusRequest, expenses, scope]);
   const memberFor = (id: string) => members.find((member) => member.user_id === id);
   const name = (id: string) => getProfileDisplayName(memberFor(id)?.profile, id.slice(0, 8));
 
@@ -107,11 +119,21 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
     }
   }
 
-  if (!expenses.length) return <View style={styles.empty}><Text style={styles.icon}>💸</Text><Text style={[styles.muted, { color: theme.colors.muted }]}>目前沒有旅費紀錄</Text></View>;
+  const historyReady = Boolean(settlementState?.hasLoaded && !settlementState.loading && !settlementState.error);
+  const waitingForHistory = Boolean(filters.pendingOnly && !historyReady);
+  const visibleExpenses = waitingForHistory ? [] : filterExpenseView(expenses.map(expense => settledIds.has(expense.id) ? { ...expense, is_settled: true } : expense), filters, userId, settlementState?.records ?? [], rates);
 
   return <View style={styles.list}>
+    <View style={styles.viewFilters}>
+      <Pressable accessibilityRole="checkbox" accessibilityLabel="費用：與我有關" accessibilityState={{ checked: Boolean(filters.mineOnly) }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, mineOnly: !current.mineOnly }))}><Text style={{ color: filters.mineOnly ? theme.colors.primary : theme.colors.muted }}>與我有關{filters.mineOnly ? ' ✓' : ''}</Text></Pressable>
+      {settlementState ? <Pressable accessibilityRole="checkbox" accessibilityLabel="費用：待結清" accessibilityState={{ checked: Boolean(filters.pendingOnly) }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, pendingOnly: !current.pendingOnly }))}><Text style={{ color: filters.pendingOnly ? theme.colors.primary : theme.colors.muted }}>待結清{filters.pendingOnly ? ' ✓' : ''}</Text></Pressable> : null}
+      {[undefined, ...EXPENSE_VIEW_CATEGORIES].map(category => <Pressable key={category ?? 'all'} accessibilityRole="button" accessibilityLabel={`費用類別：${category ?? '全部'}`} accessibilityState={{ selected: filters.category === category }} style={styles.filterButton} onPress={() => setFilters(current => ({ ...current, category }))}><Text style={{ color: filters.category === category ? theme.colors.primary : theme.colors.muted }}>{category ?? '全部類別'}</Text></Pressable>)}
+      {filters.mineOnly || filters.pendingOnly || filters.category ? <Pressable accessibilityRole="button" accessibilityLabel="清除費用篩選" style={styles.filterButton} onPress={() => setFilters({})}><Text style={{ color: theme.colors.primary }}>清除篩選</Text></Pressable> : null}
+    </View>
+    {waitingForHistory ? <View><Text style={{ color: theme.colors.muted }}>{settlementState?.error ? '無法確認待結清費用，請重新載入結清紀錄。' : '正在確認待結清費用…'}</Text>{settlementState?.error ? <Pressable accessibilityRole="button" style={styles.filterButton} onPress={() => void settlementState.reload()}><Text style={{ color: theme.colors.primary }}>重試</Text></Pressable> : null}</View> : <Text style={{ color: theme.colors.muted }}>符合 {visibleExpenses.length} 筆費用</Text>}
+    {!expenses.length ? <View style={styles.empty}><Text style={styles.icon}>💸</Text><Text style={[styles.muted, { color: theme.colors.muted }]}>目前沒有旅費紀錄</Text></View> : !visibleExpenses.length && !waitingForHistory ? <Text style={{ color: theme.colors.muted }}>沒有符合篩選的費用，可清除篩選查看全部。</Text> : null}
     {rateLabel ? <Text style={[styles.rateLabel, { color: theme.colors.muted }]}>{rateLabel}</Text> : null}
-    {expenses.map((expense) => {
+    {visibleExpenses.map((expense) => {
       const isSettled = Boolean(expense.is_settled) || settledIds.has(expense.id);
       const splits = (Array.isArray(expense.splits) ? expense.splits : []).filter((split) => split && typeof split.user_id === 'string' && split.user_id.trim());
       return <View key={expense.id} nativeID={'expense-' + expense.id} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: focusedExpenseId === expense.id ? theme.colors.primary : theme.colors.border, borderWidth: focusedExpenseId === expense.id ? 2 : 1 }]}>
@@ -172,6 +194,8 @@ export function ExpenseList({ expenses, members, tripId, userId, onEdit, onDelet
 }
 
 const styles = StyleSheet.create({
+  viewFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  filterButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 18, backgroundColor: EDITORIAL_COLORS.sand },
   transfer: { gap: 5, paddingVertical: 7 }, transferPerson: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   shares: { marginTop: 12, gap: 6 }, shareHeading: { fontSize: 11, fontWeight: '600' }, shareRows: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   shareMember: { flexDirection: 'row', alignItems: 'center', gap: 8, flexBasis: 240, flexGrow: 1, minWidth: 0, maxWidth: '100%', borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10 },

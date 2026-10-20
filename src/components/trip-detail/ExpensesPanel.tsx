@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import type { Expense } from '@/lib/expenses-api';
 import type { SupportedCurrency } from '@/lib/exchange-rates';
@@ -7,6 +7,7 @@ import type { ThemeMode } from '@/lib/theme';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { ExpenseList } from '@/components/ExpenseList';
 import { BudgetDashboard } from '@/components/BudgetDashboard';
+import { useSettlementRecords } from '../../hooks/useSettlementRecords';
 
 type Props = {
   tripId: string;
@@ -21,18 +22,19 @@ type Props = {
   onExpenseSettled?: () => void | Promise<void>;
   onAdd: () => void;
   focusedExpenseId?: string | null;
+  focusRequest?: number;
 };
 
-export function ExpensesPanel({ tripId, userId, expenses, members, rates, rateLabel, themeMode, onEdit, onDelete, onExpenseSettled, onAdd, focusedExpenseId }: Props) {
-  const [settlementRefreshKey, setSettlementRefreshKey] = useState(0);
+export function ExpensesPanel({ tripId, userId, expenses, members, rates, rateLabel, themeMode, onEdit, onDelete, onExpenseSettled, onAdd, focusedExpenseId, focusRequest }: Props) {
+  const history = useSettlementRecords(tripId, userId);
   async function handleExpenseSettled() {
-    setSettlementRefreshKey((value) => value + 1);
+    await history.reload();
     await onExpenseSettled?.();
   }
 
   return <ScrollView contentContainerStyle={styles.panel}>
-    <BudgetDashboard key={`budget-${settlementRefreshKey}`} tripId={tripId} userId={userId} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} themeMode={themeMode} />
-    <ExpenseList tripId={tripId} userId={userId} themeMode={themeMode} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} onEdit={onEdit} onDelete={onDelete} onExpenseSettled={handleExpenseSettled} focusedExpenseId={focusedExpenseId} />
+    <BudgetDashboard tripId={tripId} userId={userId} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} themeMode={themeMode} settlementState={history} />
+    <ExpenseList tripId={tripId} userId={userId} themeMode={themeMode} expenses={expenses} members={members} rates={rates} rateLabel={rateLabel} onEdit={onEdit} onDelete={onDelete} onExpenseSettled={handleExpenseSettled} focusedExpenseId={focusedExpenseId} focusRequest={focusRequest} settlementState={history} />
     <Pressable style={styles.primary} onPress={onAdd}><Text style={styles.buttonText}>新增費用</Text></Pressable>
   </ScrollView>;
 }

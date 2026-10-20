@@ -66,6 +66,7 @@ export default function TripDetailScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchTarget, setSearchTarget] = useState<TripSearchResult | null>(null);
   const [focusedExpenseId, setFocusedExpenseId] = useState<string | null>(null);
+  const [expenseFocusRequest, setExpenseFocusRequest] = useState(0);
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(() => getDefaultMapOpen(width));
   const [isMapLoading, setIsMapLoading] = useState(false);
@@ -131,7 +132,7 @@ export default function TripDetailScreen() {
       handleDayChange(target.day); setFocusedItemId(target.id);
       if (target.previewBackup) { setEditingItem(data.items.find((item) => item.id === target.id) ?? null); setInsertPosition(null); setItemModal(true); }
     }
-    else if (target.tab === 'expenses') setFocusedExpenseId(target.id);
+    else if (target.tab === 'expenses') { setFocusedExpenseId(target.id); setExpenseFocusRequest(request => request + 1); }
     else setFocusedPlaceId(target.id);
     setSearchTarget(result);
   }
@@ -378,7 +379,7 @@ export default function TripDetailScreen() {
     {/* 📥 一鍵匯入行程 is available from the timeline's more-actions menu. */}
     {/* Map toggle labels: 🗺️ 查看地圖路線 (點擊展開) / 🗺️ 隱藏地圖 */}
     {tab === 'timeline' && <TimelinePanel key={refreshKey} convenienceContent={convenienceContent} trip={trip} day={day} days={days} items={data.items} visibleItems={visibleItems} themeMode={themeMode} layout={layout} insets={insets} isMapOpen={isMapOpen} isMapLoading={isMapLoading} isDayTransitioning={isDayTransitioning} focusedItemId={focusedItemId} vouchers={data.vouchers} timelineScrollRef={timelineScrollRef} onDayChange={handleDayChange} onToggleMap={toggleMap} onMapMarkerPress={handleMapMarkerPress} onFocusedVoucher={setPreviewVoucher} onSwitchToBackupPlan={handleSwitchToBackupPlan} onEdit={(item) => { setEditingItem(item); setInsertPosition(null); setItemModal(true); }} onDelete={deleteItem} onUpdateImage={updateItemImage} onReorder={data.reorderItems} onMoveToDay={moveItemToDay} onShiftSubsequent={data.shiftSchedule} onApplyRouteOptimization={applyRouteOptimization} onAddAtPosition={(position) => { setEditingItem(null); setInsertPosition(position); setItemModal(true); }} onAdd={() => { setEditingItem(null); setInsertPosition(null); setItemModal(true); }} onImport={() => { setImportAction('import'); setImportVisible(true); }} onClearAll={() => { setImportAction('clear'); setImportVisible(true); }} />}
-    {tab === 'expenses' && <ExpensesPanel focusedExpenseId={focusedExpenseId} tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onExpenseSettled={data.reload} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
+    {tab === 'expenses' && <ExpensesPanel focusedExpenseId={focusedExpenseId} focusRequest={expenseFocusRequest} tripId={tripId!} userId={data.userId} themeMode={themeMode} expenses={data.expenses} members={data.members} rates={data.rateSnapshot.rates} rateLabel={`匯率來源：${data.rateSnapshot.source}${data.rateSnapshot.updatedAt ? ` · ${new Date(data.rateSnapshot.updatedAt).toLocaleString()}` : ''}`} onEdit={(expense) => { setEditingExpense(expense); setExpenseModal(true); }} onDelete={deleteExpense} onExpenseSettled={data.reload} onAdd={() => { setEditingExpense(null); setExpenseModal(true); }} />}
     {tab === 'packing' && <View style={styles.panelContainer}><ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent}><PackingPanel themeMode={themeMode} tripId={tripId!} userId={data.userId} members={data.members} destination={trip.destination} tripStartDate={trip.start_date} items={data.items} refreshToken={data.packingRevision} /></ScrollView></View>}
     {tab === 'documents' && <View style={styles.panelContainer}><VouchersPanel timezone={trip.timezone} initialVouchers={data.vouchers} themeMode={themeMode} tripId={tripId!} userId={data.userId} items={data.items} onChanged={data.reload} /></View>}
     {tab === 'places' && <TripPlacesPanel focusedPlaceId={focusedPlaceId} tripId={tripId!} userId={data.userId} places={data.places} days={days} destination={trip.destination} themeMode={themeMode} onChanged={refreshPlaces} onScheduled={handlePlaceScheduled} onTimezoneDetected={async (timezone) => { if (timezone !== trip.timezone) { await data.saveTripSettings({ timezone }); await data.reload(); } }} />}

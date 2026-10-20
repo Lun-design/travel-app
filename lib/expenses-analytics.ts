@@ -55,7 +55,7 @@ function memberId(member: SettlementMember): string {
   return typeof member === 'string' ? member : member.user_id;
 }
 
-function normalizeCategory(category: string | null | undefined): ExpenseCategory {
+export function normalizeCategory(category: string | null | undefined): ExpenseCategory {
   const value = category?.trim().toLowerCase() ?? '';
   if (value === '餐飲' || value.includes('food') || value.includes('餐')) return '餐飲';
   if (value === '交通' || value.includes('transport') || value.includes('transit') || value.includes('交通')) return '交通';
@@ -97,8 +97,16 @@ export function calculateExpenseAnalytics(
     return { category, amountTwd, percentage: totalSpentTwd > 0 ? round(amountTwd / totalSpentTwd * 100) : 0 };
   });
   const balanceRows = computeBalances(expenses as SettlementExpense[], memberIds, settlementRecords, rates);
-  const memberSummaries = balanceRows.map(({ memberId, paidTwd, owedTwd, netTwd }) => ({ memberId, paidTwd, owedTwd, netTwd }));
-  const settlementTotals = Object.fromEntries(balanceRows.map((row) => [row.memberId, {
+  // The settlement algorithm retains a single original currency; analytics fields
+  // are explicitly TWD, so convert presentation units without altering transfers.
+  const currencies = [...new Set(expenses.map(expense => normalizeCurrency(expense.currency)))];
+  const balanceCurrency = currencies.length === 1 ? currencies[0] : 'TWD';
+  const twdRows = balanceRows.map(row => ({ ...row,
+    paidTwd: round(toTwd(row.paidTwd, balanceCurrency, rates)), owedTwd: round(toTwd(row.owedTwd, balanceCurrency, rates)),
+    netTwd: round(toTwd(row.netTwd, balanceCurrency, rates)), settledOutTwd: round(toTwd(row.settledOutTwd, balanceCurrency, rates)), settledInTwd: round(toTwd(row.settledInTwd, balanceCurrency, rates)),
+  }));
+  const memberSummaries = twdRows.map(({ memberId, paidTwd, owedTwd, netTwd }) => ({ memberId, paidTwd, owedTwd, netTwd }));
+  const settlementTotals = Object.fromEntries(twdRows.map((row) => [row.memberId, {
     settledOutTwd: row.settledOutTwd,
     settledInTwd: row.settledInTwd,
   }])) as Record<string, SettlementTotals>;
