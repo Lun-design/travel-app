@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryOfflineStore } from '../lib/offline-store';
 import { buildItineraryWritePayload, listItineraryItems, saveItineraryItem } from '../lib/itinerary-api';
-import { buildPackingUpdatePayload, buildPackingWritePayload, createPackingItem, importPackingTemplate, normalizePackingItem } from '../lib/packing-api';
+import { buildPackingUpdatePayload, buildPackingWritePayload, createPackingItem, importPackingTemplate, listPackingItems, normalizePackingItem } from '../lib/packing-api';
 import { saveExpense } from '../lib/expenses-api';
 
 const supabaseMock = vi.hoisted(() => ({ from: vi.fn(), auth: { getSession: vi.fn() } }));
@@ -81,6 +81,33 @@ describe('offline-aware itinerary API', () => {
 
     expect(item.id).toMatch(/^offline-/);
     await expect(store.listMutations(scope)).resolves.toMatchObject([{ entity: 'packing', operation: 'create', resourceId: item.id, status: 'pending' }]);
+  });
+
+  it('keeps queued packing creates in refreshed results and cache when reads recover first', async () => {
+    const store = createMemoryOfflineStore();
+    supabaseMock.from.mockReturnValue({ insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: new TypeError('Failed to fetch') }) }) }) });
+    const local = await createPackingItem({ trip_id: 'trip-1', category: '電子產品', name: '行動電源' }, { offlineScope: scope, store });
+    const remote = { id: 'remote', trip_id: 'trip-1', category: '證件', name: '護照', is_checked: false };
+    supabaseMock.from.mockReturnValue({ select: () => ({ eq: () => ({ order: () => ({ order: () => Promise.resolve({ data: [remote], error: null }) }) }) }) });
+    const loaded = await listPackingItems('trip-1', { offlineScope: scope, store });
+    expect(loaded.map(item => item.id)).toEqual(['remote', local.id]);
+    expect((await store.getSnapshot(scope))?.packingItems).toEqual(loaded);
+    expect((await store.listMutations(scope))).toHaveLength(1);
+    expect((await listPackingItems('trip-1', { offlineScope: scope, store })).map(item => item.id)).toEqual(['remote', local.id]);
+  });
+  it('does not undo pending packing checks or resurrect pending deletes during reconciliation', async () => {
+    const store = createMemoryOfflineStore();
+    const checked = { id: 'checked', trip_id: 'trip-1', category: '證件', name: '護照', is_checked: true };
+    await store.putSnapshot(scope, { trip: null, members: [], itineraryItems: [], packingItems: [checked], expenses: [], vouchers: [], savedAt: 'now' });
+    for (const [resourceId, operation] of [['checked', 'update'], ['deleted', 'delete']] as const) {
+      await store.enqueueMutation({ id: resourceId, resourceId, operation, entity: 'packing', scope, payload: { is_checked: true }, clientTimestamp: 'now', status: 'pending' });
+    }
+    const remote = [{ ...checked, is_checked: false }, { ...checked, id: 'deleted' }, { ...checked, id: 'fresh', name: '遠端新物品' }];
+    supabaseMock.from.mockReturnValue({ select: () => ({ eq: () => ({ order: () => ({ order: () => Promise.resolve({ data: remote, error: null }) }) }) }) });
+    const loaded = await listPackingItems('trip-1', { offlineScope: scope, store });
+    expect(loaded.map(item => item.id)).toEqual(['checked', 'fresh']);
+    expect(loaded[0].is_checked).toBe(true);
+    expect((await store.getSnapshot(scope))?.packingItems).toEqual(loaded);
   });
 
   it('does not create a duplicate packing item when the name and category already exist', async () => {

@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 import { fetchWeatherForecast } from '@/lib/weather-api';
 import type { ItineraryItem } from '@/lib/itinerary';
 import { createPackingItem, deletePackingItem as deletePackingItemRemote, importPackingTemplate, listPackingItems, updatePackingItem as updatePackingItemRemote, type PackingItem } from '@/lib/packing-api';
-import { dedupePackingItems, generatePackingSuggestions, getPackingAssignmentOptions, getPackingAvatarIds, groupPackingItems, hasRainyForecast, isPackingComplete, packingItemKey, packingProgress, PACKING_CATEGORIES, RAIN_GEAR_NAME, type PackingTemplate } from '@/lib/packing-utils';
+import { dedupePackingItems, filterPackingItems, generatePackingSuggestions, getPackingAssignmentOptions, getPackingAvatarIds, groupPackingItems, hasRainyForecast, isPackingComplete, packingItemKey, packingProgress, PACKING_CATEGORIES, RAIN_GEAR_NAME, type PackingTemplate, type PackingViewFilters } from '@/lib/packing-utils';
 import type { TripMemberWithProfile } from '@/lib/trips';
 import { PuppyMascot } from './PuppyMascot';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -30,6 +30,9 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
   const [category, setCategory] = useState('未分類');
+  const [filters, setFilters] = useState<PackingViewFilters>({});
+  const [notice, setNotice] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
   const [assignmentItem, setAssignmentItem] = useState<PackingItem | null>(null);
@@ -39,17 +42,33 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const scopeKey = JSON.stringify([userId, tripId]);
   const activeScope = useRef(scopeKey);
   activeScope.current = scopeKey;
+  const activeVisit = useRef({ key: scopeKey });
+  if (activeVisit.current.key !== scopeKey) activeVisit.current = { key: scopeKey };
+  const visit = activeVisit.current;
+  const mounted = useRef(true), adding = useRef(false);
+  const isActiveVisit = () => mounted.current && activeVisit.current === visit;
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   useEffect(() => {
     mutationBusy.current = false; refreshAfterMutation.current = false;
     setMutatingItemId(null); setItems([]); setAssignmentItem(null); setCelebrateVisible(false);
     autoRainGearKey.current = null;
+    adding.current = false; setBusy(false); setName(''); setCategory('未分類');
+    setFilters({}); setNotice(null); setHighlightedId(null); setOpen({});
   }, [scopeKey]);
+  useEffect(() => {
+    if (!highlightedId) return;
+    const timer = setTimeout(() => { if (isActiveVisit()) setHighlightedId(null); }, 5000);
+    return () => clearTimeout(timer);
+  }, [highlightedId, scopeKey]);
   const offlineScope = { userId, tripId };
   const deletePackingItem = (id: string) => deletePackingItemRemote(id, { offlineScope, store: offlineStore });
   const updatePackingItem = (id: string, patch: Parameters<typeof updatePackingItemRemote>[1], options = { offlineScope, store: offlineStore }) => updatePackingItemRemote(id, patch, options);
   const progress = useMemo(() => packingProgress(items), [items]);
-  const groups = useMemo(() => groupPackingItems(items), [items]);
-  const hasExistingItem = (candidate: { name: string; category: string }) => items.some((item) => packingItemKey(item) === packingItemKey(candidate));
+  const visibleItems = useMemo(() => filterPackingItems(items, filters, userId), [items, filters, userId]);
+  const groups = useMemo(() => groupPackingItems(visibleItems), [visibleItems]);
   const memberFor = (id: string | null) => id ? members.find((member) => member.user_id === id) : undefined;
   const label = (id: string | null) => id ? getProfileDisplayName(memberFor(id)?.profile, id.slice(0, 8)) : '未指派';
 
@@ -149,12 +168,31 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   }
 
   async function add() {
-    if (!name.trim()) return;
-    if (hasExistingItem({ name, category })) { setName(''); return; }
+    if (!isActiveVisit() || busy || adding.current || mutationBusy.current || !name.trim()) return;
+    const existing = items.find((item) => packingItemKey(item) === packingItemKey({ name, category }));
+    if (existing) {
+      setNotice(`此項目已存在：${existing.name}`);
+      setFilters({});
+      setOpen((current) => ({ ...current, [existing.category]: true }));
+      setHighlightedId(existing.id);
+      return;
+    }
+    adding.current = true;
+    beginItemMutation('__adding');
+    // The mutation invalidates older reads; reconcile the complete list afterward.
+    refreshAfterMutation.current = true;
+    setNotice(null); setHighlightedId(null);
     setBusy(true);
-    try { const item = await createPackingItem({ trip_id: tripId, category, name: name.trim() }, { offlineScope, store: offlineStore, existingItems: items }); setItems((current) => current.some((value) => value.id === item.id) ? current : [...current, item]); setName(''); }
-    catch (error: any) { Alert.alert('新增項目失敗', error?.message ?? '請稍後再試。'); }
-    finally { setBusy(false); }
+    try {
+      const item = await createPackingItem({ trip_id: tripId, category, name: name.trim() }, { offlineScope, store: offlineStore, existingItems: items });
+      if (!isActiveVisit()) return;
+      setItems((current) => current.some((value) => value.id === item.id) ? current : [...current, item]);
+      setName('');
+    } catch (error: any) {
+      if (isActiveVisit()) Alert.alert('新增項目失敗', error?.message ?? '請稍後再試。');
+    } finally {
+      if (isActiveVisit()) { adding.current = false; setBusy(false); finishItemMutation(); }
+    }
   }
 
   async function importTemplate(template: PackingTemplate) {
@@ -190,9 +228,18 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
     <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
     <Pressable style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 點擊加入 AI 智慧建議</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
-    <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={setName} onSubmitEditing={() => void add()} /><Pressable accessibilityRole="button" style={styles.categorySelect} onPress={() => setOpen((current) => ({ ...current, __categoryPicker: true }))}><Text numberOfLines={1} style={styles.categorySelectText}>{category}</Text></Pressable><Pressable style={styles.addButton} onPress={() => void add()} disabled={busy}><Text style={styles.white}>新增</Text></Pressable></View>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{categories.map((value) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={category === value ? styles.white : undefined}>{value}</Text></Pressable>)}</ScrollView>
-    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} style={styles.item}><Pressable style={[styles.checkbox, item.is_checked && styles.checked]} disabled={mutatingItemId === item.id} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={[styles.assigneeButton, item.assigned_to_all && styles.allMembersAssignee]} disabled={mutatingItemId === item.id} onPress={() => setAssignmentItem(item)}>{renderAssignee(item)}</Pressable><Pressable disabled={mutatingItemId === item.id} onPress={() => void removeItem(item)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
+    <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={(value) => { setName(value); setNotice(null); }} onSubmitEditing={() => void add()} /><Pressable accessibilityRole="button" accessibilityLabel="新增項目分類" style={styles.categorySelect} onPress={() => setOpen((current) => ({ ...current, __categoryPicker: true }))}><Text numberOfLines={1} style={styles.categorySelectText}>{category}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="新增打包項目" accessibilityState={{ busy }} style={styles.addButton} onPress={() => void add()} disabled={busy || Boolean(mutatingItemId)}><Text style={styles.white}>{busy ? '新增中…' : '新增'}</Text></Pressable></View>
+    {notice ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
+    <Text style={styles.sectionTitle}>清單檢視</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{[undefined, ...categories].map((value) => <Pressable key={value ?? 'all'} accessibilityRole="button" accessibilityLabel={`檢視分類：${value ?? '全部'}`} accessibilityState={{ selected: filters.category === value }} onPress={() => setFilters((current) => ({ ...current, category: value }))} style={[styles.category, filters.category === value && styles.categorySelected]}><Text style={filters.category === value ? styles.white : undefined}>{value ?? '全部'}</Text></Pressable>)}</ScrollView>
+    <View style={styles.filterRow}>
+      <Pressable accessibilityRole="checkbox" accessibilityLabel="只看未完成" accessibilityState={{ checked: Boolean(filters.incompleteOnly) }} style={[styles.category, filters.incompleteOnly && styles.categorySelected]} onPress={() => setFilters((current) => ({ ...current, incompleteOnly: !current.incompleteOnly }))}><Text style={filters.incompleteOnly ? styles.white : undefined}>未完成</Text></Pressable>
+      <Pressable accessibilityRole="checkbox" accessibilityLabel="只看我的項目" accessibilityState={{ checked: Boolean(filters.mineOnly) }} style={[styles.category, filters.mineOnly && styles.categorySelected]} onPress={() => setFilters((current) => ({ ...current, mineOnly: !current.mineOnly }))}><Text style={filters.mineOnly ? styles.white : undefined}>我的項目</Text></Pressable>
+      {filters.category || filters.incompleteOnly || filters.mineOnly ? <Pressable accessibilityRole="button" accessibilityLabel="清除打包篩選" style={styles.category} onPress={() => setFilters({})}><Text>清除篩選</Text></Pressable> : null}
+    </View>
+    {filters.mineOnly ? <Text style={styles.filterHint}>包含指派給我與所有人的共用項目；勾選仍為共用確認。</Text> : null}
+    {!visibleItems.length ? <View style={styles.empty}><Text style={styles.filterHint}>{items.length ? '沒有符合篩選的項目，試試清除篩選。' : '還沒有打包項目，可新增或匯入範本。'}</Text></View> : null}
+    {categories.filter((value) => groups[value]?.length).map((value) => <View key={value} style={styles.group}><Pressable style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>{open[value] === false ? null : groups[value].map((item) => <View key={item.id} testID={highlightedId === item.id ? `packing-highlight-${item.id}` : undefined} style={[styles.item, highlightedId === item.id && styles.highlighted]}><Pressable accessibilityRole="checkbox" accessibilityLabel={`打包：${item.name}`} accessibilityState={{ checked: item.is_checked, disabled: mutatingItemId === item.id }} style={[styles.checkbox, item.is_checked && styles.checked]} disabled={mutatingItemId === item.id} onPress={() => void toggle(item)}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></Pressable><Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text><Pressable style={[styles.assigneeButton, item.assigned_to_all && styles.allMembersAssignee]} disabled={mutatingItemId === item.id} onPress={() => setAssignmentItem(item)}>{renderAssignee(item)}</Pressable><Pressable disabled={mutatingItemId === item.id} onPress={() => void removeItem(item)}><Text style={styles.delete}>×</Text></Pressable></View>)}</View>)}
     <Modal visible={Boolean(open.__categoryPicker)} transparent animationType="fade" onRequestClose={() => setOpen((current) => ({ ...current, __categoryPicker: false }))}>
       <View style={styles.modalBackdrop}><View style={styles.assignmentCard}><Text style={styles.celebrateTitle}>選擇分類</Text>{categories.map((value) => <Pressable key={value} style={styles.assignmentOption} onPress={() => { setCategory(value); setOpen((current) => ({ ...current, __categoryPicker: false })); }}><Text style={value === category ? styles.assignmentSelected : undefined}>{value}</Text></Pressable>)}</View></View>
     </Modal>
@@ -213,6 +260,11 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
 }
 
 const styles = StyleSheet.create({
+  notice: { color: EDITORIAL_COLORS.terracotta, backgroundColor: EDITORIAL_COLORS.terracottaSoft, padding: 12, borderRadius: 10 },
+  highlighted: { backgroundColor: EDITORIAL_COLORS.terracottaSoft },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterHint: { color: EDITORIAL_COLORS.taupe, fontSize: 12, lineHeight: 18 },
+  empty: { padding: 18, alignItems: 'center' },
   root: { width: '100%', maxWidth: '100%', minHeight: 0 },
   container: { width: '100%', maxWidth: '100%', minHeight: 0, boxSizing: 'border-box', padding: 4, paddingBottom: 100, gap: 13 },
   progressCard: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: EDITORIAL_COLORS.paper, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 14, padding: 14, gap: 12 },

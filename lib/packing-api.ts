@@ -68,7 +68,32 @@ export async function listPackingItems(tripId: string, options: OfflineApiOption
   try {
     const { data, error } = await supabase.from('packing_items').select('*').eq('trip_id', tripId).order('category').order('created_at');
     if (error) throw error;
-    const items = (data ?? []).map(normalizePackingItem);
+    let items = (data ?? []).map(normalizePackingItem);
+    if (store && !options.replaying) {
+      // A successful GET does not imply queued writes have reached the server.
+      const queued = (await store.listMutations(scope)).filter((mutation) => mutation.entity === 'packing');
+      if (queued.length) {
+        const cached = ((await store.getSnapshot(scope))?.packingItems ?? []).map(normalizePackingItem);
+        const byId = new Map(items.map((item) => [item.id, item]));
+        const cachedById = new Map(cached.map((item) => [item.id, item]));
+        for (const mutation of queued) {
+          if (mutation.operation === 'delete') { byId.delete(mutation.resourceId); continue; }
+          if (mutation.operation === 'update') {
+            const local = cachedById.get(mutation.resourceId);
+            if (local) byId.set(local.id, local);
+          }
+          if (mutation.operation === 'create') {
+            const localItems = mutation.resourceId.startsWith('template:')
+              ? cached.filter((item) => item.id.startsWith('offline-template-'))
+              : cached.filter((item) => item.id === mutation.resourceId);
+            for (const local of localItems) {
+              if (![...byId.values()].some((remote) => packingItemKey(remote) === packingItemKey(local))) byId.set(local.id, local);
+            }
+          }
+        }
+        items = [...byId.values()];
+      }
+    }
     if (store) await updateOfflineCollection(store, scope, 'packingItems', () => items);
     return items;
   } catch (error) {

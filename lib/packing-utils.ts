@@ -6,6 +6,15 @@ export type PackingForecastHint = { precipitationProbability: number | null };
 export type PackingWeatherHint = { precipitationProbability: number | null; temperatureMinC: number | null; temperatureMaxC: number | null; forecast?: PackingForecastHint[] | null };
 export type PackingSuggestion = { category: PackingCategory; name: string; assigned_to_all?: boolean };
 export type PackingAssignmentOption = { assignedTo: string | null; allMembers: boolean };
+export type PackingViewFilters = { category?: string; incompleteOnly?: boolean; mineOnly?: boolean };
+
+/** View-only filters: never change the source list or shared checked semantics. */
+export function filterPackingItems<T extends PackingItemLike & { assigned_to?: string | null }>(items: readonly T[], filters: PackingViewFilters, userId?: string): T[] {
+  const identified = Boolean(userId?.trim() && userId !== 'anonymous');
+  return items.filter((item) => (!filters.category || item.category === filters.category)
+    && (!filters.incompleteOnly || !(item.is_checked ?? item.is_packed ?? false))
+    && (!filters.mineOnly || (identified && (item.assigned_to_all || item.assigned_to === userId))));
+}
 export const RAIN_GEAR_NAME = '折疊傘 / 雨具';
 
 export function getPackingAssignmentOptions(memberIds: readonly string[]): PackingAssignmentOption[] {
