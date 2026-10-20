@@ -45,6 +45,8 @@ describe('timezone modal integration', () => {
     (dates[0].props.onChange as (v: string) => void)('2026-12-01'); (dates[1].props.onChange as (v: string) => void)('2026-12-03');
     changeZone(h.render(), 'Asia/Seoul'); button(h.render(), '取消').props.onPress!();
     expect(create).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    button(h.render(), '繼續編輯').props.onPress!();
     await button(h.render(), '建立行程').props.onPress!();
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ timezone: 'Asia/Seoul', created_by: 'u', default_departure_time: null }));
   });
