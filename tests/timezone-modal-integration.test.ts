@@ -22,7 +22,7 @@ const trip = { id: 't', title: '旅行', destination: '日本', start_date: '202
 describe('timezone modal integration', () => {
   it('updates only the settings timezone and preserves exact dates and departure time', async () => {
     const save = vi.fn(), close = vi.fn();
-    const h = harness(() => TripSettingsModal({ visible: true, startDate: trip.start_date, endDate: trip.end_date, departureTime: trip.default_departure_time, timezone: trip.timezone, onSave: save, onClose: close })); cleanup = h.unmount; h.render();
+    const h = harness(() => TripSettingsModal({ visible: true, userId: 'u', tripId: trip.id, startDate: trip.start_date, endDate: trip.end_date, departureTime: trip.default_departure_time, timezone: trip.timezone, onSave: save, onClose: close })); cleanup = h.unmount; h.render();
     changeZone(h.render(), 'Asia/Tokyo'); await button(h.render(), '儲存設定').props.onPress!();
     expect(save).toHaveBeenCalledWith({ start_date: trip.start_date, end_date: trip.end_date, default_departure_time: '08:17', timezone: 'Asia/Tokyo' });
     expect(close).toHaveBeenCalledOnce();
@@ -52,7 +52,7 @@ describe('timezone modal integration', () => {
   });
   it('rejects invalid advanced timezones without saving or closing', async () => {
     const save = vi.fn(), close = vi.fn();
-    const h = harness(() => TripSettingsModal({ visible: true, startDate: trip.start_date, endDate: trip.end_date, departureTime: '', timezone: trip.timezone, onSave: save, onClose: close })); cleanup = h.unmount; h.render();
+    const h = harness(() => TripSettingsModal({ visible: true, userId: 'u', tripId: trip.id, startDate: trip.start_date, endDate: trip.end_date, departureTime: '', timezone: trip.timezone, onSave: save, onClose: close })); cleanup = h.unmount; h.render();
     changeZone(h.render(), 'bad/zone'); await button(h.render(), '儲存設定').props.onPress!();
     expect(save).not.toHaveBeenCalled(); expect(close).not.toHaveBeenCalled(); expect(text(h.render())).toContain('有效的 IANA');
   });

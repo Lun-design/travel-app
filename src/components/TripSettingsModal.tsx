@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { isValidTripDateRange } from '@/lib/trip-dates';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
@@ -9,6 +9,8 @@ import { TimezonePickerField } from './TimezonePickerField';
 
 type Props = {
   visible: boolean;
+  userId: string | null;
+  tripId: string;
   startDate: string;
   endDate: string;
   departureTime: string | null | undefined;
@@ -28,7 +30,7 @@ const themeOptions: { mode: ThemeMode; label: string }[] = [
   { mode: 'system', label: '📱 跟隨系統' },
 ];
 
-export function TripSettingsModal({ visible, startDate, endDate, departureTime, timezone: initialTimezone, themeMode = 'system', onThemeModeChange, remindersEnabled = false, notificationPermission = 'unsupported', onReminderToggle, onClose, onSave }: Props) {
+export function TripSettingsModal({ visible, userId, tripId, startDate, endDate, departureTime, timezone: initialTimezone, themeMode = 'system', onThemeModeChange, remindersEnabled = false, notificationPermission = 'unsupported', onReminderToggle, onClose, onSave }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
@@ -36,41 +38,89 @@ export function TripSettingsModal({ visible, startDate, endDate, departureTime, 
   const [timezone, setTimezone] = useState('Asia/Taipei');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const baseline = useRef<string[]>([]);
+  const session = useRef<{ scope: string; token: object } | null>(null);
+  const saveLock = useRef(false);
+  const scope = JSON.stringify([userId, tripId]);
+  const fieldsDisabled = saving || confirmClose;
 
   useEffect(() => {
-    if (visible) { setStart(startDate); setEnd(endDate); setDeparture(departureTime ?? ''); setTimezone(normalizeTimezone(initialTimezone)); setError(''); }
-  }, [departureTime, endDate, initialTimezone, startDate, visible]);
+    if (!visible) { session.current = null; saveLock.current = false; return; }
+    if (session.current?.scope === scope) return;
+    session.current = { scope, token: {} };
+    baseline.current = [startDate, endDate, departureTime ?? '', normalizeTimezone(initialTimezone)];
+    const [nextStart, nextEnd, nextDeparture, nextTimezone] = baseline.current;
+    setStart(nextStart); setEnd(nextEnd); setDeparture(nextDeparture); setTimezone(nextTimezone);
+    saveLock.current = false;
+    setSaving(false); setConfirmClose(false); setError('');
+  }, [departureTime, endDate, initialTimezone, startDate, visible, scope]);
+
+  useEffect(() => () => { session.current = null; }, []);
+
+  function requestClose() {
+    if (saveLock.current) return;
+    if (confirmClose) { setConfirmClose(false); return; }
+    const dirty = [start, end, departure, timezone].some((value, index) => value !== baseline.current[index]);
+    if (dirty) setConfirmClose(true);
+    else onClose();
+  }
 
   async function save() {
+    if (saveLock.current || confirmClose || !visible || session.current?.scope !== scope) return;
     const trimmedStart = start.trim(); const trimmedEnd = end.trim(); const trimmedDeparture = departure.trim();
     if (!isValidTripDateRange(trimmedStart, trimmedEnd)) { setError('請輸入有效日期，且結束日期不可早於開始日期（YYYY-MM-DD）。'); return; }
     if (trimmedDeparture && !/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmedDeparture)) { setError('請使用 HH:mm 格式，例如 09:00。'); return; }
     if (!isValidTimezone(timezone)) { setError('請輸入有效的 IANA 時區，例如 Asia/Tokyo。'); return; }
+    saveLock.current = true;
+    const token = session.current.token;
     setSaving(true); setError('');
-    try { await onSave({ start_date: trimmedStart, end_date: trimmedEnd, default_departure_time: trimmedDeparture || null, timezone: normalizeTimezone(timezone) }); onClose(); }
-    catch (cause: any) { console.error('[TripSettingsModal] save failed', cause); setError(cause?.message ?? '儲存行程設定失敗。'); }
-    finally { setSaving(false); }
+    try {
+      await onSave({ start_date: trimmedStart, end_date: trimmedEnd, default_departure_time: trimmedDeparture || null, timezone: normalizeTimezone(timezone) });
+      if (session.current?.token !== token) return;
+      baseline.current = [start, end, departure, timezone];
+      onClose();
+    } catch (cause: unknown) {
+      if (session.current?.token !== token) return;
+      console.error('[TripSettingsModal] save failed', cause);
+      setError(cause && typeof cause === 'object' && 'message' in cause && typeof cause.message === 'string' ? cause.message : '儲存行程設定失敗。');
+    } finally {
+      if (session.current?.token === token) { saveLock.current = false; setSaving(false); }
+    }
   }
 
-  return <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+  return <Modal visible={visible} animationType="slide" transparent onRequestClose={requestClose}>
     <View style={styles.backdrop}><View style={[styles.card, { maxHeight: '90%', backgroundColor: theme.colors.surface }]}>
       <Text style={[styles.title, { color: theme.colors.text }]}>行程設定</Text>
       <ScrollView style={styles.form} contentContainerStyle={styles.fields} keyboardShouldPersistTaps="handled">
-      <Text style={[styles.label, { color: theme.colors.text }]}>開始日期</Text><DatePickerField label="開始日期" value={start} onChange={setStart} placeholder="2026-01-20" style={{ color: theme.colors.text, borderColor: theme.colors.border }} />
-      <Text style={[styles.label, { color: theme.colors.text }]}>結束日期</Text><DatePickerField label="結束日期" value={end} onChange={setEnd} placeholder="2026-01-23" style={{ color: theme.colors.text, borderColor: theme.colors.border }} />
+      <Text style={[styles.label, { color: theme.colors.text }]}>開始日期</Text><DatePickerField label="開始日期" value={start} onChange={setStart} disabled={fieldsDisabled} placeholder="2026-01-20" style={{ color: theme.colors.text, borderColor: theme.colors.border }} />
+      <Text style={[styles.label, { color: theme.colors.text }]}>結束日期</Text><DatePickerField label="結束日期" value={end} onChange={setEnd} disabled={fieldsDisabled} placeholder="2026-01-23" style={{ color: theme.colors.text, borderColor: theme.colors.border }} />
       <Text style={[styles.helper, { color: theme.colors.muted }]}>請使用 YYYY-MM-DD 格式；結束日期不可早於開始日期。</Text>
-      <Text style={[styles.label, { color: theme.colors.text }]}>預設每日出發時間</Text><TimePickerField label="預設每日出發時間" value={departure} onChange={setDeparture} placeholder="09:00" style={{ color: theme.colors.text, borderColor: theme.colors.border }} /><Text style={[styles.helper, { color: theme.colors.muted }]}>若景點沒有填開始時間，會依此時間推算；留白時使用 09:00。</Text>
+      <Text style={[styles.label, { color: theme.colors.text }]}>預設每日出發時間</Text><TimePickerField label="預設每日出發時間" value={departure} onChange={setDeparture} disabled={fieldsDisabled} placeholder="09:00" style={{ color: theme.colors.text, borderColor: theme.colors.border }} /><Text style={[styles.helper, { color: theme.colors.muted }]}>若景點沒有填開始時間，會依此時間推算；留白時使用 09:00。</Text>
       <Text style={[styles.label, { color: theme.colors.text }]}>介面主題</Text><View style={styles.themeOptions}>{themeOptions.map((option) => <Pressable key={option.mode} accessibilityRole="radio" accessibilityState={{ selected: themeMode === option.mode }} style={[styles.themeOption, { borderColor: theme.colors.border, backgroundColor: themeMode === option.mode ? theme.colors.primary : theme.colors.surfaceMuted }]} onPress={() => onThemeModeChange?.(option.mode)}><Text style={{ color: themeMode === option.mode ? theme.colors.surface : theme.colors.text }}>{option.label}</Text></Pressable>)}</View>
-       <TimezonePickerField value={timezone} onChange={setTimezone} disabled={saving} theme={theme} />
+       <TimezonePickerField value={timezone} onChange={setTimezone} disabled={fieldsDisabled} theme={theme} />
        <View style={[styles.reminderRow, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceMuted }]}><View style={styles.reminderCopy}><Text style={[styles.label, { color: theme.colors.text }]}>🔔 景點出發提醒</Text><Text style={[styles.helper, { color: theme.colors.muted }]}>{notificationPermission === 'unsupported' ? '此瀏覽器不支援通知' : notificationPermission === 'denied' ? '通知權限已拒絕，請至瀏覽器設定開啟' : remindersEnabled ? '已開啟：出發前 15 分鐘提醒' : '開啟後會在 PWA 使用期間提醒'}</Text></View><Pressable accessibilityRole="switch" accessibilityState={{ checked: remindersEnabled }} style={[styles.reminderSwitch, { backgroundColor: remindersEnabled ? theme.colors.primary : theme.colors.border }]} onPress={() => onReminderToggle?.(!remindersEnabled)} disabled={notificationPermission === 'unsupported'}><Text style={styles.white}>{remindersEnabled ? '開啟' : '關閉'}</Text></Pressable></View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Text style={[styles.helper, { color: theme.colors.muted }]}>介面主題與出發提醒會立即生效，不需按儲存設定。</Text>
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       </ScrollView>
-      <View style={styles.actions}><Pressable onPress={onClose}><Text style={[styles.cancel, { color: theme.colors.muted }]}>取消</Text></Pressable><Pressable style={styles.save} onPress={() => void save()} disabled={saving}><Text style={styles.white}>{saving ? '儲存中…' : '儲存設定'}</Text></Pressable></View>
+      {confirmClose ? <View style={[styles.confirmation, { backgroundColor: theme.colors.surfaceMuted }]}>
+        <Text accessibilityRole="alert" style={[styles.label, { color: theme.colors.text }]}>尚有未儲存的變更</Text>
+        <Text style={[styles.helper, { color: theme.colors.muted }]}>放棄日期、出發時間與時區的修改？已立即生效的主題與提醒不會復原。</Text>
+        <View style={styles.actions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="繼續編輯" style={styles.button} onPress={() => setConfirmClose(false)}><Text style={{ color: theme.colors.text }}>繼續編輯</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="放棄修改" style={styles.button} onPress={() => { if (!saveLock.current) { setConfirmClose(false); onClose(); } }}><Text style={{ color: EDITORIAL_COLORS.dangerText }}>放棄修改</Text></Pressable>
+        </View>
+      </View> : <View style={styles.actions}>
+        <Pressable accessibilityRole="button" accessibilityLabel="取消" style={styles.button} onPress={requestClose} disabled={saving}><Text style={[styles.cancel, { color: theme.colors.muted }]}>取消</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="儲存設定" accessibilityState={{ disabled: saving, busy: saving }} style={styles.save} onPress={() => void save()} disabled={saving}><Text style={styles.white}>{saving ? '儲存中…' : '儲存設定'}</Text></Pressable>
+      </View>}
     </View></View>
   </Modal>;
 }
 
 const styles = StyleSheet.create({
+  confirmation: { gap: 8, padding: 12, borderRadius: 10 },
+  button: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' },
   form: { flexShrink: 1 }, fields: { gap: 12, paddingBottom: 8 },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(31, 31, 31, 0.35)' }, card: { padding: 24, gap: 12, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderWidth: 1, borderColor: EDITORIAL_COLORS.line }, title: { fontSize: 24, fontWeight: '800' }, label: { fontWeight: '700', fontSize: 13 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 10, padding: 13, fontSize: 16 }, helper: { fontSize: 12, lineHeight: 17 }, themeOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, themeOption: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9 }, reminderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderWidth: 1, borderRadius: 10, padding: 12 }, reminderCopy: { flex: 1, gap: 4 }, reminderSwitch: { minWidth: 64, minHeight: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20, paddingHorizontal: 12 }, error: { color: EDITORIAL_COLORS.dangerText, backgroundColor: EDITORIAL_COLORS.dangerSoft, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, padding: 10, borderRadius: 8 }, actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 18, marginTop: 8 }, cancel: { fontWeight: '700' }, save: { minHeight: 48, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 18, paddingVertical: 12 }, white: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
 });
