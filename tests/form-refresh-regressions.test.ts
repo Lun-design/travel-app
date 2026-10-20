@@ -14,12 +14,13 @@ vi.mock('@/lib/packing-utils', async () => import('../lib/packing-utils'));
 vi.mock('@/lib/theme', async () => import('../lib/theme'));
 vi.mock('@/lib/offline-store', () => ({ offlineStore: {} }));
 vi.mock('../src/components/PuppyMascot', () => ({ PuppyMascot: 'mascot' }));
+vi.mock('../src/components/FormModalLayout', () => ({ FormModalLayout: 'form-layout' }));
 import { UserProfileModal } from '../src/components/UserProfileModal';
 import { PackingPanel } from '../src/components/PackingPanel';
 const oldProfile: Profile = { id: 'u', display_name: '旅伴', avatar_url: 'https://example.test/old.jpg', updated_at: '2026-10-18T00:00:00Z' };
 beforeEach(() => {
   mocks.pick.mockResolvedValue({ canceled: false, assets: [{ name: 'new.png', uri: 'blob:new', mimeType: 'image/png' }] });
-  vi.stubGlobal('fetch', vi.fn(async () => ({ arrayBuffer: async () => new ArrayBuffer(1) })));
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })));
   mocks.upload.mockResolvedValue('https://example.test/new.png');
   mocks.save.mockImplementation(async (p) => ({ ...oldProfile, ...p }));
   mocks.weather.mockResolvedValue({ precipitationProbability: 0 }); mocks.update.mockResolvedValue(undefined);

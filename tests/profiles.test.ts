@@ -72,6 +72,12 @@ describe('profile API', () => {
     expect(supabaseMock.auth.updateUser).toHaveBeenCalledWith({ data: { display_name: '小白', avatar_url: 'preset:cream' } });
   });
 
+  it('rejects an old editor account before writing auth metadata or profiles', async () => {
+    await expect(updateCurrentProfile({ display_name: '舊帳號資料', avatar_url: 'preset:cream' }, 'other-user')).rejects.toThrow('帳號已變更');
+    expect(supabaseMock.auth.updateUser).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
   it('uploads an avatar to the avatars bucket and returns its public URL', async () => {
     supabaseMock.storage.from.mockReturnValue({
       upload: async () => ({ error: null }),

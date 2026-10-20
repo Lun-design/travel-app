@@ -96,10 +96,11 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   };
 }
 
-export async function updateCurrentProfile(input: Pick<Profile, 'display_name' | 'avatar_url'>): Promise<Profile> {
+export async function updateCurrentProfile(input: Pick<Profile, 'display_name' | 'avatar_url'>, expectedUserId?: string): Promise<Profile> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error('尚未登入');
+  if (expectedUserId !== undefined && userData.user.id !== expectedUserId) throw new Error('帳號已變更，請重新開啟個人檔案後再試。');
   const displayName = input.display_name?.trim() || null;
   const avatarUrl = input.avatar_url?.trim() || null;
   const { error: metadataError } = await supabase.auth.updateUser({ data: { display_name: displayName, avatar_url: avatarUrl } });
