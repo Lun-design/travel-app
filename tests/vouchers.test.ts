@@ -139,7 +139,8 @@ describe('vouchers panel UI contract', () => {
   it('provides reservation-number copy controls backed by the clipboard API', () => {
     const source = readFileSync(path.resolve(process.cwd(), 'src/components/VouchersPanel.tsx'), 'utf8');
 
-    expect(source).toContain('navigator.clipboard.writeText');
+    expect(source).toContain('await copyVoucherReference(value)');
+    expect(readFileSync(path.resolve(process.cwd(), 'lib/voucher-files.ts'), 'utf8')).toContain('navigator.clipboard.writeText');
     expect(source).toContain('複製預約編號');
     expect(source).toContain('預約編號已複製');
   });

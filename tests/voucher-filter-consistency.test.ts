@@ -1,5 +1,5 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Voucher } from '../lib/vouchers';
 import { harness, nodes, press, text } from './helpers/interaction-harness';
 
@@ -13,12 +13,14 @@ vi.mock('@/lib/vouchers-api', () => ({ listVouchers: api.list, getVoucherPreview
 vi.mock('@/lib/theme', async () => import('../lib/theme'));
 vi.mock('@/lib/voucher-categories', async () => import('../lib/voucher-categories'));
 vi.mock('@/lib/voucher-date-grouping', async () => import('../lib/voucher-date-grouping'));
+vi.mock('@/lib/voucher-files', async () => import('../lib/voucher-files'));
 vi.mock('@/lib/reservation-tags', () => ({ normalizeReservationTags: () => [] }));
 vi.mock('@/lib/itinerary-api', () => ({ updateItineraryItemReservationTags: vi.fn() }));
 vi.mock('../src/components/VoucherPreviewModal', () => ({ VoucherPreviewModal: 'preview-modal' }));
 vi.mock('../src/components/VoucherUploadModal', () => ({ VoucherUploadModal: 'upload-modal' }));
 vi.mock('../src/components/VoucherMetadataModal', () => ({ VoucherMetadataModal: 'metadata-modal' }));
 vi.mock('../src/components/PuppyMascot', () => ({ PuppyMascot: 'mascot' }));
+vi.mock('../src/components/VoucherOfflineAction', () => ({ VoucherOfflineAction: 'offline-action' }));
 import { VouchersPanel } from '../src/components/VouchersPanel';
 
 const voucher = (id: string, category: Voucher['category'] = 'hotel', usage_at?: string): Voucher => ({ id, title: id, category, usage_at, trip_id: 'a', item_id: null, file_url: null, file_type: 'pdf', file_path: '', uploaded_by: 'u', created_at: '' });
@@ -30,6 +32,7 @@ function setup(rows: Voucher[]) {
   return { ...h, onChanged, setProps: (next: Partial<typeof props>) => { props = { ...props, ...next }; }, labels: () => nodes(h.render()).filter(n => n.props.numberOfLines === 2 && n.props.style && text(n).startsWith('row-')).map(text) };
 }
 beforeEach(() => { api.list.mockImplementation(() => new Promise(() => {})); });
+afterEach(() => vi.unstubAllGlobals());
 describe('voucher filters use one current source', () => {
   it('shows expired rows on the first toggle and hides them on the second', () => {
     const h = setup([voucher('row-expired', 'hotel', '2000-01-01T12:00:00')]);
@@ -170,6 +173,111 @@ describe('voucher filters use one current source', () => {
     nodes(h.render()).find(n => n.props.onPress && text(n) === (type === 'upload-modal' ? '＋ 新增' : '編輯資料'))!.props.onPress!();
     (old.props.onClose as () => void)();
     expect(nodes(h.render()).find(n => n.type === type)!.props.visible).toBe(true);
+    h.unmount();
+  });
+});
+
+describe('voucher card usability and list states', () => {
+  it('copies the selected card reference without opening preview', async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { onLine: true, clipboard: { writeText } });
+    const h = setup([{ ...voucher('first'), reservation_number: 'ABC-1' }, { ...voucher('second'), reservation_number: 'XYZ-2' }]);
+    const card = nodes(h.render()).find(n => n.key === 'second')!;
+    const preview = nodes(card).find(n => n.props.accessibilityLabel === '預覽票券：second')!;
+    expect(nodes(preview).some(n => n.props.accessibilityLabel === '複製預約編號：second')).toBe(false);
+    await press(card, '複製預約編號：second');
+    expect(writeText).toHaveBeenCalledWith('XYZ-2');
+    expect(text(h.render())).toContain('預約編號已複製');
+    expect(nodes(h.render()).find(n => n.type === 'preview-modal')!.props.voucher).toBeNull();
+    expect(nodes(h.render()).some(n => n.key === 'copy-first')).toBe(false);
+    h.unmount();
+  });
+  it('omits blank references and gives manual copy feedback on clipboard rejection', async () => {
+    vi.stubGlobal('navigator', { onLine: true, clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    const h = setup([voucher('blank'), { ...voucher('copy'), reservation_number: 'A1' }]);
+    expect(nodes(h.render()).some(n => n.props.accessibilityLabel === '複製預約編號：blank')).toBe(false);
+    await press(h.render(), '複製預約編號：copy');
+    expect(text(h.render())).toContain('手動複製');
+    h.unmount();
+  });
+  it('keeps controls while loading and never claims the cloud list is empty yet', () => {
+    const h = setup([]);
+    expect(text(h.render())).toContain('正在載入票券');
+    expect(text(h.render())).toContain('預約與票券');
+    expect(text(h.render())).not.toContain('目前還沒有預約或票券');
+    h.unmount();
+  });
+  it('distinguishes filter misses and clears the current category', () => {
+    const h = setup([voucher('hotel')]);
+    press(h.render(), '篩選機票');
+    expect(text(h.render())).toContain('沒有符合目前篩選的票券');
+    press(h.render(), '清除票券篩選');
+    expect(text(h.render())).toContain('hotel');
+    h.unmount();
+  });
+  it('offers the expired toggle when the hidden expired collection is the only data', () => {
+    const h = setup([voucher('old', 'hotel', '2000-01-01T00:00:00')]);
+    expect(text(h.render())).toContain('目前只有已過期票券');
+    press(h.render(), '查看已過期票券');
+    expect(text(h.render())).toContain('old');
+    h.unmount();
+  });
+  it('retains cached rows on a failed read and exposes a working retry', async () => {
+    api.list.mockRejectedValueOnce(new Error('read failed'));
+    const h = setup([voucher('cached')]); await Promise.resolve();
+    expect(text(h.render())).toContain('cached');
+    expect(text(h.render())).toContain('載入票券失敗');
+    api.list.mockResolvedValueOnce([voucher('fresh')]);
+    await press(h.render(), '重新載入票券');
+    expect(text(h.render())).toContain('fresh');
+    h.unmount();
+  });
+  it('distinguishes offline with no cached list and sends no list request', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    const h = setup([]);
+    expect(text(h.render())).toContain('目前離線');
+    expect(text(h.render())).not.toContain('目前還沒有預約或票券');
+    expect(api.list).not.toHaveBeenCalled();
+    h.unmount();
+  });
+  it('offers the existing upload modal after an authoritative empty response', async () => {
+    api.list.mockResolvedValueOnce([]);
+    const h = setup([]); await Promise.resolve();
+    press(h.render(), '新增第一張票券');
+    expect(nodes(h.render()).find(n => n.type === 'upload-modal')!.props.visible).toBe(true);
+    h.unmount();
+  });
+  it('refreshes card offline status when the preview closes', () => {
+    const h = setup([voucher('ticket')]);
+    const revision = nodes(h.render()).find(n => n.type === 'offline-action')!.props.revision;
+    (nodes(h.render()).find(n => n.type === 'preview-modal')!.props.onClose as () => void)();
+    expect(nodes(h.render()).find(n => n.type === 'offline-action')!.props.revision).not.toBe(revision);
+    h.unmount();
+  });
+  it.each(['edit', 'delete', 'bind'])('finishes the loading indicator when %s invalidates an older pending read', async (operation) => {
+    let finish!: (rows: Voucher[]) => void;
+    api.list.mockImplementationOnce(() => new Promise<Voucher[]>(resolve => { finish = resolve; }));
+    const current = voucher('row-current');
+    const h = setup([current]);
+    expect(text(h.render())).toContain('正在載入票券');
+    if (operation === 'edit') {
+      await (nodes(h.render()).find(n => n.type === 'metadata-modal')!.props.onSaved as (v: Voucher) => Promise<void>)({ ...current, notes: 'updated' });
+    } else if (operation === 'delete') {
+      api.remove.mockResolvedValueOnce(undefined);
+      const remove = nodes(h.render()).find(n => n.props.onPress && text(n) === '刪除')!;
+      (remove.props.onPress as (event: { stopPropagation: () => void }) => void)({ stopPropagation() {} });
+      nodes(h.render()).find(n => n.props.onPress && text(n) === '確認刪除')!.props.onPress!();
+      await Promise.resolve();
+    } else {
+      api.update.mockResolvedValueOnce({ ...current, item_id: null });
+      nodes(h.render()).find(n => n.props.onPress && text(n) === '綁定至景點')!.props.onPress!();
+      nodes(h.render()).find(n => n.props.onPress && text(n) === '確認綁定')!.props.onPress!();
+      await Promise.resolve();
+    }
+    expect(text(h.render())).not.toContain('正在載入票券');
+    finish([current]); await Promise.resolve();
+    expect(text(h.render())).not.toContain('正在載入票券');
+    if (operation === 'delete') expect(h.labels()).toEqual([]);
     h.unmount();
   });
 });

@@ -12,6 +12,8 @@ import { updateItineraryItemReservationTags } from '@/lib/itinerary-api';
 import { normalizeReservationTags } from '@/lib/reservation-tags';
 import { getVoucherCategoryLabel, voucherCategoryOptions, type VoucherCategory } from '@/lib/voucher-categories';
 import { groupVouchersByDate } from '@/lib/voucher-date-grouping';
+import { copyVoucherReference } from '@/lib/voucher-files';
+import { VoucherOfflineAction } from './VoucherOfflineAction';
 const EMPTY_VOUCHERS: Voucher[] = [];
 
 export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'system', onChanged, initialVouchers = EMPTY_VOUCHERS }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; themeMode?: ThemeMode; onChanged?: () => void | Promise<void>; initialVouchers?: Voucher[] }) {
@@ -39,6 +41,10 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
   const [bindingItemId, setBindingItemId] = useState<string | null>(null);
   const [bindingBusy, setBindingBusy] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
+  const [offlineRevision, setOfflineRevision] = useState(0);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; generation.current += 1; };
@@ -47,6 +53,7 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
     generation.current += 1;
     setSourceScope(scope);
     setAllVouchers(initialVouchers);
+    setLoading(false); setLoadError(null);
   }, [initialVouchers, scope]);
   useEffect(() => {
     setCategoryFilter('all');
@@ -66,17 +73,29 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
     if (!isCurrentScope()) return;
     const request = ++generation.current;
     const isCurrent = () => isCurrentScope() && request === generation.current;
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const disconnected = typeof navigator !== 'undefined' && navigator.onLine === false;
+    setOffline(disconnected); setLoadError(null);
+    if (disconnected) { setLoading(false); return; }
+    setLoading(true);
     try {
       const nextVouchers = await listVouchers(tripId);
       if (!isCurrent()) return;
       setAllVouchers(nextVouchers);
     } catch (error: any) {
       if (!isCurrent()) return;
-      setToast(error?.message ? `載入票券失敗：${error.message}` : '載入票券失敗，請稍後再試。');
+      setLoadError(error?.message ? `載入票券失敗：${error.message}` : '載入票券失敗，請稍後再試。');
+    } finally {
+      if (isCurrent()) setLoading(false);
     }
   }
   useEffect(() => { void load(); }, [scope]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const disconnected = () => { if (isCurrentScope()) { generation.current++; setOffline(true); setLoading(false); setLoadError(null); } };
+    const connected = () => { void load(); };
+    window.addEventListener('offline', disconnected); window.addEventListener('online', connected);
+    return () => { window.removeEventListener('offline', disconnected); window.removeEventListener('online', connected); };
+  }, [scope]);
   useEffect(() => {
     let cancelled = false;
     async function loadPreviews() {
@@ -121,6 +140,7 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
       }
       if (!isCurrentScope()) return;
       generation.current += 1;
+      setLoading(false);
       setAllVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry));
       setBindingVoucher(null);
       await onChanged?.();
@@ -138,6 +158,7 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
       await deleteVoucher({ id: voucher.id, file_path: voucher.file_path });
       if (!isCurrentScope()) return;
       generation.current += 1;
+      setLoading(false);
       setAllVouchers((current) => current.filter((entry) => entry.id !== voucher.id));
       setPreviewUrls((current) => {
         const next = { ...current };
@@ -157,35 +178,59 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
   }
 
   async function copyReservationNumber(value: string) {
+    if (!isCurrentScope()) return;
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-        setToast('預約編號已複製！');
-      } else {
-        setToast('此裝置不支援剪貼簿，請長按編號複製。');
-      }
+      await copyVoucherReference(value);
+      if (isCurrentScope()) setToast('預約編號已複製！');
     } catch {
-      setToast('複製失敗，請手動複製預約編號。');
+      if (isCurrentScope()) setToast('複製失敗，請長按或手動複製預約編號。');
     }
   }
 
   const dateGroups = groupVouchersByDate(sourceScope === scope ? allVouchers.filter((voucher) => voucher.trip_id === tripId) : []);
   const source = [...dateGroups.future, ...dateGroups.undated, ...(showExpired ? dateGroups.expired : [])];
   const vouchers = categoryFilter === 'all' ? source : source.filter((entry) => getVoucherCategoryLabel(entry.category, entry.title).value === categoryFilter);
-  const reservationCopyButtons = vouchers.filter((voucher) => Boolean(voucher.reservation_number)).map((voucher) => (
-    <Pressable key={`copy-${voucher.id}`} accessibilityRole="button" accessibilityLabel="複製預約編號" style={styles.copyButton} onPress={() => void copyReservationNumber(voucher.reservation_number!)}>
-      <Text style={styles.copyText}>複製 {voucher.reservation_number}</Text>
-    </Pressable>
-  ));
+  const hasAnyVouchers = dateGroups.future.length + dateGroups.undated.length + dateGroups.expired.length > 0;
+  const onlyExpired = categoryFilter === 'all' && !showExpired && dateGroups.expired.length > 0 && !dateGroups.future.length && !dateGroups.undated.length;
   const selectCategory = (value: VoucherCategory | 'all') => {
     setCategoryFilter(value);
   };
   const filterButtons = <View style={styles.filterList}>{[{ value: 'all' as const, label: '全部', icon: '' }, ...voucherCategoryOptions].map((option) => <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={`篩選${option.label}`} style={[styles.filterButton, categoryFilter === option.value && styles.filterSelected]} onPress={() => selectCategory(option.value)}><Text style={categoryFilter === option.value ? styles.filterSelectedText : styles.filterText}>{option.icon ? `${option.icon} ` : ''}{option.label}</Text></Pressable>)}<Pressable accessibilityRole="button" accessibilityLabel="展開已過期票券" style={[styles.filterButton, showExpired && styles.filterSelected]} onPress={() => setShowExpired((current) => !current)}><Text style={showExpired ? styles.filterSelectedText : styles.filterText}>已過期 ({dateGroups.expired.length})</Text></Pressable></View>;
   return <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]} style={{ backgroundColor: theme.colors.background }}>
-    {filterButtons}{reservationCopyButtons.length ? <View style={styles.referenceList}>{reservationCopyButtons}</View> : null}
+    {filterButtons}
     {toast ? <Pressable accessibilityRole="alert" style={styles.toast} onPress={() => setToast(null)}><Text style={styles.toastText}>{toast}</Text></Pressable> : null}
     <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.title}>🎫 預約與票券</Text><Text style={styles.subtitle}>集中管理門票、機票 QR Code 與飯店預約單。</Text></View><Pressable style={styles.upload} onPress={() => setUploading(true)}><Text style={styles.white}>＋ 新增</Text></Pressable></View>
-    {vouchers.length ? vouchers.map((voucher) => <View key={voucher.id} style={styles.card}><Pressable style={styles.info} onPress={() => setPreview(voucher)}>{voucher.file_type === 'image' && previewUrls[voucher.id] ? <Image source={{ uri: previewUrls[voucher.id] }} accessibilityLabel={`${voucher.title} 預覽縮圖`} resizeMode="cover" style={styles.thumbnail} /> : <View style={styles.iconBox}><Text style={styles.icon}>{voucher.file_type === 'pdf' ? '📄' : '🖼️'}</Text></View>}<View style={styles.content}><Text numberOfLines={2} style={styles.name}>{voucher.title}</Text><Text numberOfLines={2} style={styles.meta}>{voucher.file_type.toUpperCase()} · {itemName(voucher.item_id)}</Text>{voucher.reservation_number ? <Text numberOfLines={1} style={styles.meta}>預約編號：{voucher.reservation_number}</Text> : null}{voucher.usage_at ? <Text numberOfLines={1} style={styles.meta}>使用時間：{voucher.usage_at.replace('T', ' ').slice(0, 16)}</Text> : null}{voucher.notes ? <Text numberOfLines={1} style={styles.meta}>{voucher.notes}</Text> : null}</View></Pressable><View style={styles.cardActions}><Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => setEditingVoucher(voucher)}><Text style={styles.bindText}>編輯資料</Text></Pressable><Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => openBinding(voucher)}><Text style={styles.bindText}>{voucher.item_id ? '重新綁定景點' : '綁定至景點'}</Text></Pressable><Pressable style={styles.deleteButton} onPress={(event) => { event.stopPropagation(); setToast(null); setPendingDelete(voucher); }}><Text style={styles.delete}>刪除</Text></Pressable></View></View>) : <View style={styles.empty}><PuppyMascot puppy="-6" size={165} accessibilityLabel="目前沒有預約票券" /><Text style={styles.subtitle}>目前還沒有預約或票券</Text></View>}
+    {offline ? <Text accessibilityLiveRegion="polite" style={styles.subtitle}>目前離線，僅顯示此裝置已載入的資料；連線後可重新確認完整票券。已離線備用的檔案仍可開啟。</Text> : null}
+    {loadError ? <View style={styles.feedback}><Text accessibilityRole="alert" style={styles.subtitle}>{loadError}；已載入的票券仍保留。</Text><Pressable accessibilityRole="button" accessibilityLabel="重新載入票券" disabled={loading} style={styles.copyButton} onPress={() => load()}><Text style={styles.copyText}>重試</Text></Pressable></View> : null}
+    {loading ? <Text accessibilityLiveRegion="polite" style={styles.subtitle}>正在載入票券…</Text> : null}
+    {vouchers.map((voucher) => <View key={voucher.id} style={styles.card}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`預覽票券：${voucher.title}`} style={styles.info} onPress={() => setPreview(voucher)}>
+        {voucher.file_type === 'image' && previewUrls[voucher.id] ? <Image source={{ uri: previewUrls[voucher.id] }} accessibilityLabel={`${voucher.title} 預覽縮圖`} resizeMode="cover" style={styles.thumbnail} /> : <View style={styles.iconBox}><Text style={styles.icon}>{voucher.file_type === 'pdf' ? '📄' : '🖼️'}</Text></View>}
+        <View style={styles.content}>
+          <Text numberOfLines={2} style={styles.name}>{voucher.title}</Text>
+          <Text numberOfLines={2} style={styles.meta}>{voucher.file_type.toUpperCase()} · {itemName(voucher.item_id)}</Text>
+          {voucher.usage_at ? <Text numberOfLines={1} style={styles.meta}>使用時間：{voucher.usage_at.replace('T', ' ').slice(0, 16)}</Text> : null}
+          {voucher.notes ? <Text numberOfLines={1} style={styles.meta}>{voucher.notes}</Text> : null}
+        </View>
+      </Pressable>
+      {voucher.reservation_number?.trim() ? <View style={styles.referenceRow}>
+        <Text selectable style={[styles.meta, styles.reference]}>預約編號：{voucher.reservation_number}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={`複製預約編號：${voucher.title}`} style={styles.copyButton} onPress={() => copyReservationNumber(voucher.reservation_number!)}><Text style={styles.copyText}>複製</Text></Pressable>
+      </View> : null}
+      <VoucherOfflineAction voucher={voucher} userId={userId} revision={offlineRevision} />
+      <View style={styles.cardActions}>
+        <Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => setEditingVoucher(voucher)}><Text style={styles.bindText}>編輯資料</Text></Pressable>
+        <Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => openBinding(voucher)}><Text style={styles.bindText}>{voucher.item_id ? '重新綁定景點' : '綁定至景點'}</Text></Pressable>
+        <Pressable style={styles.deleteButton} onPress={(event) => { event.stopPropagation(); setToast(null); setPendingDelete(voucher); }}><Text style={styles.delete}>刪除</Text></Pressable>
+      </View>
+    </View>)}
+    {!vouchers.length && hasAnyVouchers ? <View style={styles.empty}>
+      <Text style={styles.subtitle}>{onlyExpired ? '目前只有已過期票券，已依預設隱藏。' : '沒有符合目前篩選的票券。'}</Text>
+      {onlyExpired ? <Pressable accessibilityRole="button" accessibilityLabel="查看已過期票券" style={styles.copyButton} onPress={() => setShowExpired(true)}><Text style={styles.copyText}>查看已過期票券</Text></Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="清除票券篩選" style={styles.copyButton} onPress={() => { setCategoryFilter('all'); setShowExpired(false); }}><Text style={styles.copyText}>清除篩選</Text></Pressable>}
+    </View> : !vouchers.length && !loading && !loadError && !offline ? <View style={styles.empty}>
+      <PuppyMascot puppy="-6" size={165} accessibilityLabel="目前沒有預約票券" /><Text style={styles.subtitle}>目前還沒有預約或票券</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="新增第一張票券" style={styles.upload} onPress={() => setUploading(true)}><Text style={styles.white}>新增第一張票券</Text></Pressable>
+    </View> : null}
     <Modal transparent visible={pendingDelete !== null} animationType="fade" onRequestClose={() => { if (!deleting) setPendingDelete(null); }}>
       <View style={styles.confirmOverlay}><View style={styles.confirmCard}>
         <Text style={styles.title}>刪除票券</Text>
@@ -207,12 +252,13 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
       </View></View>
     </Modal>
     <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} timezone={timezone} onClose={() => { if (isCurrentScope()) setUploading(false); }} onUploaded={async () => { if (!isCurrentScope()) return; await load(); if (isCurrentScope()) await onChanged?.(); }} />
-    <VoucherMetadataModal userId={userId} timezone={timezone} visible={editingVoucher !== null} voucher={editingVoucher} onClose={() => { if (isCurrentScope()) setEditingVoucher(null); }} onSaved={async (updated) => { if (!isCurrentScope()) return; generation.current += 1; setAllVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry)); await onChanged?.(); }} />
-    <VoucherPreviewModal voucher={preview} userId={userId} onClose={() => setPreview(null)} />
+    <VoucherMetadataModal userId={userId} timezone={timezone} visible={editingVoucher !== null} voucher={editingVoucher} onClose={() => { if (isCurrentScope()) setEditingVoucher(null); }} onSaved={async (updated) => { if (!isCurrentScope()) return; generation.current += 1; setLoading(false); setAllVouchers((current) => current.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry)); await onChanged?.(); }} />
+    <VoucherPreviewModal voucher={preview} userId={userId} onClose={() => { if (isCurrentScope()) { setPreview(null); setOfflineRevision((value) => value + 1); } }} />
   </ScrollView>;
 }
 
 const styles = StyleSheet.create({
+  feedback: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   confirmCard: { width: '100%', maxWidth: 420, padding: 24, gap: 16, backgroundColor: EDITORIAL_COLORS.paper, borderRadius: 14 },
   container: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: 4, paddingBottom: 100, gap: 10 },
@@ -222,7 +268,7 @@ const styles = StyleSheet.create({
   subtitle: { color: EDITORIAL_COLORS.taupe, marginTop: 3 },
   upload: { flexShrink: 0, minHeight: 44, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10 },
   white: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
-  card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', flexDirection: 'row', alignItems: 'center', backgroundColor: EDITORIAL_COLORS.paper, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
+  card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', alignItems: 'stretch', gap: 8, backgroundColor: EDITORIAL_COLORS.paper, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
   info: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
   thumbnail: { width: 58, height: 58, flexShrink: 0, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
   iconBox: { width: 58, height: 58, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
@@ -230,18 +276,17 @@ const styles = StyleSheet.create({
   content: { flex: 1, minWidth: 0 },
   name: { fontSize: 16, fontWeight: '800' },
   meta: { color: EDITORIAL_COLORS.taupe, fontSize: 12, marginTop: 3 },
-  referenceList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   filterList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   filterButton: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 999, backgroundColor: EDITORIAL_COLORS.sand },
   filterSelected: { backgroundColor: EDITORIAL_COLORS.terracotta },
   filterText: { color: EDITORIAL_COLORS.charcoal, fontSize: 12, fontWeight: '700' },
   filterSelectedText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '800' },
-  referenceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  reference: { flex: 1 },
-  copyButton: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand },
+  referenceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  reference: { flex: 1, minWidth: 0 },
+  copyButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand },
   copyText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   label: { color: EDITORIAL_COLORS.charcoal, fontWeight: '700', marginTop: 4 },
-  cardActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginLeft: 8 },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
   bindButton: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
   bindText: { color: EDITORIAL_COLORS.terracotta, fontWeight: '800', fontSize: 12 },
   dayChips: { gap: 8, paddingVertical: 4 },
