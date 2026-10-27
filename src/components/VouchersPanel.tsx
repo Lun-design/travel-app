@@ -14,6 +14,7 @@ import { getVoucherCategoryLabel, voucherCategoryOptions, type VoucherCategory }
 import { groupVouchersByDate } from '@/lib/voucher-date-grouping';
 import { copyVoucherReference } from '@/lib/voucher-files';
 import { VoucherOfflineAction } from './VoucherOfflineAction';
+import { selectionKeyboardProps } from '@/lib/selection-keyboard';
 const EMPTY_VOUCHERS: Voucher[] = [];
 
 export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'system', onChanged, initialVouchers = EMPTY_VOUCHERS }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; themeMode?: ThemeMode; onChanged?: () => void | Promise<void>; initialVouchers?: Voucher[] }) {
@@ -195,11 +196,14 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
   const selectCategory = (value: VoucherCategory | 'all') => {
     setCategoryFilter(value);
   };
-  const filterButtons = <View style={styles.filterList}>{[{ value: 'all' as const, label: '全部', icon: '' }, ...voucherCategoryOptions].map((option) => <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={`篩選${option.label}`} style={[styles.filterButton, categoryFilter === option.value && styles.filterSelected]} onPress={() => selectCategory(option.value)}><Text style={categoryFilter === option.value ? styles.filterSelectedText : styles.filterText}>{option.icon ? `${option.icon} ` : ''}{option.label}</Text></Pressable>)}<Pressable accessibilityRole="button" accessibilityLabel="展開已過期票券" style={[styles.filterButton, showExpired && styles.filterSelected]} onPress={() => setShowExpired((current) => !current)}><Text style={showExpired ? styles.filterSelectedText : styles.filterText}>已過期 ({dateGroups.expired.length})</Text></Pressable></View>;
+  const filterButtons = <View style={styles.filterList}>
+    <View accessibilityRole="radiogroup" accessibilityLabel="票券分類" style={styles.filterList}>{[{ value: 'all' as const, label: '全部', icon: '' }, ...voucherCategoryOptions].map((option) => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={`篩選${option.label}`} accessibilityState={{ checked: categoryFilter === option.value }} {...selectionKeyboardProps(() => selectCategory(option.value))} style={[styles.filterButton, categoryFilter === option.value && styles.filterSelected]} onPress={() => selectCategory(option.value)}><Text style={categoryFilter === option.value ? styles.filterSelectedText : styles.filterText}>{option.icon ? `${option.icon} ` : ''}{option.label}</Text></Pressable>)}</View>
+    <Pressable accessibilityRole="button" accessibilityLabel="展開已過期票券" accessibilityState={{ expanded: showExpired, selected: showExpired }} style={[styles.filterButton, showExpired && styles.filterSelected]} onPress={() => setShowExpired((current) => !current)}><Text style={showExpired ? styles.filterSelectedText : styles.filterText}>已過期 ({dateGroups.expired.length})</Text></Pressable>
+  </View>;
   return <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]} style={{ backgroundColor: theme.colors.background }}>
     {filterButtons}
-    {toast ? <Pressable accessibilityRole="alert" style={styles.toast} onPress={() => setToast(null)}><Text style={styles.toastText}>{toast}</Text></Pressable> : null}
-    <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.title}>🎫 預約與票券</Text><Text style={styles.subtitle}>集中管理門票、機票 QR Code 與飯店預約單。</Text></View><Pressable style={styles.upload} onPress={() => setUploading(true)}><Text style={styles.white}>＋ 新增</Text></Pressable></View>
+    {toast ? <Pressable accessibilityRole="button" accessibilityLabel={`${toast}，點擊關閉提示`} style={styles.toast} onPress={() => setToast(null)}><Text accessibilityRole="alert" style={styles.toastText}>{toast}</Text></Pressable> : null}
+    <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.title}>🎫 預約與票券</Text><Text style={styles.subtitle}>集中管理門票、機票 QR Code 與飯店預約單。</Text></View><Pressable accessibilityRole="button" accessibilityLabel="新增票券" style={styles.upload} onPress={() => setUploading(true)}><Text style={styles.white}>＋ 新增</Text></Pressable></View>
     {offline ? <Text accessibilityLiveRegion="polite" style={styles.subtitle}>目前離線，僅顯示此裝置已載入的資料；連線後可重新確認完整票券。已離線備用的檔案仍可開啟。</Text> : null}
     {loadError ? <View style={styles.feedback}><Text accessibilityRole="alert" style={styles.subtitle}>{loadError}；已載入的票券仍保留。</Text><Pressable accessibilityRole="button" accessibilityLabel="重新載入票券" disabled={loading} style={styles.copyButton} onPress={() => load()}><Text style={styles.copyText}>重試</Text></Pressable></View> : null}
     {loading ? <Text accessibilityLiveRegion="polite" style={styles.subtitle}>正在載入票券…</Text> : null}
@@ -219,9 +223,9 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
       </View> : null}
       <VoucherOfflineAction voucher={voucher} userId={userId} revision={offlineRevision} />
       <View style={styles.cardActions}>
-        <Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => setEditingVoucher(voucher)}><Text style={styles.bindText}>編輯資料</Text></Pressable>
-        <Pressable accessibilityRole="button" style={styles.bindButton} onPress={() => openBinding(voucher)}><Text style={styles.bindText}>{voucher.item_id ? '重新綁定景點' : '綁定至景點'}</Text></Pressable>
-        <Pressable style={styles.deleteButton} onPress={(event) => { event.stopPropagation(); setToast(null); setPendingDelete(voucher); }}><Text style={styles.delete}>刪除</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`編輯票券：${voucher.title}`} style={styles.bindButton} onPress={() => setEditingVoucher(voucher)}><Text style={styles.bindText}>編輯資料</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`綁定票券景點：${voucher.title}`} style={styles.bindButton} onPress={() => openBinding(voucher)}><Text style={styles.bindText}>{voucher.item_id ? '重新綁定景點' : '綁定至景點'}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`刪除票券：${voucher.title}`} style={styles.deleteButton} onPress={(event) => { event.stopPropagation(); setToast(null); setPendingDelete(voucher); }}><Text style={styles.delete}>刪除</Text></Pressable>
       </View>
     </View>)}
     {!vouchers.length && hasAnyVouchers ? <View style={styles.empty}>
@@ -236,8 +240,8 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
         <Text style={styles.title}>刪除票券</Text>
         <Text>確定要刪除「{pendingDelete?.title}」嗎？</Text>
         {toast ? <Text accessibilityRole="alert" style={styles.toastText}>{toast}</Text> : null}
-        <Pressable accessibilityRole="button" disabled={deleting} style={styles.deleteButton} onPress={() => { if (pendingDelete) void remove(pendingDelete); }}><Text style={styles.delete}>{deleting ? '刪除中…' : '確認刪除'}</Text></Pressable>
-        <Pressable accessibilityRole="button" disabled={deleting} style={styles.deleteButton} onPress={() => setPendingDelete(null)}><Text>取消</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`確認刪除票券：${pendingDelete?.title ?? ''}`} accessibilityState={{ disabled: deleting, busy: deleting }} disabled={deleting} style={styles.deleteButton} onPress={() => { if (pendingDelete) void remove(pendingDelete); }}><Text style={styles.delete}>{deleting ? '刪除中…' : '確認刪除'}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="取消刪除票券" accessibilityState={{ disabled: deleting }} disabled={deleting} style={styles.deleteButton} onPress={() => setPendingDelete(null)}><Text>取消</Text></Pressable>
       </View></View>
     </Modal>
     <Modal transparent visible={bindingVoucher !== null} animationType="fade" onRequestClose={() => { if (!bindingBusy) setBindingVoucher(null); }}>
@@ -245,10 +249,10 @@ export function VouchersPanel({ tripId, userId, items, timezone, themeMode = 'sy
         <Text style={styles.title}>綁定至行程景點</Text>
         <Text style={styles.meta}>{bindingVoucher?.title}</Text>
         <Text style={styles.label}>選擇 Day</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayChips}>{(days.length ? days : [1]).map((day) => <Pressable key={day} style={[styles.chip, day === bindingDay && styles.chipSelected]} onPress={() => { setBindingDay(day); setBindingItemId(null); }}><Text style={day === bindingDay ? styles.white : undefined}>Day {day}</Text></Pressable>)}</ScrollView>
+        <ScrollView accessibilityRole="radiogroup" accessibilityLabel="綁定天數" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayChips}>{(days.length ? days : [1]).map((day) => <Pressable key={day} accessibilityRole="radio" accessibilityLabel={`綁定天數：Day ${day}`} accessibilityState={{ checked: day === bindingDay, disabled: bindingBusy }} disabled={bindingBusy} {...selectionKeyboardProps(() => { setBindingDay(day); setBindingItemId(null); }, bindingBusy)} style={[styles.chip, day === bindingDay && styles.chipSelected]} onPress={() => { setBindingDay(day); setBindingItemId(null); }}><Text style={day === bindingDay ? styles.white : undefined}>Day {day}</Text></Pressable>)}</ScrollView>
         <Text style={styles.label}>選擇景點</Text>
-        <ScrollView style={styles.bindingList}>{bindingItems.map((item) => <Pressable key={item.id} style={[styles.bindingOption, item.id === bindingItemId && styles.chipSelected]} onPress={() => setBindingItemId(item.id)}><Text style={item.id === bindingItemId ? styles.white : undefined}>{item.time ? `${item.time} · ` : ''}{item.location_name}</Text></Pressable>)}</ScrollView>
-        <View style={styles.modalActions}><Pressable disabled={bindingBusy} style={styles.deleteButton} onPress={() => setBindingVoucher(null)}><Text>取消</Text></Pressable><Pressable disabled={bindingBusy} style={styles.bindButton} onPress={() => void bindVoucher()}><Text style={styles.bindText}>{bindingBusy ? '儲存中…' : '確認綁定'}</Text></Pressable></View>
+        <ScrollView accessibilityRole="radiogroup" accessibilityLabel="綁定景點" style={styles.bindingList}>{bindingItems.map((item) => <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={`綁定景點：${item.location_name}`} accessibilityState={{ checked: item.id === bindingItemId, disabled: bindingBusy }} disabled={bindingBusy} {...selectionKeyboardProps(() => setBindingItemId(item.id), bindingBusy)} style={[styles.bindingOption, item.id === bindingItemId && styles.chipSelected]} onPress={() => setBindingItemId(item.id)}><Text style={item.id === bindingItemId ? styles.white : undefined}>{item.time ? `${item.time} · ` : ''}{item.location_name}</Text></Pressable>)}</ScrollView>
+        <View style={styles.modalActions}><Pressable accessibilityRole="button" accessibilityLabel="取消綁定票券" accessibilityState={{ disabled: bindingBusy }} disabled={bindingBusy} style={styles.deleteButton} onPress={() => setBindingVoucher(null)}><Text>取消</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`確認綁定票券：${bindingVoucher?.title ?? ''}`} accessibilityState={{ disabled: bindingBusy, busy: bindingBusy }} disabled={bindingBusy} style={styles.bindButton} onPress={() => void bindVoucher()}><Text style={styles.bindText}>{bindingBusy ? '儲存中…' : '確認綁定'}</Text></Pressable></View>
       </View></View>
     </Modal>
     <VoucherUploadModal visible={uploading} tripId={tripId} userId={userId} items={items} timezone={timezone} onClose={() => { if (isCurrentScope()) setUploading(false); }} onUploaded={async () => { if (!isCurrentScope()) return; await load(); if (isCurrentScope()) await onChanged?.(); }} />
@@ -266,7 +270,7 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, minWidth: 0 },
   title: { fontSize: 21, fontWeight: '800' },
   subtitle: { color: EDITORIAL_COLORS.taupe, marginTop: 3 },
-  upload: { flexShrink: 0, minHeight: 44, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10 },
+  upload: { flexShrink: 0, minHeight: 44, minWidth: 44, justifyContent: 'center', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10 },
   white: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
   card: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', alignItems: 'stretch', gap: 8, backgroundColor: EDITORIAL_COLORS.paper, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: EDITORIAL_COLORS.line },
   info: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -277,27 +281,27 @@ const styles = StyleSheet.create({
   name: { fontSize: 16, fontWeight: '800' },
   meta: { color: EDITORIAL_COLORS.taupe, fontSize: 12, marginTop: 3 },
   filterList: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  filterButton: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 999, backgroundColor: EDITORIAL_COLORS.sand },
+  filterButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 999, backgroundColor: EDITORIAL_COLORS.sand },
   filterSelected: { backgroundColor: EDITORIAL_COLORS.terracotta },
   filterText: { color: EDITORIAL_COLORS.charcoal, fontSize: 12, fontWeight: '700' },
   filterSelectedText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '800' },
   referenceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   reference: { flex: 1, minWidth: 0 },
-  copyButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand },
+  copyButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 8, backgroundColor: EDITORIAL_COLORS.sand },
   copyText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
   label: { color: EDITORIAL_COLORS.charcoal, fontWeight: '700', marginTop: 4 },
   cardActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
-  bindButton: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
+  bindButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
   bindText: { color: EDITORIAL_COLORS.terracotta, fontWeight: '800', fontSize: 12 },
   dayChips: { gap: 8, paddingVertical: 4 },
-  chip: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
+  chip: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand },
   chipSelected: { backgroundColor: EDITORIAL_COLORS.terracotta },
   bindingList: { maxHeight: 220 },
-  bindingOption: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand, marginBottom: 6 },
+  bindingOption: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 9, backgroundColor: EDITORIAL_COLORS.sand, marginBottom: 6 },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 8 },
   deleteButton: { flexShrink: 0, marginLeft: 8, minHeight: 44, minWidth: 52, zIndex: 2, elevation: 2 },
   delete: { color: EDITORIAL_COLORS.dangerText, fontSize: 13, fontWeight: '700', minHeight: 44, paddingVertical: 12 },
-  toast: { width: '100%', minHeight: 42, justifyContent: 'center', borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: EDITORIAL_COLORS.sand },
+  toast: { width: '100%', minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: EDITORIAL_COLORS.line, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: EDITORIAL_COLORS.sand },
   toastText: { color: EDITORIAL_COLORS.charcoal, fontSize: 13, fontWeight: '700' },
   empty: { alignItems: 'center', padding: 45, gap: 8 },
   emptyIcon: { fontSize: 36 },

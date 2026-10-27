@@ -14,6 +14,7 @@ vi.mock('@/lib/theme', async () => import('../lib/theme'));
 vi.mock('@/lib/voucher-categories', async () => import('../lib/voucher-categories'));
 vi.mock('@/lib/voucher-date-grouping', async () => import('../lib/voucher-date-grouping'));
 vi.mock('@/lib/voucher-files', async () => import('../lib/voucher-files'));
+vi.mock('@/lib/selection-keyboard', async () => import('../lib/selection-keyboard'));
 vi.mock('@/lib/reservation-tags', () => ({ normalizeReservationTags: () => [] }));
 vi.mock('@/lib/itinerary-api', () => ({ updateItineraryItemReservationTags: vi.fn() }));
 vi.mock('../src/components/VoucherPreviewModal', () => ({ VoucherPreviewModal: 'preview-modal' }));
