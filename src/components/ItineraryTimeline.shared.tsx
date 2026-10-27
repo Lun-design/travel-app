@@ -11,10 +11,9 @@ import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEst
 import { hasValidRouteCoordinates, resolveMissingRouteCoordinates } from '@/lib/route-geocoding';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
-import type { PuppyId } from '@/lib/puppy';
+import type { PuppyArtId, PuppyId } from '@/lib/puppy';
 import { getTripJournalPalette } from '@/lib/trip-journal';
 import { PuppyMascot } from './PuppyMascot';
-import { NavigationPuppy } from './NavigationPuppy';
 import { TimelineCardLayout } from './TimelineCardLayout';
 import { getTimelineDisplayNotes } from '@/lib/timeline-display';
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
@@ -59,6 +58,12 @@ export type TimelineRouteSegment = RouteSegment & {
   navigationUrl: string | null;
   loading?: boolean;
 };
+
+const ROUTE_ACCENT_PUPPIES: readonly PuppyArtId[] = ['journal-dance', 'journal-comfort', 'journal-hearts'];
+export function timelineTransitionPuppy(index: number, day = 1): PuppyArtId | undefined {
+  if (index % 2 !== 0) return undefined;
+  return ROUTE_ACCENT_PUPPIES[(Math.floor(index / 2) + day - 1) % ROUTE_ACCENT_PUPPIES.length];
+}
 
 /**
  * Keep the local optimistic timeline in step with parent/realtime updates.
@@ -323,6 +328,7 @@ type TimelineCardProps = {
   timeContextLabel?: string;
   item: ItineraryItem;
   segment?: TimelineRouteSegment;
+  transitionPuppy?: PuppyArtId;
   scheduled?: ScheduledItem;
   nextScheduled?: ScheduledItem;
   weather?: WeatherSummary;
@@ -365,7 +371,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export const TimelineCard = React.memo(function TimelineCard({ item, segment, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, availableDays = [], onMoveToDay, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent, timeContextLabel }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, transitionPuppy, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, availableDays = [], onMoveToDay, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent, timeContextLabel }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const journal = getTripJournalPalette(theme);
   const { width: viewportWidth } = useWindowDimensions();
@@ -618,7 +624,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               {placeAddress ? <Text selectable numberOfLines={isMobile && hasLongDetails && !expandedDetails ? 2 : undefined} style={[styles.address, { color: '#8E8E93', fontSize: 13 }]}>{placeAddress}</Text> : null}
               {displayNotes ? <Text selectable numberOfLines={isMobile && hasLongDetails && !expandedDetails ? 2 : undefined} style={[styles.notes, { color: journal.muted, fontSize: 13 }]}>{displayNotes}</Text> : null}
               {isMobile && hasLongDetails ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: expandedDetails }} style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setExpandedDetails((value) => !value)}><Text style={{ fontSize: 12, color: theme.colors.primary }}>{expandedDetails ? '收合詳細資訊' : '展開詳細資訊'}</Text></Pressable> : null}
-              <Pressable accessibilityRole="link" style={[styles.navigationButton, { backgroundColor: journal.soft }]} onPress={() => { void Linking.openURL(navigationUrl).catch((error) => Alert.alert('無法開啟導航', error instanceof Error ? error.message : '請檢查網路連線或地圖 App。')); }}><NavigationPuppy /><Text numberOfLines={1} style={[styles.navigation, { color: journal.accentText }]}>🧭 開啟 Google Maps 導航</Text></Pressable>
+              <Pressable accessibilityRole="link" style={[styles.navigationButton, { backgroundColor: journal.soft }]} onPress={() => { void Linking.openURL(navigationUrl).catch((error) => Alert.alert('無法開啟導航', error instanceof Error ? error.message : '請檢查網路連線或地圖 App。')); }}><Text numberOfLines={1} style={[styles.navigation, { color: journal.accentText }]}>🧭 開啟 Google Maps 導航</Text></Pressable>
               <View style={[styles.actions, compactStyles.hidden]}>
                 {onMoveUp ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="上移景點" disabled={!canMoveUp} onPress={onMoveUp}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}
                 {onMoveDown ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="下移景點" disabled={!canMoveDown} onPress={onMoveDown}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}
@@ -637,7 +643,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
           <Text style={styles.transitionArrow}>➔</Text>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
         </View>
-        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
+        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}>{transitionPuppy ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><PuppyMascot puppy={transitionPuppy} size={34} /></View> : null}<Text numberOfLines={1} style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {/* 導航路線按鈕已整合至景點卡片，交通 Pill 保持單一資訊列。 */}
       </View> : null}
@@ -783,12 +789,12 @@ const styles = {
     routeModeText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700', flexShrink: 1 },
   }),
   // Mobile-friendly transport presentation: a compact, neutral pill.
-  transition: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, gap: 4, marginLeft: 24, marginTop: 4, marginBottom: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#F1F5F9', borderWidth: 0, borderColor: 'transparent', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.line } as const,
+  transition: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, gap: 4, marginLeft: 24, marginTop: 4, marginBottom: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#F4F0E8', borderWidth: 0, borderColor: 'transparent', borderLeftWidth: 2, borderLeftColor: EDITORIAL_COLORS.line } as const,
   transitionContext: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', minWidth: 0 } as const,
   transitionEndpoint: { maxWidth: 120, minWidth: 0, flexShrink: 1, color: '#8C6D58', fontSize: 11, fontWeight: '500' } as const,
   transitionArrow: { color: '#8C6D58', fontSize: 11, fontWeight: '500', flexShrink: 0 } as const,
-  transitionMain: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 } as const,
-  transitionText: { color: '#475569', fontSize: 11, fontWeight: '600', flexShrink: 1 } as const,
+  transitionMain: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34 } as const,
+  transitionText: { color: '#746253', fontSize: 11, fontWeight: '600', flexShrink: 1 } as const,
   // Extend the rail through the compact transport pill so the timeline never
   // appears broken between two cards.
   line: { bottom: -30 } as const,

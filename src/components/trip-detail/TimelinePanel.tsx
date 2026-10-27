@@ -173,7 +173,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const { width, height } = useWindowDimensions();
   return <>
     <View style={styles.dayNavigation}>
-      <View style={styles.dateStrip}><DayTabs dense days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} /></View>
+      <View style={styles.dateStrip}><DayTabs dense puppyOnActive={layout.compact} days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} /></View>
       <Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={styles.moreButton} onPress={() => setMoreVisible(true)}><Text style={styles.moreButtonText}>···</Text></Pressable>
     </View>
     <DashboardMetricsBar dense={layout.compact} metrics={metrics} totalEstimatedCost={totalEstimatedCost} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />

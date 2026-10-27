@@ -1,7 +1,7 @@
 export const PUPPY_IDS = ['-1', '-2', '-3', '-4', '-5', '-6', '-7', '-8', '-9', '-10', '-11'] as const;
 export type PuppyId = (typeof PUPPY_IDS)[number];
 // Journal decorations are not profile-avatar choices.
-export type PuppyArtId = PuppyId | 'journal-together' | 'journal-reading' | 'journal-drive';
+export type PuppyArtId = PuppyId | 'journal-together' | 'journal-reading' | 'journal-drive' | 'journal-dance' | 'journal-comfort' | 'journal-hearts';
 
 export function getNavigationPuppy(category: string, mode = 'DRIVING'): PuppyArtId {
   const key = category.trim().toLowerCase();

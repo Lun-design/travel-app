@@ -112,7 +112,8 @@ describe('transparent navigation puppy and smaller FAB', () => {
     const source = readFileSync('src/components/ItineraryTimeline.shared.tsx', 'utf8');
     const panel = readFileSync('src/components/trip-detail/TimelinePanel.tsx', 'utf8');
     const route = readFileSync('src/app/trips/[id].tsx', 'utf8');
-    expect(source.includes('<TimelineCardLayout')).toBe(true); expect(source.includes('<NavigationPuppy')).toBe(true);
+    expect(source.includes('<TimelineCardLayout')).toBe(true); expect(source.includes('<NavigationPuppy')).toBe(false);
+    expect(source.includes('transitionPuppy ?')).toBe(true);
     expect(panel.includes('<TimelineTools')).toBe(true); expect(panel.includes('{isMapOpen &&')).toBe(true);
     expect(route.includes('<TripAddButton')).toBe(true); expect(route).toContain('paddingBottom: 144');
   });

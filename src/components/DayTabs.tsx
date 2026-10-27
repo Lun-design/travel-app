@@ -1,14 +1,21 @@
-import React from 'react'; import { Pressable, ScrollView, StyleSheet, Text, useColorScheme } from 'react-native';
+import React from 'react'; import { Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { DAY_ACTIVE_COLOR, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { getTripJournalPalette } from '@/lib/trip-journal';
+import { PuppyMascot } from '@/components/PuppyMascot';
+import type { PuppyArtId } from '@/lib/puppy';
 
-type Props = { days: number[]; selected: number; onChange: (day: number) => void; themeMode?: ThemeMode; startDate?: string; accentColor?: string; dense?: boolean };
+type Props = { days: number[]; selected: number; onChange: (day: number) => void; themeMode?: ThemeMode; startDate?: string; accentColor?: string; dense?: boolean; puppyOnActive?: boolean };
 
-export function DayTabs({ days, selected, onChange, themeMode = 'system', startDate, accentColor, dense = false }: Props) {
+const DAY_PUPPIES: readonly PuppyArtId[] = ['journal-dance', 'journal-comfort', 'journal-hearts'];
+function puppyForDay(day: number): PuppyArtId {
+  return DAY_PUPPIES[((day % DAY_PUPPIES.length) + DAY_PUPPIES.length) % DAY_PUPPIES.length];
+}
+
+export function DayTabs({ days, selected, onChange, themeMode = 'system', startDate, accentColor, dense = false, puppyOnActive = false }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const palette = getTripJournalPalette(theme);
-  return <ScrollView accessibilityRole="tablist" accessibilityLabel="行程日期" style={[styles.scroller, dense && styles.denseScroller]} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wrap}>{days.map((day) => {
+  return <ScrollView accessibilityRole="tablist" accessibilityLabel="行程日期" style={[styles.scroller, dense && styles.denseScroller]} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.wrap, dense && styles.denseWrap]}>{days.map((day) => {
     const active = day === selected;
     const date = startDate ? tripDateForDay(startDate, day) : null;
     const dateValue = date ? new Date(`${date}T00:00:00Z`) : null;
@@ -17,7 +24,7 @@ export function DayTabs({ days, selected, onChange, themeMode = 'system', startD
     const activeColor = dense && theme.isDark ? palette.accent : accentColor ?? DAY_ACTIVE_COLOR;
     const inactiveColor = dense ? palette.muted : '#94A3B8';
     const activeTextColor = dense && theme.isDark ? theme.colors.background : '#FFFFFF';
-    return <Pressable key={day} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={`Day ${day} ${weekday} ${dateLabel}`} onPress={() => onChange(day)} style={[styles.tab, dense && styles.denseTab, { backgroundColor: active ? activeColor : 'transparent', borderColor: 'transparent', borderWidth: 0 }, active && styles.activeTab]}>{dense ? <><Text style={{ color: active ? activeTextColor : inactiveColor, fontWeight: '800', fontSize: 14 }}>Day {day}</Text><Text style={{ color: active ? activeTextColor : inactiveColor, fontSize: 11 }}>{dateLabel} {weekday}</Text></> : <><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: active ? '800' : '700', letterSpacing: 1.1, fontSize: 11 }}>{weekday}</Text><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: active ? '900' : '700', fontSize: 15 }}>{dateLabel}</Text><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: '600', fontSize: 9 }}>Day {day}</Text></>}</Pressable>;
+    return <Pressable key={day} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={`Day ${day} ${weekday} ${dateLabel}`} onPress={() => onChange(day)} style={[styles.tab, dense && styles.denseTab, { backgroundColor: active ? activeColor : 'transparent', borderColor: 'transparent', borderWidth: 0 }, active && styles.activeTab, dense && active && puppyOnActive && styles.puppyTab]}>{dense ? active && puppyOnActive ? <View style={styles.puppyTabContent}><View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><PuppyMascot puppy={puppyForDay(day)} size={38} /></View><View style={styles.puppyTabLabels}><Text numberOfLines={1} style={{ color: activeTextColor, fontWeight: '800', fontSize: 13 }}>Day {day}</Text><Text numberOfLines={1} style={{ color: activeTextColor, fontSize: 10 }}>{dateLabel} {weekday}</Text></View></View> : <><Text style={{ color: active ? activeTextColor : inactiveColor, fontWeight: '800', fontSize: 14 }}>Day {day}</Text><Text style={{ color: active ? activeTextColor : inactiveColor, fontSize: 11 }}>{dateLabel} {weekday}</Text></> : <><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: active ? '800' : '700', letterSpacing: 1.1, fontSize: 11 }}>{weekday}</Text><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: active ? '900' : '700', fontSize: 15 }}>{dateLabel}</Text><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: '600', fontSize: 9 }}>Day {day}</Text></>}</Pressable>;
   })}</ScrollView>;
 }
-const styles = StyleSheet.create({ scroller: { height: 78, flexGrow: 0, alignSelf: 'stretch', marginTop: 6, marginBottom: 8 }, denseScroller: { height: 56, marginTop: 0, marginBottom: 0 }, denseTab: { height: 44, minWidth: 80, paddingVertical: 4 }, wrap: { gap: 8, paddingVertical: 6, alignItems: 'center' }, tab: { height: 66, minWidth: 76, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 12, borderWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 2 }, activeTab: { shadowColor: '#1f1f1f', shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } });
+const styles = StyleSheet.create({ scroller: { height: 78, flexGrow: 0, alignSelf: 'stretch', marginTop: 6, marginBottom: 8 }, denseScroller: { height: 68, marginTop: 0, marginBottom: 0 }, denseTab: { height: 50, minWidth: 80, paddingVertical: 4 }, puppyTab: { height: 60, minWidth: 132, paddingHorizontal: 8 }, puppyTabContent: { flexDirection: 'row', alignItems: 'center', gap: 5 }, puppyTabLabels: { minWidth: 0, alignItems: 'flex-start', gap: 2 }, wrap: { gap: 8, paddingVertical: 6, alignItems: 'center' }, denseWrap: { paddingVertical: 4 }, tab: { height: 66, minWidth: 76, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 12, borderWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 2 }, activeTab: { shadowColor: '#1f1f1f', shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } });
