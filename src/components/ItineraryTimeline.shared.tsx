@@ -11,9 +11,12 @@ import { buildGoogleMapsRouteUrl, calculateFallbackTravelMinutes, createRouteEst
 import { hasValidRouteCoordinates, resolveMissingRouteCoordinates } from '@/lib/route-geocoding';
 import { shareOrCopyText } from '@/lib/share-actions';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
-import { getNavigationPuppy, type PuppyArtId, type PuppyId } from '@/lib/puppy';
+import type { PuppyId } from '@/lib/puppy';
 import { getTripJournalPalette } from '@/lib/trip-journal';
 import { PuppyMascot } from './PuppyMascot';
+import { NavigationPuppy } from './NavigationPuppy';
+import { TimelineCardLayout } from './TimelineCardLayout';
+import { getTimelineDisplayNotes } from '@/lib/timeline-display';
 // Theme badge fallback remains available via theme.colors.surfaceMuted.
 import { reservationTagLabels } from '@/lib/reservation-tags';
 import { getSpotImageFallbackUrl, getSpotImageLightboxUrl, getSpotImageUrl, resolveSpotImage, searchSpotImage } from '@/lib/spot-image';
@@ -380,8 +383,9 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
     mode: segment?.mode ?? 'DRIVING',
   });
   const placeAddress = formatPlaceAddress(item.address);
+  const displayNotes = getTimelineDisplayNotes({ title: item.location_name, time: item.time, notes: item.notes });
   const [expandedDetails, setExpandedDetails] = useState(false);
-  const hasLongDetails = (placeAddress?.length ?? 0) > 80 || (item.notes?.length ?? 0) > 80;
+  const hasLongDetails = (placeAddress?.length ?? 0) > 80 || (displayNotes?.length ?? 0) > 80;
   const [resolvedImageUrl, setResolvedImageUrl] = useState(() => getSpotImageUrl(item));
   const [imageRevision, setImageRevision] = useState(() => Date.now());
   const [favorite, setFavorite] = useState(false);
@@ -574,7 +578,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               </View>
             </Pressable>
           </Modal>
-          <View style={styles.cardBody}>
+          <TimelineCardLayout compact={isMobile} image={<>
             {!imageLoadFailed && resolvedImageUrl ? <Image key={`${item.id}-${imageRevision}`} source={{ uri: cacheBustedImageUrl(resolvedImageUrl, imageRevision) ?? resolvedImageUrl }} style={cardVisualStyles.thumbnail} accessibilityLabel={`${item.location_name} 縮圖`} onError={() => {
               if (!imageFallbackAttemptedRef.current) {
                 imageFallbackAttemptedRef.current = true;
@@ -587,7 +591,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
               setImageLoadFailed(true);
             }} /> : <View style={[cardVisualStyles.thumbnail, cardVisualStyles.iconBadge, { backgroundColor: categoryTint(item.category) }]}><PuppyMascot puppy={categoryPuppyId(item.category)} size={34} accessibilityLabel={`${item.category} 類別`} /></View>}
             <Pressable accessibilityRole="button" accessibilityLabel={`放大查看 ${item.location_name}`} style={styles.thumbnailOverlay} onPress={() => { setLightboxImageFailed(!resolvedImageUrl || imageLoadFailed); setLightboxVisible(true); }} />
-            <View style={[styles.content, isMobile ? null : safeCardContentStyle, { gap: 8 }]}>
+            </>} heading={<View style={[styles.content, isMobile ? null : safeCardContentStyle, { gap: 8 }]}>
               {timeContextLabel ? <Text style={{ color: theme.colors.muted, fontSize: 11 }}>{timeContextLabel}</Text> : null}
               <View style={[styles.cardHeader, isMobile && responsiveCardStyles.cardHeaderMobile]}><Text style={[styles.time, { color: journal.accentText, backgroundColor: journal.soft, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4, fontSize: 11, fontWeight: '600', letterSpacing: 0.5 }]}>{scheduled?.arrivalTime ?? item.time ?? '未排定'}{scheduled?.estimated ? ' · 預估' : ''}</Text>{isMobile ? <View style={[styles.categoryWrap, responsiveCardStyles.mobileCategoryWrap]}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View> : <><Text numberOfLines={1} style={[styles.name, cardVisualStyles.headerName, { color: journal.ink, fontSize: 17, fontWeight: '700' }]}>{item.location_name}</Text><View style={styles.categoryWrap}><Text numberOfLines={1} style={[styles.category, { color: theme.colors.muted, fontSize: 11, fontWeight: '500', letterSpacing: 0.5 }]}>{item.category}</Text></View></> }</View>{isMobile ? <Text style={[styles.name, responsiveCardStyles.mobileName, { color: journal.ink }]}>{item.location_name}</Text> : null}
               {weather ? <View style={[styles.weatherRow, compactStyles.hidden]}>{!isWeatherAlert(weather) && (weather.precipitationProbability === null || weather.precipitationProbability <= 20) ? <PuppyMascot puppy="-9" size={56} style={styles.inlineMascot} accessibilityLabel="好天氣" /> : null}<Text style={[styles.weatherText, { color: theme.colors.text }]}>{weather.icon} {formatTemperature(weather)} · {weather.condition}</Text>{weather.precipitationProbability !== null ? <Text style={styles.rainProbability}>☔ {Math.round(weather.precipitationProbability)}%</Text> : null}</View> : null}
@@ -610,10 +614,11 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
                 </Pressable>
               </Modal>
               {reservationTagLabels(item.reservation_tags).length > 0 ? <View style={reservationTagStyles.reservationTags}>{reservationTagLabels(item.reservation_tags).map((label) => <Text key={label} style={[reservationTagStyles.reservationTag, { color: theme.colors.primary, borderColor: theme.colors.border }]}>{label}</Text>)}</View> : null}
+            </View>} details={<View style={{ width: '100%', gap: 8 }}>
               {placeAddress ? <Text selectable numberOfLines={isMobile && hasLongDetails && !expandedDetails ? 2 : undefined} style={[styles.address, { color: '#8E8E93', fontSize: 13 }]}>{placeAddress}</Text> : null}
-              {item.notes ? <Text selectable numberOfLines={isMobile && hasLongDetails && !expandedDetails ? 2 : undefined} style={[styles.notes, { color: '#8E8E93', fontSize: 13 }]}>{item.notes}</Text> : null}
+              {displayNotes ? <Text selectable numberOfLines={isMobile && hasLongDetails && !expandedDetails ? 2 : undefined} style={[styles.notes, { color: journal.muted, fontSize: 13 }]}>{displayNotes}</Text> : null}
               {isMobile && hasLongDetails ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: expandedDetails }} style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setExpandedDetails((value) => !value)}><Text style={{ fontSize: 12, color: theme.colors.primary }}>{expandedDetails ? '收合詳細資訊' : '展開詳細資訊'}</Text></Pressable> : null}
-              <Pressable accessibilityRole="link" style={[styles.navigationButton, { backgroundColor: journal.soft }]} onPress={() => { void Linking.openURL(navigationUrl).catch((error) => Alert.alert('無法開啟導航', error instanceof Error ? error.message : '請檢查網路連線或地圖 App。')); }}><PuppyMascot puppy={navigationPuppyId(item.category, segment?.mode)} size={28} style={styles.navigationPuppy} accessibilityLabel="導航小狗" /><Text numberOfLines={1} style={[styles.navigation, { color: journal.accentText }]}>🧭 開啟 Google Maps 導航</Text></Pressable>
+              <Pressable accessibilityRole="link" style={[styles.navigationButton, { backgroundColor: journal.soft }]} onPress={() => { void Linking.openURL(navigationUrl).catch((error) => Alert.alert('無法開啟導航', error instanceof Error ? error.message : '請檢查網路連線或地圖 App。')); }}><NavigationPuppy /><Text numberOfLines={1} style={[styles.navigation, { color: journal.accentText }]}>🧭 開啟 Google Maps 導航</Text></Pressable>
               <View style={[styles.actions, compactStyles.hidden]}>
                 {onMoveUp ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="上移景點" disabled={!canMoveUp} onPress={onMoveUp}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveUp && styles.disabledAction]}>▲ 上移</Text></Pressable> : null}
                 {onMoveDown ? <Pressable style={styles.actionButton} accessibilityRole="button" accessibilityLabel="下移景點" disabled={!canMoveDown} onPress={onMoveDown}><Text style={[styles.reorderText, { color: theme.colors.text }, !canMoveDown && styles.disabledAction]}>▼ 下移</Text></Pressable> : null}
@@ -623,8 +628,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, sc
                 {itemVouchers.length > 0 && onPreviewVoucher ? <Pressable style={styles.actionButton} onPress={() => onPreviewVoucher(itemVouchers[0])}><Text style={styles.voucher}>🎫 檢視票券{itemVouchers.length > 1 ? ` (${itemVouchers.length})` : ''}</Text></Pressable> : null}
                 <Pressable onPress={() => setFavorite((current) => !current)}><View style={styles.favorite}>{favorite ? <PuppyMascot puppy="-3" size={28} accessibilityLabel="已收藏" /> : <Text style={styles.favoriteText}>♡ 收藏</Text>}</View></Pressable>
               </View>
-            </View>
-          </View>
+            </View>} />
         </View>
       </View>
       {segment ? <View style={styles.transition}>
@@ -681,7 +685,7 @@ const moveDayStyles = StyleSheet.create({
 });
 const compactStyles = StyleSheet.create({ hidden: { display: 'none' } });
 const cardVisualStyles = StyleSheet.create({
-  thumbnail: { width: 64, height: 64, borderRadius: 16, flexShrink: 0, marginRight: 16 },
+  thumbnail: { width: 64, height: 64, borderRadius: 12, flexShrink: 0 },
   iconBadge: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#E9E1D5' },
   icon: { fontSize: 22 },
   headerName: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '700' },
@@ -714,10 +718,6 @@ const categoryPuppies: Record<string, PuppyId> = {
 
 function categoryPuppyId(category: string): PuppyId {
   return categoryPuppies[category.trim().toLowerCase()] ?? '-11';
-}
-
-function navigationPuppyId(category: string, mode?: TravelMode): PuppyArtId {
-  return getNavigationPuppy(category, mode);
 }
 
 function CategoryBadge({ category, compact, inline = false }: { category: string; compact: boolean; inline?: boolean }) {
@@ -803,7 +803,6 @@ const styles = {
   // Navigation is a compact pill; the linedog sits inside rather than in the
   // category badge so the card header stays clean on narrow screens.
   navigationButton: { alignSelf: 'flex-start', width: 'auto', maxWidth: '100%', minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, borderWidth: 0, paddingHorizontal: 12, paddingVertical: 6 } as const,
-  navigationPuppy: { width: 28, height: 28, flexShrink: 0, backgroundColor: 'transparent', opacity: 1 } as const,
   navigation: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800', flexShrink: 1 } as const,
   thumbnailOverlay: { position: 'absolute', left: 0, top: 0, width: 64, height: 64, borderRadius: 16, zIndex: 3 } as const,
   lightboxBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.9)', alignItems: 'center', justifyContent: 'center' } as const,

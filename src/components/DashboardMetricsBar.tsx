@@ -1,27 +1,32 @@
 import React from 'react';
-import { StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { formatMetricDuration, type TimelineMetrics } from '@/lib/timeline-metrics';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 
-export function DashboardMetricsBar({ metrics, totalEstimatedCost, themeMode = 'system', action }: { metrics: TimelineMetrics; totalEstimatedCost?: number; themeMode?: ThemeMode; action?: React.ReactNode }) {
+export function DashboardMetricsBar({ metrics, totalEstimatedCost, themeMode = 'system', action, dense = false }: { metrics: TimelineMetrics; totalEstimatedCost?: number; themeMode?: ThemeMode; action?: React.ReactNode; dense?: boolean }) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const { width } = useWindowDimensions();
   const compact = width < 480;
-  return <View accessibilityLabel="當天行程摘要" style={[styles.container, compact && styles.containerCompact]}>
-    <Metric icon="📍" iconColor="#DC4A3D" label={`${metrics.spotCount} 個景點`} theme={theme} />
-    {metrics.transportMinutes > 0 ? <Metric icon="🚗" iconColor="#16A34A" label={`交通 ${formatMetricDuration(metrics.transportMinutes)}`} theme={theme} /> : null}
-    {metrics.estimatedCost > 0 || (totalEstimatedCost ?? 0) > 0 ? <Metric icon="💰" iconColor="#B45309" label={totalEstimatedCost != null && totalEstimatedCost !== metrics.estimatedCost ? `預估本日 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })} · 全程 NT$ ${totalEstimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}` : `預估 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`} theme={theme} /> : null}
+  const summary = <>
+    <Metric singleLine={dense} icon="📍" iconColor="#DC4A3D" label={`${metrics.spotCount} 個景點`} theme={theme} />
+    {metrics.transportMinutes > 0 ? <Metric singleLine={dense} icon="🚗" iconColor="#16A34A" label={`交通 ${formatMetricDuration(metrics.transportMinutes)}`} theme={theme} /> : null}
+    {metrics.estimatedCost > 0 || (totalEstimatedCost ?? 0) > 0 ? <Metric singleLine={dense} icon="💰" iconColor="#B45309" label={totalEstimatedCost != null && totalEstimatedCost !== metrics.estimatedCost ? `預估本日 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })} · 全程 NT$ ${totalEstimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}` : `預估 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`} theme={theme} /> : null}
     {action ? <View style={[styles.action, compact && styles.actionCompact]}>{action}</View> : null}
-  </View>;
+  </>;
+  return dense ? <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel="當天行程摘要，可左右滑動" style={styles.denseScroller} contentContainerStyle={[styles.container, styles.denseContainer]}>{summary}</ScrollView>
+    : <View accessibilityLabel="當天行程摘要" style={[styles.container, compact && styles.containerCompact]}>{summary}</View>;
 }
 
-function Metric({ icon, iconColor, label, theme }: { icon: string; iconColor: string; label: string; theme: ReturnType<typeof getThemeForMode> }) {
-  return <View style={styles.metric}><Text style={[styles.icon, { color: iconColor }]}>{icon}</Text><Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text></View>;
+function Metric({ icon, iconColor, label, theme, singleLine = false }: { icon: string; iconColor: string; label: string; theme: ReturnType<typeof getThemeForMode>; singleLine?: boolean }) {
+  return <View style={[styles.metric, singleLine && styles.singleLine]}><Text style={[styles.icon, { color: iconColor }]}>{icon}</Text><Text numberOfLines={singleLine ? 1 : undefined} style={[styles.label, singleLine && styles.singleLine, { color: theme.colors.text }]}>{label}</Text></View>;
 }
 
 const styles = StyleSheet.create({
   container: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 14, paddingHorizontal: 2, paddingVertical: 3, marginBottom: 6 },
   containerCompact: { gap: 8, paddingVertical: 4 },
+  denseScroller: { height: 44, flexGrow: 0, marginBottom: 6 },
+  denseContainer: { flexWrap: 'nowrap', width: 'auto', marginBottom: 0, alignItems: 'center', gap: 12 },
+  singleLine: { flexShrink: 0 },
   metric: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, minWidth: 0, flexShrink: 1 },
   icon: { fontSize: 15 },
   label: { fontSize: 12, fontWeight: '700', flexShrink: 1 },

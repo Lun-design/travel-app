@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, LayoutAnimation, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, LayoutAnimation, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { TimelineViewport } from './TimelineViewport';
 import { TodayQuickActions } from './TodayQuickActions';
 import type { EdgeInsets } from 'react-native-safe-area-context';
@@ -15,7 +15,7 @@ import { ItineraryTimeline } from '@/components/ItineraryTimeline';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import type { ThemeMode } from '@/lib/theme';
 import type { getTripDetailLayout } from '@/lib/trip-detail-layout';
-import { DAY_ACTIVE_COLOR, EDITORIAL_COLORS } from '@/lib/theme';
+import { DAY_ACTIVE_COLOR, EDITORIAL_COLORS, getThemeForMode } from '@/lib/theme';
 import { buildDaySchedule, type ScheduleContext } from '@/lib/schedule';
 import { tripDateForDay } from '@/lib/trip-dates';
 import { optimizeItineraryOrder, type RouteOptimizationResult } from '@/lib/route-optimization';
@@ -25,6 +25,7 @@ import type { ItineraryExportData } from '@/lib/export-image';
 import { DashboardMetricsBar } from '@/components/DashboardMetricsBar';
 import { calculateTimelineMetrics } from '@/lib/timeline-metrics';
 import { NextStopMode } from './NextStopMode';
+import { TimelineTools } from './TimelineTools';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -64,6 +65,7 @@ type Props = {
 type OptimizationPreview = { result: RouteOptimizationResult<ItineraryItem> };
 
 export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode, layout, insets, isMapOpen, isMapLoading, isDayTransitioning, focusedItemId, vouchers, timelineScrollRef, onDayChange, onToggleMap, onMapMarkerPress, onFocusedVoucher, onSwitchToBackupPlan, onEdit, onDelete, onUpdateImage, onReorder, onMoveToDay, onShiftSubsequent, onApplyRouteOptimization, onAddAtPosition, onAdd, onImport, onClearAll, convenienceContent }: Props) {
+  const theme = getThemeForMode(themeMode, useColorScheme());
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
   const [optimizationBusy, setOptimizationBusy] = useState(false);
@@ -174,14 +176,16 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
       <View style={styles.dateStrip}><DayTabs dense days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} /></View>
       <Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={styles.moreButton} onPress={() => setMoreVisible(true)}><Text style={styles.moreButtonText}>···</Text></Pressable>
     </View>
-    <TodayQuickActions trip={trip} day={day} items={items} vouchers={vouchers ?? []} onDayChange={onDayChange} onVoucher={(voucher) => onFocusedVoucher?.(voucher)} />
-    <DashboardMetricsBar metrics={metrics} totalEstimatedCost={totalEstimatedCost} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />
+    <DashboardMetricsBar dense={layout.compact} metrics={metrics} totalEstimatedCost={totalEstimatedCost} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />
     {showOptimizationSuggestion ? <Text accessibilityRole="text" style={styles.optimizationSuggestion}>{conflictMinutes > 0 ? `⚠️ 今日有 ${conflictMinutes} 分鐘時間衝突，建議最佳化路線` : '🚗 今日交通時間較長，建議最佳化路線'}</Text> : null}
     {/* Today Focus is intentionally omitted here; the first timeline card is the single source of truth. Legacy contract: <TodayFocusCard onComplete />. */}
     {/* optimizationBusy ? '路線計算中…' : '🧭 最佳化今日路線' */}
     {convenienceContent}
-    <NextStopMode tripId={trip.id} day={day} timezone={trip.timezone} items={items} vouchers={vouchers ?? []} onVoucher={onFocusedVoucher} />
+    <TimelineTools compact={layout.compact} scopeKey={`${trip.id}:${day}`} theme={theme}>
+    <TodayQuickActions trip={trip} day={day} items={items} vouchers={vouchers ?? []} onDayChange={onDayChange} onVoucher={(voucher) => onFocusedVoucher?.(voucher)} />
+    <NextStopMode tripId={trip.id} day={day} timezone={trip.timezone} items={items} vouchers={vouchers ?? []} onVoucher={onFocusedVoucher} theme={theme} />
     <Pressable style={[styles.mapToggle, { alignSelf: 'flex-start', width: 'auto', minHeight: 38, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, marginVertical: 8 }]} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線'}</Text></Pressable>
+    </TimelineTools>
     {isMapOpen && <View style={[styles.mapPane, { height: Math.min(layout.mapMinHeight, 220), maxHeight: 220 }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
     <TimelineViewport width={width} height={height}>
       {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} tripId={trip.id} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onUpdateImage={onUpdateImage} onReorder={onReorder} availableDays={days} onMoveToDay={onMoveToDay} onShiftSubsequent={onShiftSubsequent} onInsertAtPosition={onAddAtPosition} />}

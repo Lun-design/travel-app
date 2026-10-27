@@ -50,6 +50,9 @@ export function createUndoController<A extends UndoAction = UndoAction>(options:
   };
 }
 export type SyncInput = { isOffline: boolean; pendingCount: number; syncing?: boolean; undoPending?: boolean; error?: string; conflictCount?: number };
+export function isFullySynced(input: SyncInput) {
+  return !input.isOffline && input.pendingCount === 0 && !input.syncing && !input.undoPending && !input.error && !input.conflictCount;
+}
 export function getSyncPresentation(input: SyncInput) {
   if (input.error || input.conflictCount) return { label: '同步失敗，請重試或處理衝突', canRetry: !input.isOffline && !input.syncing };
   if (input.syncing) return { label: '正在同步…', canRetry: false };

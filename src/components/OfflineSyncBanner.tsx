@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { OfflineMutation } from '@/lib/offline-store';
 import { EDITORIAL_COLORS } from '@/lib/theme';
-import { getSyncPresentation } from '@/lib/undo-sync';
+import { getSyncPresentation, isFullySynced } from '@/lib/undo-sync';
 
 type Props = {
   isOffline: boolean;
@@ -13,9 +13,11 @@ type Props = {
   undoPending?: boolean;
   error?: string;
   onRetry?: () => void;
+  hideHealthy?: boolean;
 };
 
-export function OfflineSyncBanner({ isOffline, pendingCount, conflicts, onResolve, syncing, undoPending, error, onRetry }: Props) {
+export function OfflineSyncBanner({ isOffline, pendingCount, conflicts, onResolve, syncing, undoPending, error, onRetry, hideHealthy = false }: Props) {
+  if (hideHealthy && isFullySynced({ isOffline, pendingCount, syncing, undoPending, error, conflictCount: conflicts.length })) return null;
   const status = getSyncPresentation({ isOffline, pendingCount, syncing, undoPending, error, conflictCount: conflicts.length });
   return <View style={[styles.container, (conflicts.length > 0 || error) ? styles.problem : null]} accessibilityLiveRegion="polite">
     <View style={styles.statusRow}><Text style={styles.message}>{status.label}</Text>{onRetry && status.canRetry ? <Pressable accessibilityRole="button" accessibilityLabel="重試同步" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>重試同步</Text></Pressable> : null}</View>

@@ -67,12 +67,13 @@ describe('scoped journal presentation', () => {
     expect(dark.ink).toBe(getAppTheme('dark').colors.text);
     expect(dark.paper).not.toBe(light.paper);
   });
-  it('enlarges only navigation art and uses the existing selected segment mode', () => {
+  it('uses the transparent navigation component while retaining route mode handling', () => {
     const source = readFileSync('src/components/ItineraryTimeline.shared.tsx', 'utf8');
-    expect(source).toContain('navigationPuppyId(item.category, segment?.mode)');
-    expect(source).toContain('size={28}');
-    expect(source).toContain('width: 28, height: 28');
-    expect(source).toContain('getNavigationPuppy(category, mode)');
+    const navigation = readFileSync('src/components/NavigationPuppy.tsx', 'utf8');
+    expect(source).toContain('<NavigationPuppy />');
+    expect(source).toContain("mode: segment?.mode ?? 'DRIVING'");
+    expect(navigation).toContain('width: 28, height: 28');
+    expect(navigation).toContain('puppy="journal-reading"');
     expect(source).not.toContain('mixBlendMode');
   });
   it('applies journal surfaces to the page/cards rather than leaking hard white into dark mode', () => {

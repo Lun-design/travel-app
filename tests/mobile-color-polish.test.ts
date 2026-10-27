@@ -69,20 +69,21 @@ describe('mobile visual color polish', () => {
   it('places a compact transparent linedog inside the card navigation pill', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const mascot = readFileSync(projectFile('src', 'components', 'PuppyMascot.tsx'), 'utf8');
-    expect(timeline).toContain('navigationPuppyId');
-    expect(timeline).toContain('<PuppyMascot puppy={navigationPuppyId(item.category, segment?.mode)} size={28}');
+    const navigation = readFileSync(projectFile('src', 'components', 'NavigationPuppy.tsx'), 'utf8');
+    expect(timeline).toContain('<NavigationPuppy />');
+    expect(navigation).toContain('puppy="journal-reading"');
     expect(timeline).toContain('navigationButton');
-    expect(timeline).toContain('navigationPuppy');
+    expect(navigation).toContain('width: 28, height: 28');
     expect(timeline).not.toContain('routeLinkPuppy');
-    expect(timeline).toContain('return getNavigationPuppy(category, mode)');
+    expect(navigation).toContain('overflow: \'hidden\'');
     expect(timeline).not.toContain('disabled={!navigationUrl}');
     expect(timeline).toContain('getGoogleMapsNavigationUrl');
-    expect(timeline).toContain('opacity: 1');
+    expect(navigation).toContain('opacity: 1');
     expect(timeline).not.toContain('navigationButtonDisabled');
     expect(timeline).toContain('paddingHorizontal: 12');
     expect(timeline).toContain('paddingVertical: 6');
     expect(timeline).toContain('gap: 6');
-    expect(timeline).toContain("backgroundColor: 'transparent'");
+    expect(navigation).toContain("backgroundColor: 'transparent'");
     expect(mascot).toContain('resizeMode="contain"');
     expect(mascot).toContain("backgroundColor: 'transparent'");
   });

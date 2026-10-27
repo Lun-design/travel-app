@@ -29,11 +29,12 @@ type Props = {
   profile?: Profile | null;
   onProfile: () => void;
   compact?: boolean;
+  syncLabel?: string;
 };
 
 const HEADER_AVATAR_LIMIT = 4;
 
-export function TripDetailHeader({ trip, members, userId, theme, themeMode, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, onSearch, profile, onProfile, compact = false }: Props) {
+export function TripDetailHeader({ trip, members, userId, theme, themeMode, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, onSearch, profile, onProfile, compact = false, syncLabel }: Props) {
   const palette = getTripJournalPalette(theme);
   const [selectedMemberId, setSelectedMemberId] = React.useState<string | null>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -61,7 +62,7 @@ export function TripDetailHeader({ trip, members, userId, theme, themeMode, inse
     <View style={[styles.titleRow, { borderBottomColor: palette.line }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="返回我的行程" style={styles.iconButton} onPress={onBack}><JournalIcon name="back" color={palette.accent} /></Pressable>
       <View style={styles.titleCopy}>
-        <Text numberOfLines={1} style={[styles.kicker, { color: palette.accentText }]}>小狗的旅行手帳</Text>
+        <View style={styles.kickerRow}><Text numberOfLines={1} style={[styles.kicker, { color: palette.accentText, flexShrink: 1 }]}>小狗的旅行手帳</Text>{syncLabel ? <Text accessibilityLiveRegion="polite" style={[styles.kicker, { color: palette.muted }]}>{syncLabel}</Text> : null}</View>
         <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.title, compact && styles.compactTitle, { color: palette.ink }]}>{trip.title}</Text>
         <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.destination, { color: palette.muted }]}>{trip.destination} · {trip.start_date} – {trip.end_date}</Text>
       </View>
@@ -107,6 +108,7 @@ const styles = StyleSheet.create({
   compactActions: { flexDirection: 'column', gap: 0 },
   iconButton: { width: 44, minHeight: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   kicker: { fontSize: 9, fontWeight: '600', letterSpacing: 1, marginBottom: 3 },
+  kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { fontSize: 28, fontWeight: '700', letterSpacing: 0.8, fontFamily: Platform.OS === 'web' ? 'Georgia, "PMingLiU", serif' : undefined },
   compactTitle: { fontSize: 22 },
   destination: { fontSize: 11, marginTop: 3 },

@@ -18,6 +18,13 @@ function text(node: React.ReactNode): string {
   return typeof node === 'string' ? node : '';
 }
 describe('undo and sync controls', () => {
+  it('hides only healthy status when compact header owns that status', () => {
+    const base = { isOffline: false, pendingCount: 0, conflicts: [], onResolve: vi.fn(), hideHealthy: true };
+    expect(OfflineSyncBanner(base)).toBeNull();
+    for (const state of [{ isOffline: true }, { pendingCount: 1 }, { syncing: true }, { undoPending: true }, { error: 'denied' }]) {
+      expect(OfflineSyncBanner({ ...base, ...state })).not.toBeNull();
+    }
+  });
   it('clicking the visible undo button prevents the pending API call', async () => {
     const commit = vi.fn(async () => undefined);
     const controller = createUndoController({ onChange: vi.fn(), onError: vi.fn() });
