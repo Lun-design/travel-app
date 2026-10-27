@@ -40,6 +40,7 @@ import { UndoToast } from '@/components/UndoToast';
 import { TripSearchModal } from '@/components/TripSearchModal';
 import { TripPreparationOverview } from '@/components/trip-detail/TripPreparationOverview';
 import { TripInfoShortcuts } from '@/components/trip-detail/TripInfoShortcuts';
+import { TripTravelInfo } from '@/components/trip-detail/TripTravelInfo';
 import { TripGettingStarted } from '@/components/trip-detail/TripGettingStarted';
 import { getTripSearchDestination, type TripSearchResult } from '@/lib/trip-search';
 import { positionNewItineraryItem } from '@/lib/itinerary-create';
@@ -363,8 +364,9 @@ export default function TripDetailScreen() {
   const trip = data.trip;
   const MainScroll = tab === 'timeline' || tab === 'places' ? ScrollView : View;
   const convenienceContent = <>
-    <TripPreparationOverview tripId={trip.id} userId={data.userId} vouchers={data.vouchers} theme={theme} revision={data.packingRevision + preparationRevision} onPacking={() => setTab('packing')} onDocuments={() => setTab('documents')} onVoucher={setPreviewVoucher} />
-    <TripInfoShortcuts tripId={trip.id} userId={data.userId} items={data.items} timezone={trip.timezone} refreshToken={data.shortcutRevision} canEdit={data.members.some((member) => member.user_id === data.userId && ['owner', 'editor'].includes(member.role))} theme={theme} />
+    <TripTravelInfo key={`${data.userId}:${trip.id}`} theme={theme}
+      preparation={<TripPreparationOverview tripId={trip.id} userId={data.userId} vouchers={data.vouchers} theme={theme} revision={data.packingRevision + preparationRevision} onPacking={() => setTab('packing')} onDocuments={() => setTab('documents')} onVoucher={setPreviewVoucher} />}
+      shortcuts={expandRequest => <TripInfoShortcuts tripId={trip.id} userId={data.userId} items={data.items} timezone={trip.timezone} refreshToken={data.shortcutRevision} expandRequest={expandRequest} canEdit={data.members.some((member) => member.user_id === data.userId && ['owner', 'editor'].includes(member.role))} theme={theme} />} />
     <TripGettingStarted isTripEmpty={!data.items.some((item) => !item.is_backup)} isDayEmpty={visibleItems.length === 0} day={day} theme={theme} onAdd={() => { setEditingItem(null); setInsertPosition(null); setItemModal(true); }} onImport={() => { setImportAction('import'); setImportVisible(true); }} onInvite={() => setInviteVisible(true)} />
   </>;
 

@@ -9,7 +9,7 @@ import { getAppTheme, type AppTheme } from '@/lib/theme';
 import { getTimeContextLabel } from '@/lib/time-context';
 import { listTripInfoPins, setTripInfoPin } from '@/lib/trip-shortcuts-api';
 
-export function TripInfoShortcuts({ tripId, userId, items, timezone, refreshToken = 0, canEdit = true, theme = getAppTheme('light') }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; refreshToken?: number; canEdit?: boolean; theme?: AppTheme }) {
+export function TripInfoShortcuts({ tripId, userId, items, timezone, refreshToken = 0, expandRequest = 0, canEdit = true, theme = getAppTheme('light') }: { tripId: string; userId: string; items: ItineraryItem[]; timezone?: string; refreshToken?: number; expandRequest?: number; canEdit?: boolean; theme?: AppTheme }) {
   const key = shortcutStorageKey({ userId, tripId });
   const [stored, setStored] = useState<{ key: string; pins: ShortcutPin[]; synced: boolean } | null>(null);
   const [open, setOpen] = useState(false), [picker, setPicker] = useState(false);
@@ -26,6 +26,7 @@ export function TripInfoShortcuts({ tripId, userId, items, timezone, refreshToke
     void shortcutPreferences.getItem(key).then((raw) => { if (active) setLegacy(parseShortcutPins(raw)); }).catch(() => { /* Device storage is optional; cloud pins remain available. */ });
     return () => { active = false; generation.current++; };
   }, [key]);
+  useEffect(() => { if (expandRequest > 0) setOpen(true); }, [expandRequest]);
   useEffect(() => {
     let active = true;
     if (!userId || userId === 'anonymous' || busyRef.current) return;

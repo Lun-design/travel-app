@@ -71,17 +71,17 @@ describe('trip detail responsive layout', () => {
     expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
   });
 
-  it('keeps the desktop hero subtitle padded and the header mascot aligned', () => {
+  it('keeps compact header text truncated and the mascot aligned', () => {
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     const header = readFileSync(projectFile('src', 'components', 'trip-detail', 'TripDetailHeader.tsx'), 'utf8');
 
-    expect(panel).toContain('ellipsizeMode="tail"');
-    expect(panel).toContain('daySubtitle');
-    expect(panel).toContain('paddingHorizontal: 16');
-    expect(panel).toContain('paddingVertical: 4');
-    expect(panel).toContain("color: '#F5F5F4'");
+    expect(header).toContain('ellipsizeMode="tail"');
+    expect(header).toContain('numberOfLines={1}');
+    expect(header).toContain('Math.min(mascotSize, 44)');
+    expect(panel).toContain('<DayTabs dense');
+    expect(panel).toContain("dateStrip: { flex: 1, minWidth: 0 }");
     expect(header).toContain("alignSelf: 'center'");
-    expect(header).toContain('marginRight: 24');
+    expect(header).toContain('marginRight: 4');
   });
 
   it('keeps transport and timeline controls visually lightweight on mobile', () => {
@@ -99,16 +99,13 @@ describe('trip detail responsive layout', () => {
     expect(native).not.toContain('DraggableFlatList');
   });
 
-  it('uses the coffee hero palette and clear card-to-transport rhythm', () => {
+  it('uses coffee active dates and clear card-to-transport rhythm', () => {
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const detail = readFileSync(projectFile('src', 'app', 'trips', '[id].tsx'), 'utf8');
 
-    expect(panel).toContain("backgroundColor: '#8C6D58'");
-    expect(panel).toContain("color: '#FFFFFF'");
-    expect(panel).toContain("color: '#F5F5F4'");
-    expect(panel).toContain("backgroundColor: pressed ? 'rgba(255,255,255,0.2)'");
-    expect(panel).toContain(": 'rgba(255,255,255,0.1)'");
+    expect(panel).toContain('accentColor={DAY_ACTIVE_COLOR}');
+    expect(panel).not.toContain('dayHeroStyle');
     expect(detail).toContain("theme.isDark ? theme.colors.background : '#F7F5F0'");
     expect(timeline).toContain("borderTopColor: 'rgba(74,62,61,0.15)'");
     expect(timeline).toContain('marginTop: 4');
@@ -216,13 +213,14 @@ describe('trip detail responsive layout', () => {
     expect(timeline).toContain('導航路線');
   });
 
-  it('lays out the trip header as title and metadata rows with safe-area padding', () => {
+  it('lays out a compact trip header with a management menu and safe-area padding', () => {
     const detail = readTripDetailSources();
 
     expect(detail).toContain("import { useSafeAreaInsets } from 'react-native-safe-area-context';");
     expect(detail).toContain('const insets = useSafeAreaInsets();');
     expect(detail).toContain('styles.titleRow');
-    expect(detail).toContain('styles.metaRow');
+    expect(detail).toContain('styles.titleCopy');
+    expect(detail).toContain('開啟行程選單');
     expect(detail).toContain('paddingTop: insets.top');
     expect(detail).toContain('paddingBottom: 22 + insets.bottom');
     expect(detail).toContain('bottom: layout.fabBottom + insets.bottom');

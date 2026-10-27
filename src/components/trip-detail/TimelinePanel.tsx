@@ -169,13 +169,11 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     }
   }
   const { width, height } = useWindowDimensions();
-  const firstAddressLabel = visibleItems[0]?.address?.split(/[，,]/)[0]?.trim();
-  const heroLabel = (firstAddressLabel && /[\u3400-\u9fff]/.test(firstAddressLabel))
-    ? firstAddressLabel
-    : (trip.destination && /[\u3400-\u9fff]/.test(trip.destination) ? trip.destination : `Day ${day} 行程`);
   return <>
-    <View style={[styles.dayHeader, dayHeroStyle]}><View style={{ flex: 1 }}><Text style={[styles.dayTitle, { fontSize: 22, letterSpacing: 1.2, color: '#FFFFFF' }]}>DAY {day}</Text><Text numberOfLines={1} ellipsizeMode="tail" style={styles.daySubtitle}>{heroLabel}</Text></View><View style={styles.dayHeaderActions}><Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={({ pressed }) => [styles.moreButton, { backgroundColor: pressed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)', borderColor: 'transparent', borderWidth: 0 }]} onPress={() => setMoreVisible(true)}><Text style={[styles.moreButtonText, { color: '#FFFFFF' }]}>···</Text></Pressable></View></View>
-    <DayTabs days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} />
+    <View style={styles.dayNavigation}>
+      <View style={styles.dateStrip}><DayTabs dense days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} /></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={styles.moreButton} onPress={() => setMoreVisible(true)}><Text style={styles.moreButtonText}>···</Text></Pressable>
+    </View>
     <TodayQuickActions trip={trip} day={day} items={items} vouchers={vouchers ?? []} onDayChange={onDayChange} onVoucher={(voucher) => onFocusedVoucher?.(voucher)} />
     <DashboardMetricsBar metrics={metrics} totalEstimatedCost={totalEstimatedCost} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />
     {showOptimizationSuggestion ? <Text accessibilityRole="text" style={styles.optimizationSuggestion}>{conflictMinutes > 0 ? `⚠️ 今日有 ${conflictMinutes} 分鐘時間衝突，建議最佳化路線` : '🚗 今日交通時間較長，建議最佳化路線'}</Text> : null}
@@ -202,32 +200,11 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   </>;
 }
 
-const dayHeroStyle = {
-  width: '100%',
-  flexDirection: 'row' as const,
-  alignItems: 'center' as const,
-  justifyContent: 'space-between' as const,
-  gap: 8,
-  marginBottom: 10,
-  flexWrap: 'wrap' as const,
-  borderRadius: 16,
-  paddingHorizontal: 20,
-  paddingVertical: 16,
-  backgroundColor: '#8C6D58',
-  shadowColor: '#000000',
-  shadowOpacity: 0.05,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 2 },
-  elevation: 1,
-} as const;
-
 const styles = StyleSheet.create({
+  dayNavigation: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  dateStrip: { flex: 1, minWidth: 0 },
   mobileTimeline: { width: '100%', paddingVertical: 12 },
   mobileFab: { position: 'relative', alignSelf: 'flex-end', marginTop: 16 },
-  dayHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
-  dayHeaderActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, flexShrink: 1 },
-  dayTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
-  daySubtitle: { maxWidth: '100%', paddingHorizontal: 16, paddingVertical: 4, color: '#F5F5F4', fontSize: 14, fontWeight: '700', marginTop: 3, flexShrink: 1 },
   optimizeButton: { width: '100%', minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 0, borderColor: 'transparent', backgroundColor: '#F1F5F9', paddingHorizontal: 10 },

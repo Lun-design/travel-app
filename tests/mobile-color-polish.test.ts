@@ -31,13 +31,13 @@ describe('mobile visual color polish', () => {
     expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
   });
 
-  it('renders a coffee day hero and colored metrics icons', () => {
+  it('renders compact coffee date controls and colored metrics icons', () => {
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     const metrics = readFileSync(projectFile('src', 'components', 'DashboardMetricsBar.tsx'), 'utf8');
-    expect(panel).toContain("backgroundColor: '#8C6D58'");
-    expect(panel).toContain("color: '#FFFFFF'");
-    expect(panel).toContain("color: '#F5F5F4'");
-    expect(panel).toContain("backgroundColor: pressed ? 'rgba(255,255,255,0.2)'");
+    expect(panel).toContain('styles.dayNavigation');
+    expect(panel).toContain('<DayTabs dense');
+    expect(panel).toContain('accentColor={DAY_ACTIVE_COLOR}');
+    expect(panel).not.toContain('dayHeroStyle');
     expect(panel).toContain("backgroundColor: '#F1F5F9'");
     expect(metrics).toContain('iconColor');
     expect(metrics).toContain('#DC4A3D');

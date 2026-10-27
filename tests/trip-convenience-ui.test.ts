@@ -53,6 +53,16 @@ describe('preparation overview', () => {
   });
 });
 describe('important information', () => {
+  it('opens important details on an explicit shortcut request without reloading shared pins', async () => {
+    mocks.get.mockResolvedValue('[]'); mocks.cloud.mockResolvedValue([{ id: 'one', kind: 'hotel' }]); mocks.set.mockResolvedValue(undefined);
+    let expandRequest = 0;
+    const h = harness(() => TripInfoShortcuts({ tripId: 'trip', userId: 'user', items: [item], expandRequest })); h.render();
+    await vi.waitFor(() => expect(text(h.render())).toContain('1 筆行程共用釘選'));
+    expect(nodes(h.render()).some(n => n.props.accessibilityLabel === '導航 集合地點')).toBe(false);
+    const reads = mocks.cloud.mock.calls.length; expandRequest++; h.render();
+    expect(nodes(h.render()).some(n => n.props.accessibilityLabel === '導航 集合地點')).toBe(true); expect(mocks.cloud).toHaveBeenCalledTimes(reads);
+    h.unmount();
+  });
   it('pins an explicit selection, copies and navigates using the same latest record', async () => {
     mocks.get.mockResolvedValue('[]'); mocks.set.mockResolvedValue(undefined);
     let cloud: unknown[] = [];

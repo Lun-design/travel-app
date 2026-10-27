@@ -1,9 +1,11 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { harness, press } from './helpers/interaction-harness';
 import { getAppTheme } from '../lib/theme';
 import type { Trip, TripMemberWithProfile } from '../lib/trips';
 
 vi.mock('react-native', () => ({
+  Platform: { OS: 'web' },
   View: 'div', Text: 'span', Pressable: 'button', ScrollView: 'section',
   Modal: 'dialog', StyleSheet: { create: (styles: unknown) => styles },
 }));
@@ -34,11 +36,14 @@ const members: TripMemberWithProfile[] = ['owner', 'editor', 'viewer'].map((role
 }));
 
 describe('trip member avatar interactions', () => {
+  let cleanup: (() => void) | undefined;
+  afterEach(() => { cleanup?.(); cleanup = undefined; });
   it('lets overflow members open their details through the all-members list', () => {
-    let selected: string | null = null;
-    vi.spyOn(React, 'useState').mockImplementation(() => [selected, (value: unknown) => { selected = value as string | null; }] as ReturnType<typeof React.useState>);
     const many = [...members, ...Array.from({ length: 4 }, (_, i) => ({ ...members[1], user_id: `extra-${i}`, profile: { ...members[1].profile!, display_name: `extra-${i}` } }))];
-    const render = () => TripDetailHeader({ trip, members: many, userId: 'owner', theme: getAppTheme('light'), themeMode: 'light', mascotSize: 40, insets: { top: 0, bottom: 0, left: 0, right: 0 }, onBack: vi.fn(), onInvite: vi.fn(), onThemeModeChange: vi.fn(), onSettings: vi.fn(), onProfile: vi.fn() });
+    const h = harness(() => TripDetailHeader({ trip, members: many, userId: 'owner', theme: getAppTheme('light'), themeMode: 'light', mascotSize: 40, insets: { top: 0, bottom: 0, left: 0, right: 0 }, onBack: vi.fn(), onInvite: vi.fn(), onThemeModeChange: vi.fn(), onSettings: vi.fn(), onProfile: vi.fn() }));
+    cleanup = h.unmount;
+    const render = h.render;
+    press(render(), '開啟行程選單');
     const overflow = elements(render()).find((element) => element.props.accessibilityLabel === '查看全部旅伴');
     expect(overflow?.props.onPress).toBeTypeOf('function');
     overflow!.props.onPress!();
@@ -48,10 +53,11 @@ describe('trip member avatar interactions', () => {
     expect(elements(render()).find((element) => element.props.member?.user_id === 'extra-3')?.props.member?.profile?.display_name).toBe('extra-3');
   });
   it.each(['owner', 'editor', 'viewer'])('opens the correct member details for %s and closes again', (id) => {
-    let selected: string | null = null;
-    vi.spyOn(React, 'useState').mockImplementation(() => [selected, (value: unknown) => { selected = value as string | null; }] as ReturnType<typeof React.useState>);
     const onProfile = vi.fn();
-    const render = () => TripDetailHeader({ trip, members, userId: 'owner', theme: getAppTheme('light'), themeMode: 'light', mascotSize: 40, insets: { top: 0, bottom: 0, left: 0, right: 0 }, onBack: vi.fn(), onInvite: vi.fn(), onThemeModeChange: vi.fn(), onSettings: vi.fn(), onProfile });
+    const h = harness(() => TripDetailHeader({ trip, members, userId: 'owner', theme: getAppTheme('light'), themeMode: 'light', mascotSize: 40, insets: { top: 0, bottom: 0, left: 0, right: 0 }, onBack: vi.fn(), onInvite: vi.fn(), onThemeModeChange: vi.fn(), onSettings: vi.fn(), onProfile }));
+    cleanup = h.unmount;
+    const render = h.render;
+    press(render(), '開啟行程選單');
     const avatar = elements(render()).find((element) => element.props.accessibilityLabel === `查看${id}的資料`);
     expect(avatar?.props.onPress).toBeTypeOf('function');
     avatar!.props.onPress!();
@@ -62,7 +68,7 @@ describe('trip member avatar interactions', () => {
       expect(onProfile).toHaveBeenCalledOnce();
     } else expect(modal?.props.onEdit).toBeUndefined();
     modal!.props.onClose!();
-    expect(selected).toBeNull();
+    expect(elements(render()).some(element => Boolean(element.props.member))).toBe(false);
   });
 });
 
