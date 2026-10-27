@@ -27,8 +27,8 @@ describe('mobile visual color polish', () => {
     expect(theme).toContain("MOBILE_ACCENT_COFFEE = '#8C6D58'");
     expect(theme).toContain("DAY_ACTIVE_COLOR = '#8C6D58'");
     expect(tabs).toContain('accentColor?: string');
-    expect(tabs).toContain('const activeColor = accentColor ?? DAY_ACTIVE_COLOR');
-    expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
+    expect(tabs).toContain('accentColor ?? DAY_ACTIVE_COLOR');
+    expect(detail).toContain('backgroundColor: getTripJournalPalette(theme).accent');
   });
 
   it('renders compact coffee date controls and colored metrics icons', () => {
@@ -70,11 +70,11 @@ describe('mobile visual color polish', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const mascot = readFileSync(projectFile('src', 'components', 'PuppyMascot.tsx'), 'utf8');
     expect(timeline).toContain('navigationPuppyId');
-    expect(timeline).toContain('<PuppyMascot puppy={navigationPuppyId(item.category)} size={20}');
+    expect(timeline).toContain('<PuppyMascot puppy={navigationPuppyId(item.category, segment?.mode)} size={28}');
     expect(timeline).toContain('navigationButton');
     expect(timeline).toContain('navigationPuppy');
     expect(timeline).not.toContain('routeLinkPuppy');
-    expect(timeline).toContain("return categoryPuppies[category.trim().toLowerCase()] ?? '-8'");
+    expect(timeline).toContain('return getNavigationPuppy(category, mode)');
     expect(timeline).not.toContain('disabled={!navigationUrl}');
     expect(timeline).toContain('getGoogleMapsNavigationUrl');
     expect(timeline).toContain('opacity: 1');
@@ -92,7 +92,7 @@ describe('mobile visual color polish', () => {
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     expect(tabs).toContain('borderWidth: 0');
-    expect(tabs).toContain("const inactiveColor = '#94A3B8'");
+    expect(tabs).toContain("const inactiveColor = dense ? palette.muted : '#94A3B8'");
     expect(panel).toContain('optimizeInlineButton: { minHeight: 34');
     expect(panel).toContain("backgroundColor: '#F1F5F9'");
     expect(panel).toContain('borderWidth: 0');

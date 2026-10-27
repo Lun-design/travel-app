@@ -15,6 +15,7 @@ vi.mock('@/lib/profiles', () => ({
   getProfileDisplayName: (profile: { display_name?: string; full_name?: string } | null, fallback: string) => profile?.display_name || profile?.full_name || fallback,
 }));
 vi.mock('@/lib/theme', async () => await import('../lib/theme'));
+vi.mock('@/lib/trip-journal', async () => import('../lib/trip-journal'));
 import { TripDetailHeader } from '../src/components/trip-detail/TripDetailHeader';
 import { MemberProfileModal } from '../src/components/trip-detail/MemberProfileModal';
 

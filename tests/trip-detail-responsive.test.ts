@@ -61,14 +61,14 @@ describe('trip detail responsive layout', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const theme = readFileSync(projectFile('lib', 'theme.ts'), 'utf8');
 
-    expect(detail).toContain("backgroundColor: theme.isDark ? theme.colors.background : '#F7F5F0'");
+    expect(detail).toContain('backgroundColor: getTripJournalPalette(theme).page');
     expect(timeline).toContain("backgroundColor: '#FFFFFF'");
     expect(timeline).toContain('borderWidth: 0');
     expect(timeline).toContain('shadowOpacity: 0.05');
     expect(theme).toContain("export const MOBILE_ACCENT_COFFEE = '#8C6D58'");
     const panel = readFileSync(projectFile('src', 'components', 'trip-detail', 'TimelinePanel.tsx'), 'utf8');
     expect(panel).toContain('accentColor={DAY_ACTIVE_COLOR}');
-    expect(detail).toContain('backgroundColor: layout.compact ? MOBILE_ACCENT_COFFEE : theme.colors.primary');
+    expect(detail).toContain('backgroundColor: getTripJournalPalette(theme).accent');
   });
 
   it('keeps compact header text truncated and the mascot aligned', () => {
@@ -77,11 +77,11 @@ describe('trip detail responsive layout', () => {
 
     expect(header).toContain('ellipsizeMode="tail"');
     expect(header).toContain('numberOfLines={1}');
-    expect(header).toContain('Math.min(mascotSize, 44)');
+    expect(header).toContain('size={compact ? 76 : 106}');
     expect(panel).toContain('<DayTabs dense');
     expect(panel).toContain("dateStrip: { flex: 1, minWidth: 0 }");
     expect(header).toContain("alignSelf: 'center'");
-    expect(header).toContain('marginRight: 4');
+    expect(header).toContain('compactActions');
   });
 
   it('keeps transport and timeline controls visually lightweight on mobile', () => {
@@ -106,8 +106,8 @@ describe('trip detail responsive layout', () => {
 
     expect(panel).toContain('accentColor={DAY_ACTIVE_COLOR}');
     expect(panel).not.toContain('dayHeroStyle');
-    expect(detail).toContain("theme.isDark ? theme.colors.background : '#F7F5F0'");
-    expect(timeline).toContain("borderTopColor: 'rgba(74,62,61,0.15)'");
+    expect(detail).toContain('getTripJournalPalette(theme).page');
+    expect(timeline).toContain('borderTopColor: journal.line');
     expect(timeline).toContain('marginTop: 4');
     expect(timeline).toContain('marginBottom: 12');
   });
@@ -299,8 +299,11 @@ describe('trip detail responsive layout', () => {
 
     expect(detail).toContain('useColorScheme');
     expect(detail).toContain('getThemeForMode');
-    expect(detail).toContain('theme.colors.background');
-    expect(detail).toContain('theme.colors.tabTrack');
+    expect(detail).toContain('getTripJournalPalette(theme)');
+    expect(detail).toContain('palette.line');
+    const palette = readFileSync(projectFile('lib', 'trip-journal.ts'), 'utf8');
+    expect(palette).toContain('theme.isDark');
+    expect(palette).toContain('page: theme.colors.background');
     expect(detail).toContain('themeMode');
     expect(detail).toContain('loadThemeMode');
     expect(detail).toContain('saveThemeMode');

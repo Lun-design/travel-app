@@ -1,9 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
-import type { PuppyId } from '@/lib/puppy';
+import type { PuppyArtId } from '@/lib/puppy';
 
-const sources: Record<PuppyId, ImageSourcePropType> = {
+const sources: Record<PuppyArtId, ImageSourcePropType> = {
+  'journal-together': require('../assets/images/puppy/journal-together.gif'),
+  'journal-reading': require('../assets/images/puppy/journal-reading.gif'),
+  'journal-drive': require('../assets/images/puppy/journal-drive.gif'),
   '-1': require('../assets/images/puppy/-1.gif'),
   '-2': require('../assets/images/puppy/-2.gif'),
   '-3': require('../assets/images/puppy/-3.gif'),
@@ -18,7 +21,7 @@ const sources: Record<PuppyId, ImageSourcePropType> = {
 };
 
 export function PuppyMascot({ puppy, size = 32, style, accessibilityLabel }: {
-  puppy: PuppyId;
+  puppy: PuppyArtId;
   size?: number;
   style?: StyleProp<ImageStyle>;
   accessibilityLabel?: string;

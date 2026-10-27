@@ -11,9 +11,11 @@ vi.mock('@/components/PuppyMascot', () => ({ PuppyMascot: 'mascot' }));
 vi.mock('@/components/ProfileAvatar', () => ({ ProfileAvatar: 'avatar' }));
 vi.mock('@/lib/profiles', () => ({ getProfileDisplayName: (p: { display_name?: string } | null, fallback: string) => p?.display_name || fallback }));
 vi.mock('@/lib/theme', async () => import('../lib/theme'));
+vi.mock('@/lib/trip-journal', async () => import('../lib/trip-journal'));
 vi.mock('@/lib/trip-dates', async () => import('../lib/trip-dates'));
 import { TripDetailHeader } from '../src/components/trip-detail/TripDetailHeader';
 import { DayTabs } from '../src/components/DayTabs';
+import { TripDetailTabs } from '../src/components/trip-detail/TripDetailTabs';
 const theme = getAppTheme('light');
 const trip = { id: 't', title: '很長的日本旅行名稱', destination: '日本', start_date: '2026-10-23', end_date: '2026-10-28', created_by: 'u' } as Trip;
 const members = ['u', 'friend'].map((id, index) => ({ user_id: id, trip_id: 't', role: index ? 'editor' : 'owner', profile: { display_name: id } })) as TripMemberWithProfile[];
@@ -53,7 +55,22 @@ describe('compact trip header', () => {
     expect(named(s.h.render(), '分享行程')).toBeUndefined(); expect(named(s.h.render(), '邀請旅伴')).toBeUndefined();
     expect(named(s.h.render(), '開啟行程選單')).toBeDefined();
     const title = nodes(s.h.render()).find(n => text(n) === trip.title && n.type === 'span')!; expect(title.props.numberOfLines).toBe(1);
-    expect(nodes(s.h.render()).filter(n => n.type === 'mascot').every(n => Number(n.props.size) <= 44)).toBe(true);
+    expect(nodes(s.h.render()).find(n => n.type === 'mascot')?.props.size).toBe(76);
+  });
+  it.each([true, false])('keeps large themed artwork non-interactive and all controls at least 44px (compact=%s)', compact => {
+    const s = header(); s.set({ compact }); const tree = s.h.render();
+    const mascot = nodes(tree).find(n => n.type === 'mascot')!;
+    expect(mascot?.props.puppy).toBe('journal-together');
+    expect(mascot?.props.size).toBe(compact ? 76 : 106);
+    const decoration = nodes(tree).find(n => n.props.testID === 'journal-header-art')!;
+    expect(decoration?.props.pointerEvents).toBe('none');
+    expect(decoration?.props.accessibilityElementsHidden).toBe(true);
+    for (const label of ['返回我的行程', '搜尋此行程', '開啟行程選單']) {
+      expect(merged(named(tree, label)!.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(merged(named(tree, label)!.props.style).width).toBeGreaterThanOrEqual(44);
+    }
+    // At 320px, 12px page insets and these fixed parts leave readable title space.
+    if (compact) expect(320 - 24 - 44 - 76 - 44 - 18).toBeGreaterThanOrEqual(110);
   });
   it.each(['邀請旅伴', '分享行程', '行程設定'])('retains the original %s callback and closes the menu before it opens another modal', label => {
     const s = header(); press(s.h.render(), '開啟行程選單'); press(s.h.render(), label);
@@ -81,6 +98,25 @@ describe('compact trip header', () => {
   });
 });
 describe('single dense date navigation', () => {
+  it('uses readable warm date text without changing the day callback', () => {
+    const tree = DayTabs({ days: [1, 2], selected: 1, onChange: vi.fn(), dense: true, themeMode: 'light' });
+    const inactive = named(tree, 'Day 2 DAY 2 DAY 2')!;
+    const label = nodes(inactive).find(n => n.type === 'span')!;
+    expect(merged(label.props.style).color).toBe('#7A6B5E');
+  });
+  it('keeps the active date legible against a light accent in dark mode', () => {
+    const tree = DayTabs({ days: [1], selected: 1, onChange: vi.fn(), dense: true, themeMode: 'dark' });
+    const label = nodes(named(tree, 'Day 1 DAY 1 DAY 1')).find(n => n.type === 'span')!;
+    expect(merged(label.props.style).color).toBe(getAppTheme('dark').colors.background);
+  });
+  it('keeps functional tabs at 44px with their original destinations and selected state', () => {
+    const onChange = vi.fn(); const tree = TripDetailTabs({ value: 'timeline', onChange, theme });
+    const tabs = nodes(tree).filter(n => n.props.accessibilityRole === 'tab');
+    expect(tabs).toHaveLength(5);
+    expect(tabs[0].props.accessibilityState).toMatchObject({ selected: true });
+    tabs.forEach(tab => expect(merged(tab.props.style).height).toBeGreaterThanOrEqual(44));
+    (tabs[3].props.onPress as () => void)(); expect(onChange).toHaveBeenCalledExactlyOnceWith('documents');
+  });
   it('offers a <=56px date strip with 44px targets and exact original day callbacks', () => {
     const onChange = vi.fn(); const tree = DayTabs({ days: [1, 2, 3], selected: 2, startDate: '2026-10-31', onChange, dense: true });
     const scroll = nodes(tree).find(n => n.type === 'section')!; expect(merged(scroll.props.style).height).toBeLessThanOrEqual(56);
@@ -104,6 +140,7 @@ describe('travel information disclosure', () => {
     const tree = h.render(); expect(named(tree, '展開旅程資訊')?.props.accessibilityState).toMatchObject({ expanded: false });
     const body = nodes(tree).find(n => n.props.testID === 'trip-travel-info-body')!; expect(merged(body.props.style).display).toBe('none'); expect(body.props.accessibilityElementsHidden).toBe(true);
     expect(nodes(body).some(n => n.props.testID === 'preparation')).toBe(true); expect(nodes(body).some(n => n.props.testID === 'shortcuts')).toBe(true);
+    expect(nodes(tree).find(n => n.type === 'mascot')?.props.puppy).toBe('journal-reading');
   });
   it('opens and closes the same panel instances and provides a one-click important-information request', async () => {
     const { TripTravelInfo } = await info(); const preparation = React.createElement('panel', { testID: 'preparation' });

@@ -7,7 +7,8 @@ import { PuppyMascot } from '@/components/PuppyMascot';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import type { Profile } from '@/lib/profiles';
 import { getProfileDisplayName } from '@/lib/profiles';
-import { EDITORIAL_COLORS } from '@/lib/theme';
+import { getTripJournalPalette } from '@/lib/trip-journal';
+import { JournalIcon } from './JournalIcon';
 import { MemberProfileModal } from './MemberProfileModal';
 import { MemberListModal } from './MemberListModal';
 
@@ -32,7 +33,8 @@ type Props = {
 
 const HEADER_AVATAR_LIMIT = 4;
 
-export function TripDetailHeader({ trip, members, userId, theme, themeMode, mascotSize, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, onSearch, profile, onProfile, compact = false }: Props) {
+export function TripDetailHeader({ trip, members, userId, theme, themeMode, insets, onBack, onInvite, onThemeModeChange, onSettings, onShare, onSearch, profile, onProfile, compact = false }: Props) {
+  const palette = getTripJournalPalette(theme);
   const [selectedMemberId, setSelectedMemberId] = React.useState<string | null>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const pendingAction = React.useRef<(() => void) | null>(null);
@@ -56,21 +58,24 @@ export function TripDetailHeader({ trip, members, userId, theme, themeMode, masc
   }
   function showMember(id: string) { act(() => setSelectedMemberId(id)); }
   return <View style={[styles.header, compact && styles.compactHeader, { paddingTop: insets.top }]}>
-    <View style={styles.titleRow}>
-      <Pressable accessibilityRole="button" accessibilityLabel="返回我的行程" style={styles.iconButton} onPress={onBack}><Text style={[styles.back, { color: theme.colors.primary }]}>‹</Text></Pressable>
+    <View style={[styles.titleRow, { borderBottomColor: palette.line }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="返回我的行程" style={styles.iconButton} onPress={onBack}><JournalIcon name="back" color={palette.accent} /></Pressable>
       <View style={styles.titleCopy}>
-        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.title, { color: theme.colors.text }]}>{trip.title}</Text>
-        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.destination, { color: theme.colors.muted }]}>{trip.destination} · {trip.start_date} – {trip.end_date}</Text>
+        <Text numberOfLines={1} style={[styles.kicker, { color: palette.accentText }]}>小狗的旅行手帳</Text>
+        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.title, compact && styles.compactTitle, { color: palette.ink }]}>{trip.title}</Text>
+        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.destination, { color: palette.muted }]}>{trip.destination} · {trip.start_date} – {trip.end_date}</Text>
       </View>
-      {!compact ? <PuppyMascot puppy="-11" size={Math.min(mascotSize, 44)} style={styles.mascot} accessibilityLabel="旅程裝飾" /> : null}
-      {onSearch ? <Pressable accessibilityRole="button" accessibilityLabel="搜尋此行程" style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]} onPress={onSearch}><Text style={[styles.searchIcon, { color: theme.colors.primary }]}>⌕</Text></Pressable> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel="開啟行程選單" accessibilityState={{ expanded: menuOpen }} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]} onPress={() => setMenuOpen(true)}><Text style={[styles.searchIcon, { color: theme.colors.primary }]}>⋯</Text></Pressable>
+      <View testID="journal-header-art" pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.mascot}><PuppyMascot puppy="journal-together" size={compact ? 76 : 106} /></View>
+      <View style={[styles.headerActions, compact && styles.compactActions]}>
+        {onSearch ? <Pressable accessibilityRole="button" accessibilityLabel="搜尋此行程" style={[styles.iconButton, { backgroundColor: palette.paper }]} onPress={onSearch}><JournalIcon name="search" color={palette.accent} /></Pressable> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel="開啟行程選單" accessibilityState={{ expanded: menuOpen }} style={[styles.iconButton, { backgroundColor: palette.paper }]} onPress={() => setMenuOpen(true)}><JournalIcon name="more" color={palette.accent} /></Pressable>
+      </View>
     </View>
     <Modal testID="trip-management-menu" visible={menuOpen} transparent animationType="fade" onDismiss={finishDismissal} onRequestClose={() => setMenuOpen(false)}>
       {menuOpen ? <View style={styles.menuOverlay}>
         <Pressable accessibilityRole="button" accessibilityLabel="關閉行程選單背景" style={styles.backdrop} onPress={() => setMenuOpen(false)} />
         <View accessibilityViewIsModal style={[styles.menu, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.menuHeading}><Text accessibilityRole="header" style={[styles.menuTitle, { color: theme.colors.text }]}>行程選單</Text><Pressable accessibilityRole="button" accessibilityLabel="關閉行程選單" style={styles.iconButton} onPress={() => setMenuOpen(false)}><Text style={{ color: theme.colors.text, fontSize: 22 }}>×</Text></Pressable></View>
+          <View style={styles.menuHeading}><Text accessibilityRole="header" style={[styles.menuTitle, { color: theme.colors.text }]}>行程選單</Text><Pressable accessibilityRole="button" accessibilityLabel="關閉行程選單" style={styles.iconButton} onPress={() => setMenuOpen(false)}><JournalIcon name="close" color={theme.colors.text} /></Pressable></View>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.menuContent}>
             <Text style={{ color: theme.colors.muted }}>{trip.destination} · {trip.start_date} – {trip.end_date}</Text>
             <Text style={[styles.menuLabel, { color: theme.colors.text }]}>旅伴（{members.length}）</Text>
@@ -95,13 +100,15 @@ export function TripDetailHeader({ trip, members, userId, theme, themeMode, masc
 const styles = StyleSheet.create({
   header: { width: '100%', maxWidth: '100%', marginBottom: 8, flexShrink: 0 },
   compactHeader: { marginBottom: 6 },
-  titleRow: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0, minHeight: 56 },
+  titleRow: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0, minHeight: 88, paddingBottom: 8, borderBottomWidth: 1 },
   titleCopy: { flex: 1, minWidth: 0 },
-  mascot: { flexShrink: 0, alignSelf: 'center', marginRight: 4 },
+  mascot: { flexShrink: 0, alignSelf: 'center' },
+  headerActions: { flexDirection: 'row', gap: 4, flexShrink: 0 },
+  compactActions: { flexDirection: 'column', gap: 0 },
   iconButton: { width: 44, minHeight: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  searchIcon: { fontSize: 24, fontWeight: '700' },
-  back: { color: EDITORIAL_COLORS.terracotta, fontWeight: '700', fontSize: 30 },
-  title: { fontSize: 22, fontWeight: '800' },
+  kicker: { fontSize: 9, fontWeight: '600', letterSpacing: 1, marginBottom: 3 },
+  title: { fontSize: 28, fontWeight: '700', letterSpacing: 0.8, fontFamily: Platform.OS === 'web' ? 'Georgia, "PMingLiU", serif' : undefined },
+  compactTitle: { fontSize: 22 },
   destination: { fontSize: 11, marginTop: 3 },
   members: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   memberButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
