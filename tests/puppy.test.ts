@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPuppyId, PUPPY_IDS } from '../lib/puppy';
+import { getTimelinePuppy, isPuppyId, PUPPY_IDS } from '../lib/puppy';
 
 describe('puppy mascot assets', () => {
   it('registers all eleven configured GIF identifiers', () => {
@@ -10,5 +10,11 @@ describe('puppy mascot assets', () => {
     expect(isPuppyId('-1')).toBe(true);
     expect(isPuppyId('-11')).toBe(true);
     expect(isPuppyId('-12')).toBe(false);
+  });
+
+  it('keeps a stop mascot stable regardless of its neighbors', () => {
+    const stopMascot = getTimelinePuppy('stop-42');
+
+    expect(Reflect.apply(getTimelinePuppy, null, ['stop-42', stopMascot])).toBe(stopMascot);
   });
 });

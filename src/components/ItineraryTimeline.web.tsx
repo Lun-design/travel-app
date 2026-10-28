@@ -44,10 +44,8 @@ export function ItineraryTimeline({
   const displayItems = incomingRevision !== parentRevision.current ? incomingItems : localItems;
   const timelinePuppies = useMemo(() => {
     const byId: Record<string, PuppyArtId> = {};
-    let previous: PuppyArtId | undefined;
     for (const item of displayItems) {
-      previous = getTimelinePuppy(item.id, previous);
-      byId[item.id] = previous;
+      byId[item.id] = getTimelinePuppy(item.id);
     }
     return byId;
   }, [displayItems]);

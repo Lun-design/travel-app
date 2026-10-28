@@ -17,12 +17,9 @@ function stableHash(value: string): number {
   return hash >>> 0;
 }
 
-/** Assign a stable art variant to a stop and avoid repeating its neighbor. */
-export function getTimelinePuppy(itemId: string, previousPuppy?: PuppyArtId): PuppyArtId {
-  const start = stableHash(itemId) % TIMELINE_PUPPY_ART.length;
-  const previous = previousPuppy ? TIMELINE_PUPPY_ART.indexOf(previousPuppy) : -1;
-  const index = start === previous ? (start + 1) % TIMELINE_PUPPY_ART.length : start;
-  return TIMELINE_PUPPY_ART[index];
+/** Assign art from the stop ID alone so reordering never changes its sticker. */
+export function getTimelinePuppy(itemId: string): PuppyArtId {
+  return TIMELINE_PUPPY_ART[stableHash(itemId) % TIMELINE_PUPPY_ART.length];
 }
 
 export function getNavigationPuppy(category: string, mode = 'DRIVING'): PuppyArtId {
