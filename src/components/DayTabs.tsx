@@ -1,4 +1,4 @@
-import React from 'react'; import { Pressable, ScrollView, StyleSheet, Text, useColorScheme } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react'; import { Pressable, ScrollView, StyleSheet, Text, useColorScheme } from 'react-native';
 import { DAY_ACTIVE_COLOR, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { tripDateForDay } from '@/lib/trip-dates';
 
@@ -6,7 +6,16 @@ type Props = { days: number[]; selected: number; onChange: (day: number) => void
 
 export function DayTabs({ days, selected, onChange, themeMode = 'system', startDate, accentColor, dense = false }: Props) {
   const theme = getThemeForMode(themeMode, useColorScheme());
-  return <ScrollView accessibilityRole="tablist" accessibilityLabel="行程日期" style={[styles.scroller, dense && styles.denseScroller]} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.wrap, dense && styles.denseWrap]}>{days.map((day) => {
+  const scrollRef = useRef<ScrollView>(null);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const selectedIndex = days.indexOf(selected);
+  const dayCount = days.length;
+  useEffect(() => {
+    if (!dense || viewportWidth <= 0 || selectedIndex < 0) return;
+    const tabCenter = selectedIndex * 88 + 40;
+    scrollRef.current?.scrollTo({ x: Math.max(0, tabCenter - viewportWidth / 2), animated: true });
+  }, [dayCount, dense, selectedIndex, viewportWidth]);
+  return <ScrollView ref={scrollRef} onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} accessibilityRole="tablist" accessibilityLabel="行程日期" style={[styles.scroller, dense && styles.denseScroller]} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.wrap, dense && styles.denseWrap]}>{days.map((day) => {
     const active = day === selected;
     const date = startDate ? tripDateForDay(startDate, day) : null;
     const dateValue = date ? new Date(`${date}T00:00:00Z`) : null;

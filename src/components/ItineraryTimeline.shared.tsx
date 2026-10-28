@@ -322,7 +322,7 @@ type TimelineCardProps = {
   timeContextLabel?: string;
   item: ItineraryItem;
   segment?: TimelineRouteSegment;
-  timelineMarkerPuppy?: PuppyArtId;
+  timelineMarkerPuppy: PuppyArtId;
   scheduled?: ScheduledItem;
   nextScheduled?: ScheduledItem;
   weather?: WeatherSummary;
@@ -544,7 +544,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, ti
   return (
     <View style={timelineCardContainerStyle}>
       <View style={styles.row}>
-        <View style={styles.rail}><View style={[styles.line, { width: 3 }]} />{timelineMarkerPuppy ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.timelinePuppyMarker}><PuppyMascot puppy={timelineMarkerPuppy} size={32} /></View> : <View style={styles.dot} />}</View>
+        <View style={styles.rail}><View style={[styles.line, { width: 3 }]} />{timelineMarkerPuppy ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.timelinePuppyMarker}><PuppyMascot puppy={timelineMarkerPuppy} size={44} /></View> : null}</View>
         <View style={[styles.card, { backgroundColor: journal.paper, borderWidth: 0, borderColor: 'transparent', borderTopWidth: 1, borderTopColor: journal.line, padding: 18, borderRadius: 16, marginBottom: 16, shadowColor: '#4A3E3D', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 1 }, active && styles.cardActive]}>
           {scheduled?.openingWarning ? <View style={styles.warningStack}>
             {scheduled?.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
@@ -736,10 +736,9 @@ const styles = {
     insertButton: { alignSelf: 'center', minHeight: 40, justifyContent: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: EDITORIAL_COLORS.terracotta, borderRadius: 999, paddingHorizontal: 14, marginTop: -4, marginBottom: 8 },
     insertButtonText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
     row: { width: '100%', flexDirection: 'row', minHeight: 130 },
-    rail: { width: 24, alignItems: 'center' },
-    timelinePuppyMarker: { zIndex: 2, width: 34, height: 34, alignItems: 'center', justifyContent: 'center', marginTop: -8 },
+    rail: { width: 46, alignItems: 'center' },
+    timelinePuppyMarker: { zIndex: 2, width: 46, height: 46, alignItems: 'center', justifyContent: 'center', marginTop: -8 },
     line: { position: 'absolute', top: 18, bottom: 0, width: 2, backgroundColor: EDITORIAL_COLORS.line },
-    dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 3, borderColor: EDITORIAL_COLORS.terracottaSoft, zIndex: 1 },
     card: { flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', marginBottom: 12, padding: 12, borderRadius: 14, borderWidth: 0, position: 'relative' },
     cardActive: { shadowOpacity: 0.08 },
     cardBody: { width: '100%', flexDirection: 'row', alignItems: 'stretch', gap: 10, position: 'relative' },
@@ -792,7 +791,7 @@ const styles = {
   transitionText: { color: '#746253', fontSize: 11, fontWeight: '600', flexShrink: 1 } as const,
   // Extend the rail through the compact transport pill so the timeline never
   // appears broken between two cards.
-  rail: { width: 34 } as const,
+  rail: { width: 46 } as const,
   line: { bottom: -30 } as const,
   // The category is rendered once as an outer, position-safe badge. The
   // legacy inline wrapper remains hidden to avoid duplicate labels.

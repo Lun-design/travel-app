@@ -18,6 +18,7 @@ import {
 } from './ItineraryTimeline.shared';
 import type { TravelMode } from '@/lib/routes';
 import { getTimeContextLabel } from '@/lib/time-context';
+import { getTimelinePuppy, type PuppyArtId } from '@/lib/puppy';
 
 export function ItineraryTimeline({
   items,
@@ -41,6 +42,15 @@ export function ItineraryTimeline({
   const incomingRevision = timelineItemsRevision(incomingItems);
   const parentRevision = useRef(incomingRevision);
   const displayItems = incomingRevision !== parentRevision.current ? incomingItems : localItems;
+  const timelinePuppies = useMemo(() => {
+    const byId: Record<string, PuppyArtId> = {};
+    let previous: PuppyArtId | undefined;
+    for (const item of displayItems) {
+      previous = getTimelinePuppy(item.id, previous);
+      byId[item.id] = previous;
+    }
+    return byId;
+  }, [displayItems]);
   const [routeModes, setRouteModes] = useState<Record<string, TravelMode>>({});
   const routeState = useRouteSegments(displayItems, routeModes, { tripId, day: displayItems[0]?.day_number });
   const routeEstimates = routeState.estimates;
@@ -133,7 +143,7 @@ export function ItineraryTimeline({
               vouchers={vouchers}
               onPreviewVoucher={onPreviewVoucher}
               segment={segmentsByFromId.get(item.id)}
-              timelineMarkerPuppy={index === 0 ? 'journal-dance' : undefined}
+              timelineMarkerPuppy={timelinePuppies[item.id]}
               onRouteModeChange={handleRouteModeChange}
               active={focusedItemId === item.id}
               onEdit={onEdit}

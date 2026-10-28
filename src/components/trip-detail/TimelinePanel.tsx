@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   dayNavigation: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   dateStrip: { flex: 1, minWidth: 0 },
   mobileTimeline: { width: '100%', paddingVertical: 12 },
-  mobileFab: { position: 'relative', alignSelf: 'flex-end', marginTop: 8, marginBottom: 8, borderRadius: 24 },
+  mobileFab: { position: 'relative', alignSelf: 'flex-end', marginTop: 4, marginBottom: 0, borderRadius: 24 },
   optimizeButton: { width: '100%', minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 0, borderColor: 'transparent', backgroundColor: '#F1F5F9', paddingHorizontal: 10 },
