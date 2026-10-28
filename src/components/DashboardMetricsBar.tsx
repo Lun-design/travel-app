@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { formatMetricDuration, type TimelineMetrics } from '@/lib/timeline-metrics';
 import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 
@@ -10,10 +10,10 @@ export function DashboardMetricsBar({ metrics, totalEstimatedCost, themeMode = '
   const summary = <>
     <Metric singleLine={dense} icon="📍" iconColor="#DC4A3D" label={`${metrics.spotCount} 個景點`} theme={theme} />
     {metrics.transportMinutes > 0 ? <Metric singleLine={dense} icon="🚗" iconColor="#16A34A" label={`交通 ${formatMetricDuration(metrics.transportMinutes)}`} theme={theme} /> : null}
-    {metrics.estimatedCost > 0 || (totalEstimatedCost ?? 0) > 0 ? <Metric singleLine={dense} icon="💰" iconColor="#B45309" label={totalEstimatedCost != null && totalEstimatedCost !== metrics.estimatedCost ? `預估本日 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })} · 全程 NT$ ${totalEstimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}` : `預估 NT$ ${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`} theme={theme} /> : null}
+    {metrics.estimatedCost > 0 || (totalEstimatedCost ?? 0) > 0 ? <Metric singleLine={dense} icon="💰" iconColor="#B45309" label={totalEstimatedCost != null && totalEstimatedCost !== metrics.estimatedCost ? `本日 NT$${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })} · 全程 NT$${totalEstimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}` : `預估 NT$${metrics.estimatedCost.toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`} theme={theme} /> : null}
     {action ? <View style={[styles.action, compact && styles.actionCompact]}>{action}</View> : null}
   </>;
-  return dense ? <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel="當天行程摘要，可左右滑動" style={styles.denseScroller} contentContainerStyle={[styles.container, styles.denseContainer]}>{summary}</ScrollView>
+  return dense ? <View accessibilityLabel="當天行程摘要" style={[styles.container, styles.denseContainer]}>{summary}</View>
     : <View accessibilityLabel="當天行程摘要" style={[styles.container, compact && styles.containerCompact]}>{summary}</View>;
 }
 
@@ -24,8 +24,7 @@ function Metric({ icon, iconColor, label, theme, singleLine = false }: { icon: s
 const styles = StyleSheet.create({
   container: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 14, paddingHorizontal: 2, paddingVertical: 3, marginBottom: 6 },
   containerCompact: { gap: 8, paddingVertical: 4 },
-  denseScroller: { height: 44, flexGrow: 0, marginBottom: 6 },
-  denseContainer: { flexWrap: 'nowrap', width: 'auto', marginBottom: 0, alignItems: 'center', gap: 12 },
+  denseContainer: { flexWrap: 'wrap', width: '100%', marginBottom: 6, alignItems: 'center', gap: 8, paddingHorizontal: 2 },
   singleLine: { flexShrink: 0 },
   metric: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, minWidth: 0, flexShrink: 1 },
   icon: { fontSize: 15 },

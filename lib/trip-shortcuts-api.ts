@@ -18,7 +18,7 @@ export async function listTripInfoPins(tripId: string): Promise<ShortcutPin[]> {
 
 /** Change only the selected pin: never overwrite another device's entire list. */
 export async function setTripInfoPin(tripId: string, pin: ShortcutPin, selected: boolean): Promise<void> {
-  if (!tripId.trim() || !pin.id.trim() || !['hotel', 'meeting'].includes(pin.kind)) throw new Error('無效的快捷資訊。');
+  if (!tripId.trim() || !pin.id.trim() || !['hotel', 'meeting', 'place'].includes(pin.kind)) throw new Error('無效的快捷資訊。');
   const table = supabase.from('trip_info_pins');
   const { error } = selected
     ? await table.upsert({ trip_id: tripId, item_id: pin.id, kind: pin.kind }, { onConflict: 'trip_id,item_id,kind', ignoreDuplicates: true })

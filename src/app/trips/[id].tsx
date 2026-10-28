@@ -41,9 +41,7 @@ import { preserveItineraryTimes } from '@/lib/route-optimization';
 import { updateItineraryItemImage } from '@/lib/itinerary-api';
 import { UndoToast } from '@/components/UndoToast';
 import { TripSearchModal } from '@/components/TripSearchModal';
-import { TripPreparationOverview } from '@/components/trip-detail/TripPreparationOverview';
 import { TripInfoShortcuts } from '@/components/trip-detail/TripInfoShortcuts';
-import { TripTravelInfo } from '@/components/trip-detail/TripTravelInfo';
 import { TripGettingStarted } from '@/components/trip-detail/TripGettingStarted';
 import { getTripSearchDestination, type TripSearchResult } from '@/lib/trip-search';
 import { positionNewItineraryItem } from '@/lib/itinerary-create';
@@ -92,7 +90,6 @@ export default function TripDetailScreen() {
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>(() => getNotificationPermission());
   const [refreshKey, setRefreshKey] = useState(0);
-  const [preparationRevision, setPreparationRevision] = useState(0);
   const [undoNotice, setUndoNotice] = useState('');
   useEffect(() => {
     if (!undoNotice) return;
@@ -368,9 +365,7 @@ export default function TripDetailScreen() {
   const compactSynced = layout.compact && isFullySynced({ isOffline: data.isOffline, pendingCount: data.pendingSyncCount, syncing: data.syncing, undoPending: data.undoPending, error: data.syncError, conflictCount: data.syncConflicts.length });
   const MainScroll = tab === 'timeline' || tab === 'places' ? ScrollView : View;
   const convenienceContent = <>
-    <TripTravelInfo key={`${data.userId}:${trip.id}`} theme={theme}
-      preparation={<TripPreparationOverview tripId={trip.id} userId={data.userId} vouchers={data.vouchers} theme={theme} revision={data.packingRevision + preparationRevision} onPacking={() => setTab('packing')} onDocuments={() => setTab('documents')} onVoucher={setPreviewVoucher} />}
-      shortcuts={expandRequest => <TripInfoShortcuts tripId={trip.id} userId={data.userId} items={data.items} timezone={trip.timezone} refreshToken={data.shortcutRevision} expandRequest={expandRequest} canEdit={data.members.some((member) => member.user_id === data.userId && ['owner', 'editor'].includes(member.role))} theme={theme} />} />
+    <TripInfoShortcuts key={`${data.userId}:${trip.id}`} tripId={trip.id} userId={data.userId} items={data.items} timezone={trip.timezone} refreshToken={data.shortcutRevision} canEdit={data.members.some((member) => member.user_id === data.userId && ['owner', 'editor'].includes(member.role))} theme={theme} />
     <TripGettingStarted isTripEmpty={!data.items.some((item) => !item.is_backup)} isDayEmpty={visibleItems.length === 0} day={day} theme={theme} onAdd={() => { setEditingItem(null); setInsertPosition(null); setItemModal(true); }} onImport={() => { setImportAction('import'); setImportVisible(true); }} onInvite={() => setInviteVisible(true)} />
   </>;
 
@@ -395,7 +390,7 @@ export default function TripDetailScreen() {
     <ItineraryItemModal timezone={trip.timezone} visible={itemModal} item={editingItem} day={day} insertPosition={insertPosition} tripStartDate={trip.start_date} tripEndDate={trip.end_date} tripId={tripId!} userId={data.userId} onClose={() => setItemModal(false)} onSave={saveItem} onSaveAndContinue={(input) => saveItem(input, true)} onRefresh={refreshAfterItemSave} onDelete={editingItem ? async () => { await data.removeItem(editingItem.id); setItemModal(false); } : undefined} />
     <ExpenseModal themeMode={themeMode} rateSnapshot={data.rateSnapshot} onLockRate={data.lockRate} visible={expenseModal} tripId={tripId!} expense={editingExpense} members={data.members} userId={data.userId} onClose={() => setExpenseModal(false)} onSave={saveExpense} />
     <InviteTripModal visible={inviteVisible} inviteCode={trip.invite_code} onClose={() => setInviteVisible(false)} />
-    <VoucherPreviewModal userId={data.userId} voucher={previewVoucher} onClose={() => { setPreviewVoucher(null); setPreparationRevision((v) => v + 1); }} />
+    <VoucherPreviewModal userId={data.userId} voucher={previewVoucher} onClose={() => setPreviewVoucher(null)} />
     <TripSearchModal visible={searchVisible} data={{ tripId: trip.id, items: data.items, vouchers: data.vouchers, expenses: data.expenses, places: data.places }} theme={theme} isOffline={data.isOffline} onClose={() => setSearchVisible(false)} onSelect={selectSearchResult} />
     <TripSettingsModal visible={settingsVisible} userId={data.userId} tripId={trip.id} startDate={trip.start_date} endDate={trip.end_date} departureTime={trip.default_departure_time} timezone={trip.timezone} themeMode={themeMode} onThemeModeChange={changeThemeMode} remindersEnabled={remindersEnabled} notificationPermission={notificationPermission} onReminderToggle={(enabled) => { void toggleReminders(enabled); }} onClose={() => setSettingsVisible(false)} onSave={async (changes) => { const updated = await data.saveTripSettings(changes); await data.reload(); setRefreshKey((current) => current + 1); setDay((current) => Math.min(current, tripDayNumbers(updated.start_date, updated.end_date).length)); }} />
     <UserProfileModal visible={profileVisible} profile={data.profile} themeMode={themeMode} onClose={() => setProfileVisible(false)} onSaved={(updated) => { data.setProfile(updated); data.setMembers((current) => current.map((member) => member.user_id === updated.id ? { ...member, profile: { ...member.profile, display_name: updated.display_name, full_name: updated.full_name, email: updated.email, avatar_url: updated.avatar_url } } : member)); }} />

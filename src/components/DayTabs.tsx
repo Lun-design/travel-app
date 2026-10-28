@@ -12,8 +12,10 @@ export function DayTabs({ days, selected, onChange, themeMode = 'system', startD
   const dayCount = days.length;
   useEffect(() => {
     if (!dense || viewportWidth <= 0 || selectedIndex < 0) return;
-    const tabCenter = selectedIndex * 88 + 40;
-    scrollRef.current?.scrollTo({ x: Math.max(0, tabCenter - viewportWidth / 2), animated: true });
+    const tabStride = 86;
+    const visibleTabs = Math.max(1, Math.floor((viewportWidth + 6) / tabStride));
+    const firstVisibleIndex = Math.max(0, selectedIndex - visibleTabs + 1);
+    scrollRef.current?.scrollTo({ x: firstVisibleIndex * tabStride, animated: true });
   }, [dayCount, dense, selectedIndex, viewportWidth]);
   return <ScrollView ref={scrollRef} onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} accessibilityRole="tablist" accessibilityLabel="行程日期" style={[styles.scroller, dense && styles.denseScroller]} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.wrap, dense && styles.denseWrap]}>{days.map((day) => {
     const active = day === selected;
@@ -27,4 +29,4 @@ export function DayTabs({ days, selected, onChange, themeMode = 'system', startD
     return <Pressable key={day} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={`Day ${day} ${weekday} ${dateLabel}`} onPress={() => onChange(day)} style={[styles.tab, dense && styles.denseTab, { backgroundColor: active ? activeColor : 'transparent', borderColor: 'transparent', borderWidth: 0 }, active && styles.activeTab]}>{dense ? <><Text numberOfLines={1} style={{ color: active ? activeTextColor : inactiveColor, fontWeight: '800', fontSize: 13 }}>Day {day}</Text><Text numberOfLines={1} style={{ color: active ? activeTextColor : inactiveColor, fontSize: 10 }}>{dateLabel} {weekday}</Text></> : <><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: active ? '800' : '700', letterSpacing: 1.1, fontSize: 11 }}>{weekday}</Text><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: active ? '900' : '700', fontSize: 15 }}>{dateLabel}</Text><Text style={{ color: active ? '#FFFFFF' : inactiveColor, fontWeight: '600', fontSize: 9 }}>Day {day}</Text></>}</Pressable>;
   })}</ScrollView>;
 }
-const styles = StyleSheet.create({ scroller: { height: 78, flexGrow: 0, alignSelf: 'stretch', marginTop: 6, marginBottom: 8 }, denseScroller: { height: 68, marginTop: 0, marginBottom: 0 }, denseTab: { width: 80, minWidth: 80, height: 50, paddingHorizontal: 3, paddingVertical: 4 }, wrap: { gap: 8, paddingVertical: 6, alignItems: 'center' }, denseWrap: { paddingVertical: 4 }, tab: { height: 66, minWidth: 76, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 12, borderWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 2 }, activeTab: { shadowColor: '#1f1f1f', shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } });
+const styles = StyleSheet.create({ scroller: { height: 78, flexGrow: 0, alignSelf: 'stretch', marginTop: 6, marginBottom: 8 }, denseScroller: { height: 68, marginTop: 0, marginBottom: 0 }, denseTab: { width: 80, minWidth: 80, height: 50, paddingHorizontal: 3, paddingVertical: 4 }, wrap: { gap: 8, paddingVertical: 6, alignItems: 'center' }, denseWrap: { gap: 6, paddingVertical: 4, paddingRight: 86 }, tab: { height: 66, minWidth: 76, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 12, borderWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 2 }, activeTab: { shadowColor: '#1f1f1f', shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } });
