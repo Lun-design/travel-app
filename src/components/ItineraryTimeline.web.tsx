@@ -12,7 +12,6 @@ import {
   routeDurationsForSchedule,
   timelineItemsRevision,
   TimelineCard,
-  timelineTransitionPuppy,
   useRouteSegments,
   useWeatherByItem,
   type ItineraryTimelineProps,
@@ -134,7 +133,7 @@ export function ItineraryTimeline({
               vouchers={vouchers}
               onPreviewVoucher={onPreviewVoucher}
               segment={segmentsByFromId.get(item.id)}
-              transitionPuppy={segmentsByFromId.has(item.id) ? timelineTransitionPuppy(index, displayItems[0]?.day_number ?? 1) : undefined}
+              timelineMarkerPuppy={index === 0 ? 'journal-dance' : undefined}
               onRouteModeChange={handleRouteModeChange}
               active={focusedItemId === item.id}
               onEdit={onEdit}

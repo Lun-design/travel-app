@@ -59,12 +59,6 @@ export type TimelineRouteSegment = RouteSegment & {
   loading?: boolean;
 };
 
-const ROUTE_ACCENT_PUPPIES: readonly PuppyArtId[] = ['journal-dance', 'journal-comfort', 'journal-hearts'];
-export function timelineTransitionPuppy(index: number, day = 1): PuppyArtId | undefined {
-  if (index % 2 !== 0) return undefined;
-  return ROUTE_ACCENT_PUPPIES[(Math.floor(index / 2) + day - 1) % ROUTE_ACCENT_PUPPIES.length];
-}
-
 /**
  * Keep the local optimistic timeline in step with parent/realtime updates.
  * Time is part of the revision so route fields refresh in the same render as
@@ -328,7 +322,7 @@ type TimelineCardProps = {
   timeContextLabel?: string;
   item: ItineraryItem;
   segment?: TimelineRouteSegment;
-  transitionPuppy?: PuppyArtId;
+  timelineMarkerPuppy?: PuppyArtId;
   scheduled?: ScheduledItem;
   nextScheduled?: ScheduledItem;
   weather?: WeatherSummary;
@@ -371,7 +365,7 @@ async function copyCardText(text: string, successMessage: string) {
   }
 }
 
-export const TimelineCard = React.memo(function TimelineCard({ item, segment, transitionPuppy, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, availableDays = [], onMoveToDay, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent, timeContextLabel }: TimelineCardProps) {
+export const TimelineCard = React.memo(function TimelineCard({ item, segment, timelineMarkerPuppy, scheduled, nextScheduled, weather, vouchers, onPreviewVoucher, active, onEdit, onDelete, onMoveUp, onMoveDown, availableDays = [], onMoveToDay, canMoveUp, canMoveDown, themeMode = 'system', onRouteModeChange, onUpdateImage, onShiftSubsequent, timeContextLabel }: TimelineCardProps) {
   const theme = getThemeForMode(themeMode, useColorScheme());
   const journal = getTripJournalPalette(theme);
   const { width: viewportWidth } = useWindowDimensions();
@@ -550,7 +544,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, tr
   return (
     <View style={timelineCardContainerStyle}>
       <View style={styles.row}>
-        <View style={styles.rail}><View style={[styles.line, { width: 3 }]} /><View style={styles.dot} /></View>
+        <View style={styles.rail}><View style={[styles.line, { width: 3 }]} />{timelineMarkerPuppy ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.timelinePuppyMarker}><PuppyMascot puppy={timelineMarkerPuppy} size={32} /></View> : <View style={styles.dot} />}</View>
         <View style={[styles.card, { backgroundColor: journal.paper, borderWidth: 0, borderColor: 'transparent', borderTopWidth: 1, borderTopColor: journal.line, padding: 18, borderRadius: 16, marginBottom: 16, shadowColor: '#4A3E3D', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 1 }, active && styles.cardActive]}>
           {scheduled?.openingWarning ? <View style={styles.warningStack}>
             {scheduled?.openingWarning ? <Text style={[styles.openingWarning, { backgroundColor: theme.colors.warningSurface, color: theme.colors.warningText }]}>⚠️ 注意：預計抵達時可能已過營業時間</Text> : null}
@@ -643,7 +637,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, tr
           <Text style={styles.transitionArrow}>➔</Text>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
         </View>
-        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}>{transitionPuppy ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><PuppyMascot puppy={transitionPuppy} size={34} /></View> : null}<Text numberOfLines={1} style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
+        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text numberOfLines={1} style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {/* 導航路線按鈕已整合至景點卡片，交通 Pill 保持單一資訊列。 */}
       </View> : null}
@@ -743,6 +737,7 @@ const styles = {
     insertButtonText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '800' },
     row: { width: '100%', flexDirection: 'row', minHeight: 130 },
     rail: { width: 24, alignItems: 'center' },
+    timelinePuppyMarker: { zIndex: 2, width: 34, height: 34, alignItems: 'center', justifyContent: 'center', marginTop: -8 },
     line: { position: 'absolute', top: 18, bottom: 0, width: 2, backgroundColor: EDITORIAL_COLORS.line },
     dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 3, borderColor: EDITORIAL_COLORS.terracottaSoft, zIndex: 1 },
     card: { flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', marginBottom: 12, padding: 12, borderRadius: 14, borderWidth: 0, position: 'relative' },
@@ -797,6 +792,7 @@ const styles = {
   transitionText: { color: '#746253', fontSize: 11, fontWeight: '600', flexShrink: 1 } as const,
   // Extend the rail through the compact transport pill so the timeline never
   // appears broken between two cards.
+  rail: { width: 34 } as const,
   line: { bottom: -30 } as const,
   // The category is rendered once as an outer, position-safe badge. The
   // legacy inline wrapper remains hidden to avoid duplicate labels.

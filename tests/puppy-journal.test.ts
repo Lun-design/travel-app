@@ -67,11 +67,11 @@ describe('scoped journal presentation', () => {
     expect(dark.ink).toBe(getAppTheme('dark').colors.text);
     expect(dark.paper).not.toBe(light.paper);
   });
-  it('keeps route-mode handling and decorates route transitions instead of every navigation button', () => {
+  it('keeps route summaries clean and places a puppy at the start of the timeline', () => {
     const source = readFileSync('src/components/ItineraryTimeline.shared.tsx', 'utf8');
     expect(source).not.toContain('<NavigationPuppy />');
-    expect(source).toContain('timelineTransitionPuppy');
-    expect(source).toContain('transitionPuppy ?');
+    expect(source).toContain('timelineMarkerPuppy');
+    expect(source).toContain('styles.timelinePuppyMarker');
     expect(source).toContain("mode: segment?.mode ?? 'DRIVING'");
     expect(source).not.toContain('mixBlendMode');
   });

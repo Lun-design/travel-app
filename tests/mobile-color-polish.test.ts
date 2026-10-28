@@ -66,11 +66,11 @@ describe('mobile visual color polish', () => {
     expect(badge).toContain('{category}</Text>');
   });
 
-  it('keeps navigation simple and places transparent puppy art on route transitions', () => {
+  it('keeps navigation and route summaries simple while placing puppy art on the timeline rail', () => {
     const timeline = readFileSync(projectFile('src', 'components', 'ItineraryTimeline.shared.tsx'), 'utf8');
     const mascot = readFileSync(projectFile('src', 'components', 'PuppyMascot.tsx'), 'utf8');
     expect(timeline).not.toContain('<NavigationPuppy />');
-    expect(timeline).toContain('transitionPuppy ?');
+    expect(timeline).toContain('timelineMarkerPuppy ?');
     expect(timeline).toContain('pointerEvents="none"');
     expect(timeline).toContain('navigationButton');
     expect(timeline).not.toContain('disabled={!navigationUrl}');

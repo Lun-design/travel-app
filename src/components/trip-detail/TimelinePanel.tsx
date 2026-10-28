@@ -26,6 +26,8 @@ import { DashboardMetricsBar } from '@/components/DashboardMetricsBar';
 import { calculateTimelineMetrics } from '@/lib/timeline-metrics';
 import { NextStopMode } from './NextStopMode';
 import { TimelineTools } from './TimelineTools';
+import { TripAddButton } from './TripAddButton';
+import { getTripJournalPalette } from '@/lib/trip-journal';
 
 type Layout = ReturnType<typeof getTripDetailLayout>;
 type Props = {
@@ -173,7 +175,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
   const { width, height } = useWindowDimensions();
   return <>
     <View style={styles.dayNavigation}>
-      <View style={styles.dateStrip}><DayTabs dense puppyOnActive={layout.compact} days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} /></View>
+      <View style={styles.dateStrip}><DayTabs dense days={days} selected={day} startDate={trip.start_date} onChange={onDayChange} themeMode={themeMode} accentColor={DAY_ACTIVE_COLOR} /></View>
       <Pressable accessibilityRole="button" accessibilityLabel="更多行程操作" style={styles.moreButton} onPress={() => setMoreVisible(true)}><Text style={styles.moreButtonText}>···</Text></Pressable>
     </View>
     <DashboardMetricsBar dense={layout.compact} metrics={metrics} totalEstimatedCost={totalEstimatedCost} themeMode={themeMode} action={showOptimizationSuggestion ? <Pressable accessibilityRole="button" accessibilityLabel="最佳化今日路線" accessibilityState={{ busy: optimizationBusy, disabled: optimizationBusy }} disabled={optimizationBusy} style={[styles.optimizeInlineButton, width < 480 && styles.optimizeInlineCompact]} onPress={openOptimizationPreview}><Text numberOfLines={1} style={[styles.optimizeInlineText, width < 480 && styles.optimizeInlineIconText]}>{optimizationBusy ? '計算中…' : width < 480 ? '🧭' : '🧭 最佳化路線'}</Text></Pressable> : undefined} />
@@ -187,6 +189,7 @@ export function TimelinePanel({ trip, day, days, items, visibleItems, themeMode,
     <Pressable style={[styles.mapToggle, { alignSelf: 'flex-start', width: 'auto', minHeight: 38, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, marginVertical: 8 }]} onPress={toggleMap} accessibilityRole="button" accessibilityState={{ expanded: isMapOpen }}><Text numberOfLines={1} style={styles.mapToggleText}>{isMapOpen ? '🗺️ 隱藏地圖' : '🗺️ 查看地圖路線'}</Text></Pressable>
     </TimelineTools>
     {isMapOpen && <View style={[styles.mapPane, { height: Math.min(layout.mapMinHeight, 220), maxHeight: 220 }]}>{isMapLoading ? <SkeletonCard variant="map" /> : <TripMap items={items} day={day} onMarkerPress={onMapMarkerPress} />}</View>}
+    {layout.compact ? <TripAddButton compact onPress={onAdd} textColor={theme.isDark ? theme.colors.background : '#ffffff'} style={[styles.mobileFab, { backgroundColor: getTripJournalPalette(theme).accent }]} /> : null}
     <TimelineViewport width={width} height={height}>
       {isDayTransitioning ? <View style={styles.skeletonStack}><SkeletonCard /><SkeletonCard /></View> : <ItineraryTimeline items={visibleItems} tripId={trip.id} themeMode={themeMode} focusedItemId={focusedItemId} vouchers={vouchers} onPreviewVoucher={onFocusedVoucher} scheduleContext={scheduleContext} onEdit={onEdit} onDelete={onDelete} onUpdateImage={onUpdateImage} onReorder={onReorder} availableDays={days} onMoveToDay={onMoveToDay} onShiftSubsequent={onShiftSubsequent} onInsertAtPosition={onAddAtPosition} />}
     </TimelineViewport>
@@ -208,7 +211,7 @@ const styles = StyleSheet.create({
   dayNavigation: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   dateStrip: { flex: 1, minWidth: 0 },
   mobileTimeline: { width: '100%', paddingVertical: 12 },
-  mobileFab: { position: 'relative', alignSelf: 'flex-end', marginTop: 16 },
+  mobileFab: { position: 'relative', alignSelf: 'flex-end', marginTop: 8, marginBottom: 8, borderRadius: 24 },
   optimizeButton: { width: '100%', minHeight: 44, justifyContent: 'center', borderRadius: 10, backgroundColor: EDITORIAL_COLORS.terracotta, borderWidth: 1, borderColor: EDITORIAL_COLORS.terracotta, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   optimizeText: { color: EDITORIAL_COLORS.paper, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   optimizeInlineButton: { minHeight: 34, justifyContent: 'center', borderRadius: 999, borderWidth: 0, borderColor: 'transparent', backgroundColor: '#F1F5F9', paddingHorizontal: 10 },
