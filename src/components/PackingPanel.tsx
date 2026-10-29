@@ -11,6 +11,7 @@ import { offlineStore } from '@/lib/offline-store';
 import { getProfileDisplayName } from '@/lib/profiles';
 import { ProfileAvatar } from './ProfileAvatar';
 import { selectionKeyboardProps } from '../../lib/selection-keyboard';
+import { getPackingPawProgress } from '@/lib/puppy-details';
 
 const categories = PACKING_CATEGORIES;
 const templates: PackingTemplate[] = ['國內輕旅行', '國外海島', '雪國滑雪', '日韓都市'];
@@ -68,6 +69,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   const deletePackingItem = (id: string) => deletePackingItemRemote(id, { offlineScope, store: offlineStore });
   const updatePackingItem = (id: string, patch: Parameters<typeof updatePackingItemRemote>[1], options = { offlineScope, store: offlineStore }) => updatePackingItemRemote(id, patch, options);
   const progress = useMemo(() => packingProgress(items), [items]);
+  const pawProgress = getPackingPawProgress(progress.completed, progress.total);
   const visibleItems = useMemo(() => filterPackingItems(items, filters, userId), [items, filters, userId]);
   const groups = useMemo(() => groupPackingItems(visibleItems), [visibleItems]);
   const memberFor = (id: string | null) => id ? members.find((member) => member.user_id === id) : undefined;
@@ -226,7 +228,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
   }
 
   return <View style={[styles.root, { backgroundColor: theme.colors.background }]}><View style={[styles.container, { backgroundColor: theme.colors.background }] }>
-    <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View style={styles.track}><View style={[styles.fill, { width: `${progress.percentage}%` }]} /></View></View>
+    <View style={styles.progressCard}><View style={styles.progressHeader}><Text style={styles.progressTitle}>準備進度</Text><Text style={styles.progressValue}>{progress.completed}/{progress.total} ({progress.percentage}%)</Text></View><View accessibilityLabel={`打包爪印進度：${progress.completed} / ${progress.total}`} style={styles.pawProgress}>{Array.from({ length: pawProgress.total }, (_, index) => <Text key={index} accessible={false} style={[styles.progressPaw, index < pawProgress.filled && styles.progressPawFilled]}>🐾</Text>)}</View></View>
     <Pressable accessibilityRole="button" accessibilityLabel="加入 AI 打包建議" accessibilityState={{ disabled: busy, busy }} style={styles.aiButton} onPress={() => void suggestItems()} disabled={busy}><Text style={styles.aiText}>🪄 點擊加入 AI 智慧建議</Text><Text style={styles.aiHint}>依目的地與預報補上常用必帶物品</Text></Pressable>
     <Text style={styles.sectionTitle}>快速匯入範本</Text><View style={styles.templates}>{templates.map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`匯入打包範本：${value}`} accessibilityState={{ disabled: busy }} style={styles.template} onPress={() => void importTemplate(value)} disabled={busy}><Text style={styles.templateText}>📋 {value}</Text></Pressable>)}</View>
     <View style={styles.addRow}><TextInput style={styles.input} placeholder="新增項目，例如：行動電源" value={name} onChangeText={(value) => { setName(value); setNotice(null); }} onSubmitEditing={() => void add()} /><Pressable accessibilityRole="button" accessibilityLabel="新增項目分類" style={styles.categorySelect} onPress={() => setOpen((current) => ({ ...current, __categoryPicker: true }))}><Text numberOfLines={1} style={styles.categorySelectText}>{category}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="新增打包項目" accessibilityState={{ busy }} style={styles.addButton} onPress={() => void add()} disabled={busy || Boolean(mutatingItemId)}><Text style={styles.white}>{busy ? '新增中…' : '新增'}</Text></Pressable></View>
@@ -282,8 +284,9 @@ const styles = StyleSheet.create({
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   progressTitle: { color: EDITORIAL_COLORS.charcoal, fontWeight: '800', flexShrink: 1 },
   progressValue: { color: EDITORIAL_COLORS.terracotta, fontSize: 13, fontWeight: '800', flexShrink: 0 },
-  track: { height: 9, backgroundColor: EDITORIAL_COLORS.sand, borderRadius: 5, overflow: 'hidden' },
-  fill: { height: '100%', backgroundColor: EDITORIAL_COLORS.terracotta, borderRadius: 5 },
+  pawProgress: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
+  progressPaw: { fontSize: 19, opacity: 0.2 },
+  progressPawFilled: { opacity: 1 },
   aiButton: { width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', backgroundColor: EDITORIAL_COLORS.terracottaSoft, borderColor: EDITORIAL_COLORS.line, borderWidth: 1, borderRadius: 12, minHeight: 44, padding: 14, gap: 3 },
   aiText: { color: EDITORIAL_COLORS.terracotta, fontSize: 16, fontWeight: '800' },
   aiHint: { color: EDITORIAL_COLORS.taupe, fontSize: 12 },

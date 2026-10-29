@@ -21,6 +21,7 @@ import { reservationTagLabels } from '@/lib/reservation-tags';
 import { getSpotImageFallbackUrl, getSpotImageLightboxUrl, getSpotImageUrl, resolveSpotImage, searchSpotImage } from '@/lib/spot-image';
 import { getCategoryBadgePalette } from '@/lib/visual-styles';
 import { getCategoryIcon } from '@/lib/category-icons';
+import { shouldSuggestRestBreak } from '@/lib/puppy-details';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { compressSpotPhoto, resolveSpotPhotoDimensions, uploadAndPersistSpotPhoto, type CompressedSpotPhoto } from '@/lib/spot-photo-upload';
@@ -638,6 +639,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, ti
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
         </View>
         <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text accessible={false} style={styles.paw}>🐾</Text><Text numberOfLines={1} style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
+        {shouldSuggestRestBreak(segment.durationMinutes) ? <View style={styles.restBreakHint}><PuppyMascot puppy="journal-drive" size={30} /><Text style={styles.restBreakText}>車程較長，記得中途休息、伸展一下</Text></View> : null}
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {/* 導航路線按鈕已整合至景點卡片，交通 Pill 保持單一資訊列。 */}
       </View> : null}
@@ -778,6 +780,8 @@ const styles = {
     transitionMain: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     transitionText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700', flexShrink: 1 },
     routeModes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 53 },
+    restBreakHint: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4, paddingVertical: 2 },
+    restBreakText: { color: EDITORIAL_COLORS.taupe, fontSize: 11, flexShrink: 1 },
     routeModeButton: { minHeight: 36, justifyContent: 'center', borderRadius: 8, paddingHorizontal: 9, borderWidth: 1, borderColor: EDITORIAL_COLORS.line, backgroundColor: EDITORIAL_COLORS.paper },
     routeModeButtonActive: { borderColor: EDITORIAL_COLORS.terracotta, backgroundColor: EDITORIAL_COLORS.terracottaSoft },
     routeModeText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700', flexShrink: 1 },

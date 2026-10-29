@@ -12,6 +12,7 @@ vi.mock('react', async original => {
 vi.mock('react-native', () => ({ View: 'div', Text: 'span', TextInput: 'input', Modal: 'dialog', ScrollView: 'section', Pressable: 'button', Alert: { alert: api.alert }, useColorScheme: () => 'light', StyleSheet: { create: (v: unknown) => v } }));
 vi.mock('@/lib/packing-api', () => ({ listPackingItems: api.list, createPackingItem: api.create, updatePackingItem: api.update, deletePackingItem: api.remove, importPackingTemplate: vi.fn() }));
 vi.mock('@/lib/packing-utils', async () => import('../lib/packing-utils'));
+vi.mock('@/lib/puppy-details', async () => import('../lib/puppy-details'));
 vi.mock('@/lib/theme', async () => import('../lib/theme'));
 vi.mock('@/lib/weather-api', () => ({ fetchWeatherForecast: vi.fn() }));
 vi.mock('@/lib/offline-store', () => ({ offlineStore: {} }));
@@ -36,6 +37,14 @@ beforeEach(() => { api.create.mockResolvedValue(row('new')); api.update.mockReso
 afterEach(() => { unmount?.(); unmount = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('packing view and add feedback', () => {
+  it('shows an eight-paw progress strip while preserving the numeric completion count', async () => {
+    const h = await setup();
+    const progress = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包爪印進度：1 / 5')!;
+    expect(text(progress)).toContain('🐾');
+    expect(nodes(progress).filter(n => n.props.accessible === false)).toHaveLength(8);
+    expect(text(h.render())).toMatch(/1\s*\/\s*5\s*\(\s*20\s*%\s*\)/);
+  });
+
   it('activates a web checkbox once with Space even though RNWeb delegates only Enter for this role', async () => {
     vi.stubGlobal('document', {}); const h = await setup();
     const checkbox = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!;
