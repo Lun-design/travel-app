@@ -11,6 +11,12 @@ describe('timeline and itinerary editor UX simplification', () => {
     expect(timeline).not.toContain('segment.navigationUrl ? <Pressable');
   });
 
+  it('adds a subtle paw mark to the route pill without changing route details', () => {
+    const timeline = source('src/components/ItineraryTimeline.shared.tsx');
+    expect(timeline).toContain('<Text accessible={false} style={styles.paw}>🐾</Text>');
+    expect(timeline).toContain("paw: { fontSize: 12, opacity: 0.72, flexShrink: 0 }");
+  });
+
   it('places cost and category controls in a compact editor row', () => {
     const modal = source('src/components/ItineraryItemModal.tsx');
     expect(modal).toContain('styles.compactFieldRow');

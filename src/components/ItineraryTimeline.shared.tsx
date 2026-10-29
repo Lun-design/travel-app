@@ -637,7 +637,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, ti
           <Text style={styles.transitionArrow}>➔</Text>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.transitionEndpoint}>{segment.toTitle}</Text>
         </View>
-        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text numberOfLines={1} style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
+        <Pressable style={styles.transitionMain} onPress={() => setRouteModesVisible((current) => !current)}><Text accessible={false} style={styles.paw}>🐾</Text><Text numberOfLines={1} style={styles.transitionText}>{routeModes.find((option) => option.mode === segment.mode)?.icon} {segment.loading ? '估算中' : formatRouteEstimateDuration({ distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes }, segment.mode)} ({formatDistance(segment.distanceKm)})</Text></Pressable>
         {routeModesVisible ? <View style={styles.routeModes}>{routeModes.map((option) => <Pressable key={option.mode} style={[styles.routeModeButton, segment.mode === option.mode && styles.routeModeButtonActive]} accessibilityRole="button" accessibilityState={{ selected: segment.mode === option.mode }} onPress={() => { setRouteModesVisible(false); onRouteModeChange?.(segment.fromId, option.mode); }}><Text style={styles.routeModeText}>{option.icon} {option.label}</Text></Pressable>)}</View> : null}
         {/* 導航路線按鈕已整合至景點卡片，交通 Pill 保持單一資訊列。 */}
       </View> : null}
@@ -787,6 +787,7 @@ const styles = {
   transitionContext: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', minWidth: 0 } as const,
   transitionEndpoint: { maxWidth: 120, minWidth: 0, flexShrink: 1, color: '#8C6D58', fontSize: 11, fontWeight: '500' } as const,
   transitionArrow: { color: '#8C6D58', fontSize: 11, fontWeight: '500', flexShrink: 0 } as const,
+  paw: { fontSize: 12, opacity: 0.72, flexShrink: 0 } as const,
   transitionMain: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34 } as const,
   transitionText: { color: '#746253', fontSize: 11, fontWeight: '600', flexShrink: 1 } as const,
   // Extend the rail through the compact transport pill so the timeline never
