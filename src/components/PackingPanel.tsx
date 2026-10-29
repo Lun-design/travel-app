@@ -244,7 +244,7 @@ export function PackingPanel({ tripId, userId = 'anonymous', members, destinatio
       <Pressable accessibilityRole="button" accessibilityLabel={`打包分類：${value}`} accessibilityState={{ expanded: open[value] !== false }} style={styles.groupHeader} onPress={() => setOpen((current) => ({ ...current, [value]: !(current[value] ?? true) }))}><Text style={styles.groupTitle}>{value}</Text><Text style={styles.groupCount}>{groups[value].filter((item) => item.is_checked).length}/{groups[value].length} {open[value] === false ? '展開' : '收合'}</Text></Pressable>
       {open[value] === false ? null : groups[value].map((item) => <View key={item.id} testID={highlightedId === item.id ? `packing-highlight-${item.id}` : undefined} style={[styles.item, highlightedId === item.id && styles.highlighted]}>
         <Pressable {...selectionKeyboardProps(() => void toggle(item), Boolean(mutatingItemId))} accessibilityRole="checkbox" accessibilityLabel={`打包：${item.name}`} accessibilityHint="與旅伴共用的打包確認" accessibilityState={{ checked: item.is_checked, disabled: Boolean(mutatingItemId), busy: mutatingItemId === item.id }} style={styles.itemToggle} disabled={Boolean(mutatingItemId)} onPress={() => void toggle(item)}>
-          <View accessible={false} importantForAccessibility="no-hide-descendants" style={[styles.checkbox, item.is_checked && styles.checked]}><Text style={styles.checkText}>{item.is_checked ? '✓' : ''}</Text></View>
+          <View accessible={false} importantForAccessibility="no-hide-descendants" style={[styles.checkbox, item.is_checked && styles.checked]}><Text style={styles.checkText}>{item.is_checked ? '🐾' : ''}</Text></View>
           <Text numberOfLines={2} style={[styles.itemName, item.is_checked && styles.done]}>{item.name}</Text>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={`指派攜帶人：${item.name}，目前：${item.assigned_to_all ? '所有人' : label(item.assigned_to)}`} accessibilityState={{ disabled: Boolean(mutatingItemId), expanded: assignmentItem?.id === item.id }} style={[styles.assigneeButton, item.assigned_to_all && styles.allMembersAssignee]} disabled={Boolean(mutatingItemId)} onPress={() => setAssignmentItem(item)}>{renderAssignee(item)}</Pressable>
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   itemToggle: { flex: 1, minWidth: 44, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 },
   deleteButton: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   checked: { backgroundColor: EDITORIAL_COLORS.terracotta, borderColor: EDITORIAL_COLORS.terracotta },
-  checkText: { color: EDITORIAL_COLORS.paper, fontWeight: '800' },
+  checkText: { color: EDITORIAL_COLORS.paper, fontSize: 12, fontWeight: '800' },
   itemName: { flex: 1, minWidth: 0, flexShrink: 1, fontSize: 14 },
   done: { textDecorationLine: 'line-through', color: '#94a3b8' },
   assigneeButton: { flexShrink: 1, minWidth: 44, maxWidth: '34%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { OfflineMutation } from '@/lib/offline-store';
 import { EDITORIAL_COLORS } from '@/lib/theme';
 import { getSyncPresentation, isFullySynced } from '@/lib/undo-sync';
+import { PuppyMascot } from './PuppyMascot';
 
 type Props = {
   isOffline: boolean;
@@ -20,7 +21,7 @@ export function OfflineSyncBanner({ isOffline, pendingCount, conflicts, onResolv
   if (hideHealthy && isFullySynced({ isOffline, pendingCount, syncing, undoPending, error, conflictCount: conflicts.length })) return null;
   const status = getSyncPresentation({ isOffline, pendingCount, syncing, undoPending, error, conflictCount: conflicts.length });
   return <View style={[styles.container, (conflicts.length > 0 || error) ? styles.problem : null]} accessibilityLiveRegion="polite">
-    <View style={styles.statusRow}><Text style={styles.message}>{status.label}</Text>{onRetry && status.canRetry ? <Pressable accessibilityRole="button" accessibilityLabel="重試同步" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>重試同步</Text></Pressable> : null}</View>
+    <View style={styles.statusRow}><View style={styles.statusLabel}>{syncing ? <PuppyMascot puppy="journal-drive" size={28} /> : null}<Text style={styles.message}>{status.label}</Text></View>{onRetry && status.canRetry ? <Pressable accessibilityRole="button" accessibilityLabel="重試同步" style={styles.retry} onPress={onRetry}><Text style={styles.retryText}>重試同步</Text></Pressable> : null}</View>
     {error ? <Text style={styles.conflictText}>{error}</Text> : null}
     {conflicts.map((conflict) => <View key={conflict.id} style={styles.conflict}>
       <Text numberOfLines={2} style={styles.conflictText}>⚠️ {conflict.error?.message ?? '同步發生衝突，請選擇處理方式'}</Text>
@@ -34,6 +35,7 @@ export function OfflineSyncBanner({ isOffline, pendingCount, conflicts, onResolv
 
 const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  statusLabel: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   retry: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10 },
   retryText: { color: EDITORIAL_COLORS.terracotta, fontSize: 12, fontWeight: '700' },
   container: { width: '100%', gap: 6, paddingVertical: 4 },

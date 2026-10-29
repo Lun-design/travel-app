@@ -71,6 +71,12 @@ describe('packing view and add feedback', () => {
     press(h.render(), '打包：物品-mine'); await vi.waitFor(() => expect(api.update).toHaveBeenCalledOnce());
     expect(api.update.mock.calls[0][1]).toEqual({ is_checked: true, is_packed: true });
   });
+  it('uses a paw stamp for checked packing items while keeping the checkbox accessible', async () => {
+    const h = await setup();
+    const checkedItem = nodes(h.render()).find(n => n.props.accessibilityRole === 'checkbox' && Boolean((n.props.accessibilityState as { checked?: boolean } | undefined)?.checked))!;
+    expect(text(checkedItem)).toContain('🐾');
+    expect((checkedItem.props.accessibilityState as { checked?: boolean }).checked).toBe(true);
+  });
   it('keeps assignment and deletion beside, not inside, the checkbox target', async () => {
     const h = await setup(); const checkbox = nodes(h.render()).find(n => n.props.accessibilityLabel === '打包：物品-mine')!;
     const row = nodes(h.render()).find(n => n.type === 'div' && n.key === 'mine')!;

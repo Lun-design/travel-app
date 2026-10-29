@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, useColorScheme, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDefaultMapOpen, getTripDetailLayout } from '@/lib/trip-detail-layout';
-import { getThemeForMode, type ThemeMode } from '@/lib/theme';
+import { EDITORIAL_COLORS, getThemeForMode, type ThemeMode } from '@/lib/theme';
 import { getTripJournalPalette } from '@/lib/trip-journal';
 import { isFullySynced } from '@/lib/undo-sync';
 import { TripAddButton } from '@/components/trip-detail/TripAddButton';
@@ -21,6 +21,7 @@ import { InviteTripModal } from '@/components/InviteTripModal';
 import { ItineraryItemModal } from '@/components/ItineraryItemModal';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
 import { PackingPanel } from '@/components/PackingPanel';
+import { PuppyMascot } from '@/components/PuppyMascot';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { TimelinePanel } from '@/components/trip-detail/TimelinePanel';
 import { TripDetailHeader } from '@/components/trip-detail/TripDetailHeader';
@@ -359,7 +360,7 @@ export default function TripDetailScreen() {
     }
   }
 
-  if (data.loading && !data.trip) return <View style={[styles.loadingShell, { backgroundColor: getTripJournalPalette(theme).page }]}><SkeletonCard variant="header" /><SkeletonCard /><SkeletonCard /></View>;
+  if (data.loading && !data.trip) return <View style={[styles.loadingShell, { backgroundColor: getTripJournalPalette(theme).page }]}><View style={styles.loadingPuppy}><PuppyMascot puppy="journal-reading" size={60} /><Text accessibilityLiveRegion="polite" style={styles.loadingPuppyText}>小狗正在整理旅程…</Text></View><SkeletonCard variant="header" /><SkeletonCard /><SkeletonCard /></View>;
   if (!data.trip) return <View style={styles.center}><Text style={styles.error}>{data.error || '找不到此行程。'}</Text></View>;
   const trip = data.trip;
   const compactSynced = layout.compact && isFullySynced({ isOffline: data.isOffline, pendingCount: data.pendingSyncCount, syncing: data.syncing, undoPending: data.undoPending, error: data.syncError, conflictCount: data.syncConflicts.length });
@@ -408,6 +409,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box', paddingBottom: 22 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingShell: { flex: 1, width: '100%', gap: 16, padding: 20 },
+  loadingPuppy: { alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 2 },
+  loadingPuppyText: { color: EDITORIAL_COLORS.taupe, fontSize: 13, fontWeight: '600' },
   panelContainer: { flex: 1, minHeight: 0, width: '100%', overflow: 'hidden' },
   panelScroll: { flex: 1, width: '100%', minHeight: 0 },
   panelScrollContent: { width: '100%', minHeight: '100%', paddingBottom: 100, boxSizing: 'border-box' },

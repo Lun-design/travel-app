@@ -2,11 +2,12 @@ import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { createUndoController } from '../lib/undo-sync';
 vi.mock('react-native', () => ({ View: 'div', Text: 'span', Pressable: 'button', StyleSheet: { create: (styles: unknown) => styles } }));
+vi.mock('../src/components/PuppyMascot', () => ({ PuppyMascot: 'mascot' }));
 vi.mock('@/lib/theme', async () => await import('../lib/theme'));
 vi.mock('@/lib/undo-sync', async () => await import('../lib/undo-sync'));
 import { UndoToast } from '../src/components/UndoToast';
 import { OfflineSyncBanner } from '../src/components/OfflineSyncBanner';
-type Props = { children?: React.ReactNode; accessibilityLabel?: string; disabled?: boolean; onPress?: () => void };
+type Props = { children?: React.ReactNode; accessibilityLabel?: string; disabled?: boolean; onPress?: () => void; puppy?: string };
 function nodes(node: React.ReactNode): React.ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(nodes);
   if (!React.isValidElement<Props>(node)) return [];
@@ -24,6 +25,12 @@ describe('undo and sync controls', () => {
     for (const state of [{ isOffline: true }, { pendingCount: 1 }, { syncing: true }, { undoPending: true }, { error: 'denied' }]) {
       expect(OfflineSyncBanner({ ...base, ...state })).not.toBeNull();
     }
+  });
+  it('shows a small driving puppy only while sync is in progress', () => {
+    const base = { isOffline: false, pendingCount: 0, conflicts: [], onResolve: vi.fn() };
+    const syncing = OfflineSyncBanner({ ...base, syncing: true });
+    expect(nodes(syncing).find((node) => node.type === 'mascot')?.props.puppy).toBe('journal-drive');
+    expect(nodes(OfflineSyncBanner(base)).some((node) => node.type === 'mascot')).toBe(false);
   });
   it('clicking the visible undo button prevents the pending API call', async () => {
     const commit = vi.fn(async () => undefined);

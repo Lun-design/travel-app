@@ -646,7 +646,7 @@ export const TimelineCard = React.memo(function TimelineCard({ item, segment, ti
 });
 
 function formatTemperature(weather: WeatherSummary) { const min = weather.temperatureMinC == null ? null : Math.round(weather.temperatureMinC); const max = weather.temperatureMaxC == null ? null : Math.round(weather.temperatureMaxC); if (min !== null && max !== null) return `${min}–${max}°C`; if (max !== null) return `${max}°C`; if (min !== null) return `${min}°C`; return '溫度未知'; }
-export function EmptyTimeline() { return <View style={styles.empty}><PuppyMascot puppy="-1" size={120} accessibilityLabel="目前沒有景點" /><Text style={styles.emptyText}>目前還沒有景點，新增第一站吧！</Text></View>; }
+export function EmptyTimeline() { return <View style={styles.empty}><PuppyMascot puppy="journal-reading" size={104} accessibilityLabel="小狗正在等你安排行程" /><Text style={styles.emptyText}>小狗在等你安排第一站，準備好就出發！</Text></View>; }
 export function InsertSpotButton({ position, onPress }: { position: number; onPress: (position: number) => void }) { return <Pressable accessibilityRole="button" accessibilityLabel="在這裡插入景點" style={[styles.insertButton, { borderWidth: 0, borderTopWidth: 1, borderStyle: 'dashed', borderRadius: 0, paddingHorizontal: 0, minHeight: 28, width: '100%', marginTop: 0, marginBottom: 4, opacity: 0.15 }]} onPress={() => onPress(position)}><Text style={[styles.insertButtonText, { fontSize: 16 }]}>＋</Text></Pressable>; }
 // Legacy accessibility copy: ＋ 在這裡插入景點
 const reservationTagStyles = StyleSheet.create({
